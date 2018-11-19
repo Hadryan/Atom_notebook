@@ -1913,6 +1913,7 @@
     ```
 ## seq2seq 模型
   - [Eager 执行环境与 Keras 定义 RNN seq2seq 模型使用注意力机制进行文本翻译](./09-06_tensorflow_tutotials.md#eager-执行环境与-keras-定义-rnn-seq2seq-模型使用注意力机制进行文本翻译)
+  - [Google Colab chatbot_demo.ipynb](https://colab.research.google.com/drive/1DlWpzLPR_DSdH84OMUje2EtRg_Kqjmyg)
 ***
 
 # Excel

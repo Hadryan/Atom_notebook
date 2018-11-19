@@ -2798,6 +2798,8 @@
     - Decoder 返回 `预测值 predictions` 与 `decoder hidden state`，其中预测值用作计算模型损失
     - Decoer 的下一次输入使用 `encoder output` / `decoder hidden state`，以及使用 `Teacher forcing` 机制决定的下一个 `decoder input`
     ```py
+    import time
+
     ''' Define the optimizer and the loss function '''
     optimizer = tf.train.AdamOptimizer()
 
@@ -2864,7 +2866,7 @@
 
         sentence = preprocess_sentence(sentence)
 
-        inputs = [inp_lang.word2idx[i] for i in sentence.split(' ')]
+        inputs = [inp_lang.word2idx.get(i, 0) for i in sentence.split(' ')]
         inputs = tf.keras.preprocessing.sequence.pad_sequences([inputs], maxlen=max_length_inp, padding='post')
         inputs = tf.convert_to_tensor(inputs)
 
