@@ -85,11 +85,11 @@
     - user: docker
     - pass: tcuser
 ## helm
-  - [Linux](https://kubernetes-helm.storage.googleapis.com/helm-v2.9.1-linux-amd64.tar.gz)
+  - [Github helm releases](https://github.com/helm/helm/releases)
   - [Quick Start Guide](https://docs.helm.sh/using_helm/#quickstart-guide)
   - Extract and copy `helm` to a PATH directory
     ```shell
-    tar xvf helm-v2.9.1-linux-amd64.tar.gz
+    tar xvf helm-v2.11.1-linux-amd64.tar.gz
     cd linux-amd64
     cp helm ~/local_bin
     ```
@@ -97,6 +97,7 @@
     ```shell
     # Find out which cluster Tiller would install to
     kubectl config current-context
+    # minikube
 
     # Initialize the local CLI and also install Tiller into Kubernetes cluster in one step
     helm init

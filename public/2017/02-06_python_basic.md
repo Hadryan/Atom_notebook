@@ -701,86 +701,90 @@
     type({1, 2, 3, 4, 2, 3, 1})        # 集合中元素是惟一的
     <class 'set'>
     ```
-## 序列 (切片 / 索引 / in / not in / 转换工厂函数 / 内建函数)
-  - 列表、元组和字符串都是序列
-  - 切片 / 索引
-    ```python
-    序列的两个主要特点是索引操作符和切片操作符
-    索引操作符可以从序列中抓取一个特定项目
-    切片操作符能够获取序列的一个切片，即一部分序列
-    切片操作返回的序列从开始位置开始，在结束位置之前结束，即包括开始位置，不包括结束位置
-    ```
-  - 索引
+## 序列的切片与索引与 in 判断 (切片 / 索引 / in / not in / 转换工厂函数 / 内建函数)
+  - **序列** 列表 / 元组 / 字符串都是序列，序列的两个主要特点是 **索引操作符** 和 **切片操作符**
+  - **索引** 从序列中抓取一个特定项目
     ```python
     shoplist = ['apple', 'mango', 'carrot', 'banana']
 
-    shoplist[0]                # 第0个元素
-    Out[381]: 'apple'
-    shoplist[-1]        # 最后一个元素
-    Out[382]: 'banana'
-    shoplist[-2]        # 倒数第二的元素
-    Out[383]: 'carrot'
+    print(shoplist[0])  # 第0个元素
+    # apple
+    print(shoplist[-1]) # 最后一个元素
+    # banana
+    print(shoplist[-2]) # 倒数第二的元素
+    # carrot
     ```
-  - list上的切片操作，包括开始的节点，不包括结束的节点
+  - **切片** 获取序列的一个切片，即一部分序列，格式 `[start : stop : step]`，包括开始的节点，不包括结束的节点
     ```python
-    shoplist[1:3]        # 元素1, 2
-    Out[387]: ['mango', 'carrot']
-    shoplist[2:]        # 编号2以后的元素，包括2
-    Out[388]: ['carrot', 'banana']
-    shoplist[1:-1]        # 编号1到最后一个元素，包括1，不包括最后一个
-    Out[389]: ['mango', 'carrot']
-    shoplist[:]        # 所有元素
-    Out[390]: ['apple', 'mango', 'carrot', 'banana']
+    print(shoplist[1:3])  # 元素1, 2
+    # ['mango', 'carrot']
+    print(shoplist[2:]) # 编号2以后的元素，包括2
+    # ['carrot', 'banana']
+    print(shoplist[1:-1]) # 编号1到最后一个元素，包括1，不包括最后一个
+    # ['mango', 'carrot']
+    print(shoplist[:])  # 所有元素
+    # ['apple', 'mango', 'carrot', 'banana']
     ```
-  - ::设定步长step
+  - **切片步长 step**
     ```python
-    shoplist[::-1]        # 逆序
-    Out[391]: ['banana', 'carrot', 'mango', 'apple']
-    shoplist[::2]        # 步长为2，选取0, 2, 4, ...
-    Out[392]: ['apple', 'carrot']
-    shoplist[:-3:-1]    # 等价于 shoplist[::-1][:2]
-    Out[393]: ['banana', 'carrot']
+    print(shoplist[::-1]) # 逆序
+    # ['banana', 'carrot', 'mango', 'apple']
+    print(shoplist[::2])  # 偶数元素，步长为 2，选取 0, 2, 4, ...
+    # ['apple', 'carrot']
+    print(shoplist[1::2])  # 奇数元素，步长为 2，选取 1, 3, 5, ...
+    # ['mango', 'banana']
+    print(shoplist[:-3:-1]) # 等价于 shoplist[::-1][:2]
+    # ['banana', 'carrot']
     ```
-  - string类型的切片操作
+  - **string 类型的切片操作**
     ```python
     name = 'swaroop'
     print('characters 1 to 3 is', name[1:3])
-    characters 1 to 3 is wa
+    # characters 1 to 3 is wa
     ```
-  - 序列类型运算符
+## 序列的 in 判断与运算符
+  - **in / not in** 判断元素是否存在
     ```python
-    x in s 判断s是否包含x
-    x not in s
-    s + t
-    s * n, n * s
-    s[i]
-    s[i:j]
-    s[i:j:k]
+    'x' in 'xyz'  # 判断 s 是否包含 x
+    # True
+
+    'x' not in 'abc'
+    # True
     ```
-  - 序列类型转换工厂函数
+  - **运算符** `+` / `*`
+    ```py
+    print('xyz' * 3)
+    # xyzxyzxyz
+    print(3 * [1, 2, 3])
+    # [1, 2, 3, 1, 2, 3, 1, 2, 3]
+
+    print([1, 2, 3] + ['a', 'b', 'c'])
+    # [1, 2, 3, 'a', 'b', 'c']
+    ```
+## 序列的类型转换与内建函数
+  - **转换工厂函数**
     ```python
     list()
     str()
     basestring()
     tuple()
-
-    str(['hello', 'world'])
-    "['hello', 'world']"
-    list('hello, world')
-    ['h', 'e', 'l', 'l', 'o', ',', ' ', 'w', 'o', 'r', 'l', 'd']
-    tuple('hello, world')
-    ('h', 'e', 'l', 'l', 'o', ',', ' ', 'w', 'o', 'r', 'l', 'd')
     ```
-  - 序列类型可用内建函数
     ```python
-    enumerate() 返回一个元组(i, value)，给参数的每一项加上索引
-    len() 序列成员数量，len(member)
-    max() / min() 返回序列中最大/最小值，max(member) / min(member)
-    reversed() 转置，返回一个列表生成器，list(reversed(member))
-    sorted() 排序，返回一个新的列表，不修改原序列sorted(member)
-    sum() 返回序列成员(int)总和，sum(member)
-    zip() 压缩组合，建立两个序列间的对应关系，可用于生成dict，返回一个列表生成器 a=[1, 2, 3, 4], b=[5, 6], list(zip(a, b)) --> [(1, 5), (2, 6)]
+    print(str(['hello', 'world']))
+    # ['hello', 'world']
+    print(list('hello, world'))
+    # ['h', 'e', 'l', 'l', 'o', ',', ' ', 'w', 'o', 'r', 'l', 'd']
+    print(tuple('hello, world'))
+    # ('h', 'e', 'l', 'l', 'o', ',', ' ', 'w', 'o', 'r', 'l', 'd')
     ```
+  - **内建函数**
+    - **enumerate()** 返回一个元组 `(i, value)`，给参数的每一项加上索引
+    - **len()** 序列成员数量，`len(member)`
+    - **max()** / **min()** 返回序列中最大 / 最小值，`max(member)` / `min(member)`
+    - **reversed()** 转置，返回一个列表生成器，`list(reversed(member))`
+    - **sorted()** 排序，返回一个新的列表，不修改原序列 `sorted(member)`
+    - **sum()** 返回 int 型序列成员总和，`sum(member)`
+    - **zip()** 压缩组合，建立两个序列间的对应关系，可用于生成 dict，返回一个列表生成器 `a=[1, 2, 3, 4], b=[5, 6], list(zip(a, b)) --> [(1, 5), (2, 6)]`
 ## 列表 list
   - 处理一组有序项目的数据结构，包括在方括号中
     ```python
@@ -1678,14 +1682,23 @@
   - f.read() / f.write() / f.readline() / f.readlines() / f.writelines()        # readline()返回一行字符串，readlines()返回包含所有行的字符串列表
   - f.seek() / f.tell()        # seek(offset, whence=0)指定文件指针偏移
 ## open 与 close
-  - file_obj = open(filename, mode='r', buffering=-1)
-    ```python
-    mode为可选参数,默认值为r
-    buffering也为可选参数,默认值为-1(0代表不缓冲,1或大于1的值表示缓冲一行或指定缓冲区大小)
-
+  - **open** 打开文件
+    ```py
+    open(file, mode='r', buffering=-1, encoding=None, errors=None, newline=None, closefd=True, opener=None)
+    ```
+    - **file** 文件名路径
+    - **mode** 打开模式，'r' / 'w' / 'a' / 'b' / 'x'
+    - **buffering** 缓存模式，0 表示不使用缓存，1 / 大于1 表示缓存一行或其他缓存区大小，默认为 -1
+    - **encoding** 编码模式，[Standard Encodings](https://docs.python.org/3.6/library/codecs.html#standard-encodings)
+    - **errors** 编码错误处理方式，默认为 `strict` 抛出异常，可以指定为 `ignore` 忽略错误
+  - **使用**
+    ```py
     f1 = open(r'~/foo')
     f2 = open(r'd:\outfile.txt', 'w')
     f3 = open('frecord.csv', 'ab', 0)
+
+    with open('./foo', 'r') as ff:
+        ...
     ```
 ## 读文件
   - list / in

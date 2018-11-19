@@ -7,7 +7,7 @@
   - [___2018 - 10 - 24 Chatbot___](#2018-10-24-chatbot)
   - [目录](#目录)
   - [翻译 translate](#翻译-translate)
-  - [AIML](#aiml)
+  - [基于模式匹配 AIML](#基于模式匹配-aiml)
   	- [AIML guide](#aiml-guide)
   	- [AIML 标签元素](#aiml-标签元素)
   	- [基本标签元素 aiml category pattern template](#基本标签元素-aiml-category-pattern-template)
@@ -31,13 +31,13 @@
   	- [初始化启动 AIML xml 文件](#初始化启动-aiml-xml-文件)
   	- [对话](#对话)
   	- [组合](#组合)
-  - [NLTK](#nltk)
+  - [基于检索 NLTK](#基于检索-nltk)
   	- [NLP 与 NLTK](#nlp-与-nltk)
   	- [NLTK 文本预处理](#nltk-文本预处理)
   	- [词袋 与 词频逆文本频率指数](#词袋-与-词频逆文本频率指数)
   	- [余弦相似度](#余弦相似度)
   	- [完整示例](#完整示例)
-  - [jieba](#jieba)
+  - [中文分词 jieba](#中文分词-jieba)
   	- [简介](#简介)
   	- [分词](#分词)
   	- [添加自定义词典](#添加自定义词典)
@@ -53,6 +53,13 @@
   	- [性能相关](#性能相关)
   	- [sklean 与 jieba 训练的简单模型](#sklean-与-jieba-训练的简单模型)
   - [中文分词词性对照表](#中文分词词性对照表)
+  - [中文聊天语料解析用于 seq2seq 模型](#中文聊天语料解析用于-seq2seq-模型)
+  	- [链接](#链接)
+  	- [dgk 中文对白语料](#dgk-中文对白语料)
+  	- [中文开放聊天语料链接](#中文开放聊天语料链接)
+  	- [中文开放聊天语料 tsv 文件解析](#中文开放聊天语料-tsv-文件解析)
+  	- [seq2seq 模型](#seq2seq-模型)
+  - [Excel](#excel)
 
   <!-- /TOC -->
 ***
@@ -1738,4 +1745,185 @@
   | y        | 语气词   | 取汉字“语”的声母                                                                   |
   | z        | 状态词   | 取汉字“状”的声母的前一个字母                                                       |
   | un       | 未知词   | 不可识别词及用户自定义词组，取英文 Unkonwn 首两个字母 (非北大标准，CSW 分词中定义) |
+***
+
+# 中文聊天语料解析用于 seq2seq 模型
+## 链接
+  - [从产品完整性的角度浅谈chatbot](https://zhuanlan.zhihu.com/p/34927757)
+## dgk 中文对白语料
+  - [dgk_lost_conv 中文对白语料](https://github.com/fateleak/dgk_lost_conv.git)
+  - **加载数据集**
+    ```py
+    import os
+    import tensorflow as tf
+    tf.enable_eager_execution()
+
+    from tensorflow import keras
+    dgk_url = "https://github.com/fateleak/dgk_lost_conv/raw/master/results/dgk_shooter_z.conv.zip"
+    dgk_path = keras.utils.get_file(os.path.basename(dgk_url), dgk_url, extract=True)
+    dgk_path = dgk_path.replace('.zip', '')
+    ```
+    **测试**
+    ```py
+    print(dgk_path)
+    # /home/leondgarse/.keras/datasets/dgk_shooter_z.conv
+
+    ! head {dgk_path}
+    # E
+    # M 畹华吾侄
+    # M 你/接到/这/封信/的/时候
+    # M 不/知道/大伯/还/在/不/在/人世/了
+    # E
+    # M 咱们/梅家/从/你/爷爷/起
+    # M 就/一直/小心翼翼/地/唱戏
+    # M 侍奉/宫廷/侍奉/百姓
+    # M 从来不/曾/遭此/大祸
+    # M 太后/的/万寿节/谁/敢/不/穿/红
+    ```
+  - **dgk 数据集转化为 tsv 文件** 每两句对话组合成一组 `[ask, response]`，使用 `tab` 分割
+    ```py
+    def dgk_to_tsv(path, target=None):
+        convs = []
+        one_conv = []
+        with open(dgk_path, 'r', errors='ignore') as ff:
+            for line in ff.readlines():
+                line = " ".join(line.strip().split('/'))
+                if line.startswith('E') and len(one_conv) > 1:
+                    convs.extend([one_conv[ii] + '\t' + one_conv[ii + 1] + '\n' for ii in range(0, len(one_conv) - 1, 2)])
+                    one_conv = []
+                elif line.startswith('M') and len(line[2:].strip()) > 0:
+                    one_conv.append(line[2:].strip())
+
+        if target == None:
+            target = path + '.tsv'
+
+        with open(target, 'w') as ff:
+            ff.writelines(convs)
+
+        return target
+    ```
+    **测试**
+    ```py
+    dgk_path = '/home/leondgarse/.keras/datasets/dgk_shooter_z.conv'
+    tt = dgk_to_tsv(dgk_path)
+    ! head {tt}
+    # 畹华吾侄	你 接到 这 封信 的 时候
+    # 咱们 梅家 从 你 爷爷 起	就 一直 小心翼翼 地 唱戏
+    # 侍奉 宫廷 侍奉 百姓	从来不 曾 遭此 大祸
+    # 太后 的 万寿节 谁 敢 不 穿 红	就 你 胆儿 大
+    # 唉 这 我 舅母 出殡	我 不敢 穿红 啊
+    # 唉 呦 唉 呦 爷	您 打 得 好 我 该 打
+    # 就 因为 没穿 红 让 人赏 咱 一纸 枷锁	爷 您 别 给 我 戴 这纸 枷锁 呀
+    # 您 多 打 我 几下 不 就 得 了 吗	走
+    # 这 是 哪 一出 啊 …   这是	撕破 一点 就 弄死 你
+    # 唉	记着 唱戏 的 再 红
+    ```
+## 中文开放聊天语料链接
+  - [中文开放聊天语料整理](https://github.com/fateleak/chaotbot_corpus_Chinese.git)
+  - [xiaohuangji.tsv](https://nj02cm01.baidupcs.com/file/f6afdef288ac8b331c6a42c4d36dfcac?bkt=p3-0000f412c5b4d33d47e31d714d790c7758b8&fid=1996957962-250528-386109303356121&time=1542263652&sign=FDTAXGERLQBHSKW-DCb740ccc5511e5e8fedcff06b081203-wv8IAR%2Fv8nPOGO%2Fzh3l7hwVuBdE%3D&to=88&size=21695199&sta_dx=21695199&sta_cs=1&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CQingdao%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262299&mtime=1542263228&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=0000f412c5b4d33d47e31d714d790c7758b8&sl=76480590&expires=8h&rt=sh&r=515556153&mlogid=7389324144060169315&vbdid=2565181720&fin=xiaohuangji.tsv&fn=xiaohuangji.tsv&rtype=1&dp-logid=7389324144060169315&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=51702cd94a4865eec6510480021de2bf4007a3a543911113&by=themis)
+  - [weibo.tsv](https://nj02cm01.baidupcs.com/file/3a602c87cce1fd854a1c9dbbe8180846?bkt=p3-0000bc6b08a1a8fb245041e54e93429a7cb0&fid=1996957962-250528-1007821817293088&time=1542263868&sign=FDTAXGERLQBHSKWa-DCb740ccc5511e5e8fedcff06b081203-SogAe1uL%2B8vWmMI1E3xF9cByUIg%3D&to=88&size=465372773&sta_dx=465372773&sta_cs=0&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CQingdao%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262290&mtime=1542263229&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=0000bc6b08a1a8fb245041e54e93429a7cb0&sl=76480590&expires=8h&rt=sh&r=813873717&mlogid=7389434792457359372&vbdid=2565181720&fin=weibo.tsv&fn=weibo.tsv&rtype=1&dp-logid=7389434792457359372&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=54c943154d86290386a2505e3e75257fcfffd70bf9621d98&by=themis)
+  - [tieba.tsv](https://nj02cm01.baidupcs.com/file/20529b73cec1a6c248cc781df23b6e3b?bkt=p3-0000875c7877aa5ce8f072d95a106d857971&fid=1996957962-250528-133975231575771&time=1542263878&sign=FDTAXGERLQBHSKWa-DCb740ccc5511e5e8fedcff06b081203-kxWg9KiIGlMCaYE65j8gVXixcFI%3D&to=88&size=298597018&sta_dx=298597018&sta_cs=0&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CQingdao%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262210&mtime=1542263229&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=0000875c7877aa5ce8f072d95a106d857971&sl=76480590&expires=8h&rt=sh&r=925191988&mlogid=7389438382771940371&vbdid=2565181720&fin=tieba.tsv&fn=tieba.tsv&rtype=1&dp-logid=7389438382771940371&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=bae93ca4a6cd705eb556a901151a5854fcf6651ef75c2b49&by=themis)
+  - [subtitle.tsv](https://nj02cm01.baidupcs.com/file/6a4b072432f61d6e8164922c99003e58?bkt=p3-00000026d00bfca7245df154de812ff11137&fid=1996957962-250528-51124885150663&time=1542263895&sign=FDTAXGERLQBHSKWa-DCb740ccc5511e5e8fedcff06b081203-KiNUN9wfEI77Clarjnq5zGD%2BP7s%3D&to=88&size=151548740&sta_dx=151548740&sta_cs=0&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CYangquan%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262164&mtime=1542263229&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=00000026d00bfca7245df154de812ff11137&sl=76480590&expires=8h&rt=sh&r=666015184&mlogid=7389441603982393196&vbdid=2565181720&fin=subtitle.tsv&fn=subtitle.tsv&rtype=1&dp-logid=7389441603982393196&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=26fa64dbec2882245568d34ef7dd0a127bb920708ec4c053305a5e1275657320&by=themis)
+  - [qingyun.tsv](https://nj02cm01.baidupcs.com/file/84c278a7b3ad3a885ff5a1866722912e?bkt=p3-0000b87efbc2d34273876f83bf36ea831ffe&fid=1996957962-250528-619315375933202&time=1542263906&sign=FDTAXGERLQBHSKW-DCb740ccc5511e5e8fedcff06b081203-pX%2BewZSl85lr3I%2FtFSdJCYpAoUA%3D&to=88&size=5594328&sta_dx=5594328&sta_cs=1&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CQingdao%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262140&mtime=1542263230&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=0000b87efbc2d34273876f83bf36ea831ffe&sl=76480590&expires=8h&rt=sh&r=851920421&mlogid=7389444053170552784&vbdid=2565181720&fin=qingyun.tsv&fn=qingyun.tsv&rtype=1&dp-logid=7389444053170552784&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=26fa64dbec288224f44525cb9f24ccb0fd8c823a25fb0847305a5e1275657320&by=themis)
+  - [ptt.tsv](https://nj02cm01.baidupcs.com/file/3f859e50f65308bf3087715840f4d945?bkt=p3-0000e663799a17252a5116e69193915f8a22&fid=1996957962-250528-296468751612325&time=1542263920&sign=FDTAXGERLQBHSKW-DCb740ccc5511e5e8fedcff06b081203-qJ3pfV7sSuxnPCniV06HqxHWxMA%3D&to=88&size=18202714&sta_dx=18202714&sta_cs=0&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CQingdao%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262135&mtime=1542263230&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=0000e663799a17252a5116e69193915f8a22&sl=76480590&expires=8h&rt=sh&r=785422652&mlogid=7389446234529744604&vbdid=2565181720&fin=ptt.tsv&fn=ptt.tsv&rtype=1&dp-logid=7389446234529744604&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=26fa64dbec28822459deb4641c297738fc99d1f14b4dfe03305a5e1275657320&by=themis)
+  - [douban_single_turn.tsv](https://nj02cm01.baidupcs.com/file/67fd78295b219703853d0594287d8ffd?bkt=p3-00008628c569c1e7e3ca79865b9ac2f9146f&fid=1996957962-250528-748500324868080&time=1542263933&sign=FDTAXGERLQBHSKWa-DCb740ccc5511e5e8fedcff06b081203-VnG2Dqb7%2BmiH6drNL5eesoABgv0%3D&to=88&size=171360576&sta_dx=171360576&sta_cs=0&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CYangquan%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262128&mtime=1542263230&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=00008628c569c1e7e3ca79865b9ac2f9146f&sl=76480590&expires=8h&rt=sh&r=166462935&mlogid=7389448366121075380&vbdid=2565181720&fin=douban_single_turn.tsv&fn=douban_single_turn.tsv&rtype=1&dp-logid=7389448366121075380&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=78cccb630bb0656e7f7960a3127561e4c3ecf254f194dfe3&by=themis)
+  - [chatterbot.tsv](https://nj02cm01.baidupcs.com/file/bd034754f6e9baac534e6f263303c04a?bkt=p3-1400bd034754f6e9baac534e6f263303c04ac2738a050000000085c9&fid=1996957962-250528-829710954717052&time=1542265190&sign=FDTAXGERLQBHSKW-DCb740ccc5511e5e8fedcff06b081203-B%2BIILB2jm3GiqWsLKjbdDnGZGHs%3D&to=88&size=34249&sta_dx=34249&sta_cs=0&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CQingdao%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262101&mtime=1542263230&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=1400bd034754f6e9baac534e6f263303c04ac2738a050000000085c9&sl=76480590&expires=8h&rt=sh&r=568354668&mlogid=7389450456936252592&vbdid=2565181720&fin=chatterbot.tsv&fn=chatterbot.tsv&rtype=1&dp-logid=7389450456936252592&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=e3357e20d22cf8486178361f6cd94e618534f0af9d115663&by=themis)
+## 中文开放聊天语料 tsv 文件解析
+  - **加载数据集**
+    ```py
+    import os
+    import tensorflow as tf
+    tf.enable_eager_execution()
+
+    from tensorflow import keras
+    import re
+    db_path = 'chatbot_db_tsv'
+    name_reg = re.compile(r'fn=(.*\.tsv)&rtype=')
+    gen_target_name = lambda url: os.path.join(db_path, name_reg.findall(url)[0])
+
+    chatterbot_url = "https://nj02cm01.baidupcs.com/file/bd034754f6e9baac534e6f263303c04a?bkt=p3-1400bd034754f6e9baac534e6f263303c04ac2738a050000000085c9&fid=1996957962-250528-829710954717052&time=1542265190&sign=FDTAXGERLQBHSKW-DCb740ccc5511e5e8fedcff06b081203-B%2BIILB2jm3GiqWsLKjbdDnGZGHs%3D&to=88&size=34249&sta_dx=34249&sta_cs=0&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CQingdao%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262101&mtime=1542263230&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=1400bd034754f6e9baac534e6f263303c04ac2738a050000000085c9&sl=76480590&expires=8h&rt=sh&r=568354668&mlogid=7389450456936252592&vbdid=2565181720&fin=chatterbot.tsv&fn=chatterbot.tsv&rtype=1&dp-logid=7389450456936252592&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=e3357e20d22cf8486178361f6cd94e618534f0af9d115663&by=themis"
+
+    chatterbot_path = keras.utils.get_file(gen_target_name(chatterbot_url), chatterbot_url)
+    ```
+  - **创建数据集** 将文件解析成 `[ask, response]`，每个句子添加 `<start>` `<end>` 标签
+    ```py
+    import jieba
+    import pickle
+
+    # Also used for parsing user's input
+    def preprocess_sentence(sentence):
+        return "<start> " + " ".join(jieba.lcut(sentence)) + " <end>"
+
+    def create_dataset_wrapper(path, num_examples=None, max_line=100, is_split=False, re_parse=False):
+        backup_path = path + '.pkl'
+        if not re_parse and os.path.exists(backup_path):
+            print('Reload from back up file: ', backup_path)
+            ff = open(dgk_path + '.pkl', 'rb')
+            return pickle.load(ff)
+
+        with open(path, 'r', errors='ignore') as ff:
+            lines = ff.readlines()
+
+        if num_examples != None:
+            lines = lines[:num_examples]
+
+        if is_split:
+            sentence_handler = lambda ss: "<start> " + ss + " <end>"
+        else:
+            sentence_handler = preprocess_sentence
+
+        convs = []
+        for line in lines:
+            ss = line.strip().split('\t')
+            if len(ss) != 2:
+                print('Format not right: {}'.format(ss))
+                continue
+            aa, rr = ss
+            convs.append([sentence_handler(aa[:max_line]), sentence_handler(rr[:max_line])])
+
+        with open(backup_path, 'wb') as ff:
+            pickle.dump(convs, ff)
+        return convs
+
+    create_dataset = lambda path, num_examples: create_dataset_wrapper(path, num_examples=num_examples)
+
+    create_dataset = lambda path, num_examples: create_dataset_wrapper(path, num_examples=num_examples, is_split=True)
+    ```
+    **测试**
+    ```py
+    chatterbot_path = '/home/leondgarse/.keras/datasets/chatbot_db_tsv/chatterbot.tsv'
+    ww = create_dataset_wrapper(chatterbot_path, re_parse=True)
+    print(len(ww), ww[:5])
+    # 564
+    # [['<start> 什么 是 ai <end>', '<start> 人工智能 是 工程 和 科学 的 分支 , 致力于 构建 思维 的 机器 。 <end>'],
+    #  ['<start> 你 写 的 是 什么 语言 <end>', '<start> 蟒蛇 <end>'],
+    #  ['<start> 你 听 起来 像 数据 <end>', '<start> 是 的 , 我 受到 指挥官 数据 的 人工 个性 的 启发 <end>'],
+    #  ['<start> 你 是 一个 人工 语言 实体 <end>', '<start> 那 是 我 的 名字 。 <end>'],
+    #  ['<start> 你 不是 不朽 的 <end>', '<start> 所有 的 软件 都 可以 永久 存在 。 <end>']]
+
+    dgk_tt = '/home/leondgarse/.keras/datasets/dgk_shooter_z.conv.tsv'
+    ww = create_dataset_wrapper(tt, is_split=True, re_parse=True)
+    print(len(ww), ww[:5])
+    # 1604401
+    # [['<start> 畹华吾侄 <end>', '<start> 你 接到 这 封信 的 时候 <end>'],
+    #  ['<start> 咱们 梅家 从 你 爷爷 起 <end>', '<start> 就 一直 小心翼翼 地 唱戏 <end>'],
+    #  ['<start> 侍奉 宫廷 侍奉 百姓 <end>', '<start> 从来不 曾 遭此 大祸 <end>'],
+    #  ['<start> 太后 的 万寿节 谁 敢 不 穿 红 <end>', '<start> 就 你 胆儿 大 <end>'],
+    #  ['<start> 唉 这 我 舅母 出殡 <end>', '<start> 我 不敢 穿红 啊 <end>']]
+    ```
+## seq2seq 模型
+  - [Eager 执行环境与 Keras 定义 RNN seq2seq 模型使用注意力机制进行文本翻译](./09-06_tensorflow_tutotials.md#eager-执行环境与-keras-定义-rnn-seq2seq-模型使用注意力机制进行文本翻译)
+***
+
+# Excel
+  ```py
+  xx = pd.ExcelFile('./datasets/hpe_chatbot_db/courses.xls')
+  tt = {}
+  for nn in xx.sheet_names:
+      tt[nn] = xx.parse(nn, index_col='序号').values.tolist()
+  aa = []
+  for vv in tt.values():
+      aa.extend(vv)
+  tt['total'] = aa
+  ```
 ***
