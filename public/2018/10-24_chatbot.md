@@ -59,7 +59,9 @@
   	- [中文开放聊天语料链接](#中文开放聊天语料链接)
   	- [中文开放聊天语料 tsv 文件解析](#中文开放聊天语料-tsv-文件解析)
   	- [seq2seq 模型](#seq2seq-模型)
-  - [Excel](#excel)
+  - [项目应用](#项目应用)
+  	- [Excel](#excel)
+  	- [Flask](#flask)
 
   <!-- /TOC -->
 ***
@@ -1358,7 +1360,6 @@
     - 切出了词典中没有的词语，原因在于 HMM 的新词发现机制，解决方法可以关闭新词发现
       ```py
       jieba.cut('丰田太省了', HMM=False)
-      jieba.cut('我们中出了一个叛徒', HMM=False)
       ```
 ## 基于 TF-IDF 算法的关键词抽取
   - **jieba.analyse.TFIDF 类** 新建 TFIDF 实例
@@ -1837,9 +1838,8 @@
 
     from tensorflow import keras
     import re
-    db_path = 'chatbot_db_tsv'
     name_reg = re.compile(r'fn=(.*\.tsv)&rtype=')
-    gen_target_name = lambda url: os.path.join(db_path, name_reg.findall(url)[0])
+    gen_target_name = lambda url: name_reg.findall(url)[0]
 
     chatterbot_url = "https://nj02cm01.baidupcs.com/file/bd034754f6e9baac534e6f263303c04a?bkt=p3-1400bd034754f6e9baac534e6f263303c04ac2738a050000000085c9&fid=1996957962-250528-829710954717052&time=1542265190&sign=FDTAXGERLQBHSKW-DCb740ccc5511e5e8fedcff06b081203-B%2BIILB2jm3GiqWsLKjbdDnGZGHs%3D&to=88&size=34249&sta_dx=34249&sta_cs=0&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CQingdao%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262101&mtime=1542263230&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=1400bd034754f6e9baac534e6f263303c04ac2738a050000000085c9&sl=76480590&expires=8h&rt=sh&r=568354668&mlogid=7389450456936252592&vbdid=2565181720&fin=chatterbot.tsv&fn=chatterbot.tsv&rtype=1&dp-logid=7389450456936252592&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=e3357e20d22cf8486178361f6cd94e618534f0af9d115663&by=themis"
 
@@ -1916,15 +1916,284 @@
   - [Google Colab chatbot_demo.ipynb](https://colab.research.google.com/drive/1DlWpzLPR_DSdH84OMUje2EtRg_Kqjmyg)
 ***
 
-# Excel
+# 项目应用
+## Excel
+  - 使用 jieba 分词以及 sklearn 训练模型
+  - 数据库使用 excel 表格，组织多个话题
+  - 会话管理功能
+  - 话题选取功能
   ```py
-  xx = pd.ExcelFile('./datasets/hpe_chatbot_db/courses.xls')
-  tt = {}
-  for nn in xx.sheet_names:
-      tt[nn] = xx.parse(nn, index_col='序号').values.tolist()
-  aa = []
-  for vv in tt.values():
-      aa.extend(vv)
-  tt['total'] = aa
+  #! /usr/bin/env python
+  import os
+  import numpy as np
+  import pandas as pd
+  import pickle
+  import jieba
+  from sklearn.metrics.pairwise import cosine_similarity
+  from sklearn.feature_extraction.text import TfidfVectorizer
+  from datetime import datetime
+
+  class Course_chatbot:
+      def __init__(
+              self,
+              course_data_path='./database/courses.xls',
+              user_dict='./database/user_dict.dict',
+              stw_path='./database/stopwords.csv',
+              input_pre='Enter your message >> ',
+              response_pre='ROBO: ',
+              reload=False,
+              user_input_backup='./database/user_input_backup',
+              thresh=0):
+          jieba.load_userdict(user_dict)
+
+          self.stop_words = [ii.strip() for ii in open(stw_path, 'r').readlines()]
+          self.course_data_path = course_data_path
+          self.input_pre = input_pre
+          self.response_pre = response_pre
+          self.user_input_backup = user_input_backup
+          self.thresh = thresh
+
+          self.load_dataset_xls(self.course_data_path, self.stop_words, reload=reload)
+          self.TfidfVec_dd, self.tfidf_dd = self.create_tfidf_data(self.questions_split)
+          self.topic = {}
+          self.init_session_data()
+
+          self.greeting = ['你好', '早上好', '早', '上午好', '中午好', '下午好', '晚上好', '嘿', 'hi', 'hello', 'hey', 'hi there']
+          self.goodbye = ['再见', '拜拜', '拜', '88', 'bye', 'byebye', 'goodbye', 'cya', 'see you']
+          self.thanks = ['谢谢', '谢', 'thanks', 'thank you', 'thank u', 'thx']
+          self.goodbye_r = ['再见', '拜拜', '再见了', '祝你开心', '88']
+          self.thanks_r = ['不客气', '我也很开心', '有帮到你就好了']
+          self.unknown_r = ['请再详细描述一下？', '没明白', '似乎超出我的知识范围了']
+
+      def init_session_data(self):
+          for ii in range(len(self.topic) + 1):
+              if ii not in self.topic:
+                  new_session_id = ii
+                  break
+
+          self.topic[new_session_id] = 'total'
+          return new_session_id
+
+      def remove_session_id(self, session_id):
+          if session_id in self.topic:
+              self.topic.pop(session_id)
+
+      def preprocess_sentence(self, ss, stop_words=None):
+          cc = jieba.lcut(ss.strip().lower())
+          if stop_words != None:
+              return " ".join([ww for ww in cc if ww not in stop_words and ww.strip() != ''])
+          else:
+              return " ".join(cc)
+
+      def load_dataset_xls(self, xls_path, stop_words=None, reload=False, index_col='序号', keywords_key='keywords'):
+          backup_path = xls_path + '.pkl'
+          if not reload and os.path.exists(backup_path):
+              print("Reload from backup file: {}...".format(backup_path))
+              with open(backup_path, 'rb') as ff:
+                  self.questions_split, self.questions_orig, self.responses, self.keywords = pickle.load(ff)
+
+          xx = pd.ExcelFile(xls_path)
+          self.questions_split = {}
+          self.questions_orig = {}
+          self.responses = {}
+          self.keywords = {}
+          for nn in xx.sheet_names:
+              qa_table = xx.parse(nn, index_col=index_col).values
+              if qa_table[0, 0].lower() == keywords_key:
+                  self.keywords.update({vv: nn for vv in qa_table[0, 1].split(' ')})
+                  qa_table = qa_table[1:]
+
+              self.questions_orig[nn] = qa_table[:, 0].copy()
+              qa_table[:, 0] = [self.preprocess_sentence(aa, stop_words) for aa in qa_table[:, 0]]
+              self.questions_split[nn] = qa_table[:, 0]
+              self.responses[nn] = qa_table[:, 1]
+
+          self.questions_split['total'] = np.concatenate(list(self.questions_split.values()))
+          self.questions_orig['total'] = np.concatenate(list(self.questions_orig.values()))
+          self.responses['total'] = np.concatenate(list(self.responses.values()))
+
+          with open(backup_path, 'wb') as ff:
+              pickle.dump((self.questions_split, self.questions_orig, self.responses, self.keywords), ff)
+
+      def create_tfidf_data(self, data_dict):
+          TfidfVec_dd = {}
+          tfidf_dd = {}
+          for kk in data_dict:
+              TfidfVec_dd[kk] = TfidfVectorizer()
+              tfidf_dd[kk] = TfidfVec_dd[kk].fit_transform(data_dict[kk])
+          return TfidfVec_dd, tfidf_dd
+
+      def top_k_cosine(self, user_input, topic, top_k=1):
+          uu = self.TfidfVec_dd[topic].transform([user_input])
+          cos_vals = cosine_similarity(uu, self.tfidf_dd[topic])
+
+          if np.alltrue(cos_vals <= self.thresh):
+              return []
+          elif top_k == 1:
+              print("Max cosin value: {}".format(cos_vals.max()))
+              return [cos_vals.argmax()]
+          else:
+              top_match = cos_vals[0].argsort()[-top_k:]
+              return top_match[cos_vals[0][top_match] > self.thresh]
+
+      def select_topic(self, user_input, session_id):
+          ss = user_input.split(' ')
+          kk = {tt: ss.index(tt) for tt in self.keywords.keys() if tt in ss}
+
+          if len(kk) != 0:
+              first_keyword = min(kk.keys(), key=lambda x: kk[x])
+              self.topic[session_id] = self.keywords[first_keyword]
+          return self.topic[session_id]
+
+      def greeting_response(self, user_input=None):
+          gg = ['你好', '有什么可以帮你的吗？']
+          if user_input:
+              gg.append(user_input)
+
+          hh = datetime.now().hour
+          if hh <= 6:
+              gg.extend(['这么早。。'])
+          elif 6 < hh <= 10:
+              gg.extend(['早上好', '早啊'])
+          elif 11 <= hh <= 13:
+              gg.extend(['中午好', '中午了啊'])
+          elif 13 < hh <= 17:
+              gg.extend(['下午好', '啊，好困'])
+          elif 17 < hh <= 23:
+              gg.extend(['晚上好', '下班了啊'])
+
+          return np.random.choice(gg)
+
+      def if_specific_input(self, user_input, session_id=0):
+          if user_input in self.greeting:
+              return self.greeting_response(user_input)
+          elif user_input in self.goodbye:
+              if session_id != 0:
+                  self.remove_session_id(session_id)
+              return np.random.choice(self.goodbye_r)
+          elif user_input in self.thanks:
+              return np.random.choice(self.thanks_r)
+          else:
+              return None
+
+      def input_2_response(self, user_input, session_id=0):
+          if session_id not in self.topic:
+              self.topic[session_id] = 'total'
+          if self.user_input_backup != None:
+              with open(self.user_input_backup, 'a') as ff:
+                  ff.write(user_input + '\n')
+
+          user_input = self.preprocess_sentence(user_input, self.stop_words)
+          rr = self.if_specific_input(user_input, session_id)
+          if rr:
+              return self.response_pre + rr
+
+          topic = self.select_topic(user_input, session_id)
+          print('topic = {}, user_input = {}'.format(topic, user_input))
+
+          top_match = self.top_k_cosine(user_input, topic, top_k=1)
+          if len(top_match) == 0 and topic != 'total':
+              self.topic[session_id] = 'total'
+              top_match = self.top_k_cosine(user_input, self.topic[session_id], top_k=1)
+
+          if len(top_match) != 0:
+              rr = self.responses[topic][top_match[0]]
+              return self.response_pre + rr
+          else:
+              return self.response_pre + np.random.choice(self.unknown_r)
+
+      def top_k_questions(self, user_input, session_id=0, top_k=5):
+          topic = self.topic.get(session_id, 'total')
+          user_input = self.preprocess_sentence(user_input, self.stop_words)
+          top_match = self.top_k_cosine(user_input, topic, top_k)
+          return self.questions_orig[topic][top_match].tolist()
+
+      def start_conversation_loop(self, session_id=0):
+          while True:
+              user_input = input(self.input_pre)
+              rr = self.input_2_response(user_input, session_id)
+              print(rr)
+              print("")
+
+              if session_id not in self.topic:
+                  break
+
+  if __name__ == "__main__":
+      cc = Course_chatbot()
+      cc.start_conversation_loop()
   ```
+  **测试**
+  ```py
+  cc = Course_chatbot(reload=True)
+  cc.select_topic(cc.preprocess_sentence('python 大数据', cc.stop_words))
+  # Out[10]: 'python'
+
+  cc.if_specific_input('hi')
+  # Out[28]: '中午好'
+  cc.if_specific_input('thx')
+  # Out[29]: '有帮到你就好了'
+  cc.if_specific_input('bye')
+  # Out[30]: '88'
+
+  cc.input_2_response('你好啊')
+  cc.top_k_questions('python 大数据')
+
+  session_id = cc.init_session_data()
+  cc.start_conversation_loop(session_id)
+  ```
+## Flask
+  - **Basic test**
+    ```shell
+    ./chatbot_flask.py -l 0 -b 'ROBO: '
+    # using wsgi server
+    waitress-serve --port 7777 --call 'course_chatbot_flask:get_app'
+    ```
+    ```python
+    host_ip = '127.0.0.1:7777'
+    import requests
+    import json
+
+    # 初始化会话
+    requests.post("http://%s/course_chatbot/session/init" % (host_ip), headers={"Content-type": "application/json"}).json()
+
+    # 删除会话
+    rr = {'session_id': 1}
+    requests.post("http://%s/course_chatbot/session/remove" % (host_ip), headers={"Content-type": "application/json"}, data=json.dumps(rr)).text
+
+    # 回复用户输入
+    rr = {'input': '你好', 'session_id': 0}
+    requests.post("http://%s/course_chatbot/response" % (host_ip), headers={"Content-type": "application/json"}, data=json.dumps(rr)).text
+
+    # 获取 top k 匹配的问题
+    rr = {'input': 'python 大数据 云计算 开发', 'session_id': 0, 'top_k': 5}
+    requests.post("http://%s/course_chatbot/top_k_questions" % (host_ip), headers={"Content-type": "application/json"}, data=json.dumps(rr)).json()
+    ```
+  - **Test loop**
+    ```python
+    # Test loop
+    session_id = requests.post("http://%s/course_chatbot/session/init" % (host_ip), headers={"Content-type": "application/json"}).json()
+    while True:
+        user_input = input("Enter your message >> ")
+        if user_input == "quit":
+            rr = {'session_id': session_id}
+            requests.post("http://%s/course_chatbot/session/remove" % (host_ip), headers={"Content-type": "application/json"}, data=json.dumps(rr))
+            break
+
+        rr = {'input': user_input, 'session_id': session_id}
+        response = requests.post("http://%s/course_chatbot/response" % (host_ip), headers={"Content-type": "application/json"}, data=json.dumps(rr)).text
+        print(response + '\n')
+    ```
+    **运行结果**
+    ```python
+    Enter your message >> 你好啊
+    ROBO: 你好
+
+    Enter your message >> 谢谢
+    ROBO: 不客气
+
+    Enter your message >> 再见
+    ROBO: 再见
+
+    Enter your message >> quit
+    ```
 ***
