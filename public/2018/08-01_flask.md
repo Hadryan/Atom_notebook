@@ -843,4 +843,17 @@
     # 默认端口 8080
     waitress-serve --port 8041 --call 'hello:create_app'
     ```
+## Q / A
+  - Q: 跨域问题
+    ```py
+    No 'Access-Control-Allow-Origin' header is present on the requested resource.
+    ```
+    A: **跨域** 是浏览器对于 javascript 的同源策略的限制，如 `a.cn` 下面的 js 不能调用 `b.cn` 中的 js / 对象 / 数据，可以安装 [Flask-CORS](https://flask-cors.readthedocs.io/en/latest/)
+    ```py
+    ! pip install flask_cors
+    from flask_cors import CORS
+
+    app = Flask(__name__)
+    CORS(app, supports_credentials=True)
+    ```
 ***

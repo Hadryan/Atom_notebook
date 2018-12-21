@@ -87,9 +87,6 @@
   	- [enumerate 带指数的列表](#enumerate-带指数的列表)
   	- [format 格式化](#format-格式化)
   	- [Iterator 与 Generators 与 Yield](#iterator-与-generators-与-yield)
-  - [python 执行 shell 命令](#python-执行-shell-命令)
-  	- [os 模块](#os-模块)
-  	- [subprocess 模块](#subprocess-模块)
 
   <!-- /TOC -->
 ***
@@ -2149,56 +2146,5 @@
     tt = itertools.permutations(range(3), 2)
     print(list(tt))
     # [(0, 1), (0, 2), (1, 0), (1, 2), (2, 0), (2, 1)]
-    ```
-***
-
-# python 执行 shell 命令
-## os 模块
-  - 头文件
-    ```python
-    import os
-    ```
-  - **os.system** 返回执行状态，输出结果到标准输出，用于执行不需要返回结果的操作
-    ```python
-    os.system('echo 1')
-    # 1
-    # Out[2]: 0
-    ```
-  - **os.popen** 返回执行结果，通过管道的方式，返回一个file-like的对象，里面的内容是脚本输出的内容
-    ```python
-    pp = os.popen('echo 1')
-    pp.read()
-    # Out[8]: '1\n'
-
-    # 重新调用，使用 readlines 读取
-    pp.readlines()
-    # Out[13]: ['1\n']
-    ```
-## subprocess 模块
-  - 头文件
-    ```python
-    import subprocess
-    ```
-  - **subprocess.getoutput** 返回执行结果
-    ```python
-    subprocess.getoutput('echo 1')
-    # Out[19]: '1'
-    ```
-  - **subprocess.getstatusoutput** 返回执行状态与结果
-    ```python
-    subprocess.getstatusoutput('echo 1')
-    # Out[20]: (0, '1')
-    ```
-  - **subprocess.Popen** 在子进程中执行一个命令
-    ```python
-    p = subprocess.Popen('echo 1', stdout=subprocess.PIPE, shell=True)
-
-    # 返回执行结果与错误代码
-    p.communicate()
-    # Out[26]: (b'1\n', None)
-
-    # 返回执行状态
-    p.wait()
-    # Out[27]: 0
     ```
 ***

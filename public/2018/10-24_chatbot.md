@@ -1821,14 +1821,32 @@
     ```
 ## 中文开放聊天语料链接
   - [中文开放聊天语料整理](https://github.com/fateleak/chaotbot_corpus_Chinese.git)
-  - [xiaohuangji.tsv](https://nj02cm01.baidupcs.com/file/f6afdef288ac8b331c6a42c4d36dfcac?bkt=p3-0000f412c5b4d33d47e31d714d790c7758b8&fid=1996957962-250528-386109303356121&time=1542263652&sign=FDTAXGERLQBHSKW-DCb740ccc5511e5e8fedcff06b081203-wv8IAR%2Fv8nPOGO%2Fzh3l7hwVuBdE%3D&to=88&size=21695199&sta_dx=21695199&sta_cs=1&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CQingdao%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262299&mtime=1542263228&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=0000f412c5b4d33d47e31d714d790c7758b8&sl=76480590&expires=8h&rt=sh&r=515556153&mlogid=7389324144060169315&vbdid=2565181720&fin=xiaohuangji.tsv&fn=xiaohuangji.tsv&rtype=1&dp-logid=7389324144060169315&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=51702cd94a4865eec6510480021de2bf4007a3a543911113&by=themis)
-  - [weibo.tsv](https://nj02cm01.baidupcs.com/file/3a602c87cce1fd854a1c9dbbe8180846?bkt=p3-0000bc6b08a1a8fb245041e54e93429a7cb0&fid=1996957962-250528-1007821817293088&time=1542263868&sign=FDTAXGERLQBHSKWa-DCb740ccc5511e5e8fedcff06b081203-SogAe1uL%2B8vWmMI1E3xF9cByUIg%3D&to=88&size=465372773&sta_dx=465372773&sta_cs=0&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CQingdao%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262290&mtime=1542263229&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=0000bc6b08a1a8fb245041e54e93429a7cb0&sl=76480590&expires=8h&rt=sh&r=813873717&mlogid=7389434792457359372&vbdid=2565181720&fin=weibo.tsv&fn=weibo.tsv&rtype=1&dp-logid=7389434792457359372&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=54c943154d86290386a2505e3e75257fcfffd70bf9621d98&by=themis)
-  - [tieba.tsv](https://nj02cm01.baidupcs.com/file/20529b73cec1a6c248cc781df23b6e3b?bkt=p3-0000875c7877aa5ce8f072d95a106d857971&fid=1996957962-250528-133975231575771&time=1542263878&sign=FDTAXGERLQBHSKWa-DCb740ccc5511e5e8fedcff06b081203-kxWg9KiIGlMCaYE65j8gVXixcFI%3D&to=88&size=298597018&sta_dx=298597018&sta_cs=0&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CQingdao%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262210&mtime=1542263229&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=0000875c7877aa5ce8f072d95a106d857971&sl=76480590&expires=8h&rt=sh&r=925191988&mlogid=7389438382771940371&vbdid=2565181720&fin=tieba.tsv&fn=tieba.tsv&rtype=1&dp-logid=7389438382771940371&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=bae93ca4a6cd705eb556a901151a5854fcf6651ef75c2b49&by=themis)
-  - [subtitle.tsv](https://nj02cm01.baidupcs.com/file/6a4b072432f61d6e8164922c99003e58?bkt=p3-00000026d00bfca7245df154de812ff11137&fid=1996957962-250528-51124885150663&time=1542263895&sign=FDTAXGERLQBHSKWa-DCb740ccc5511e5e8fedcff06b081203-KiNUN9wfEI77Clarjnq5zGD%2BP7s%3D&to=88&size=151548740&sta_dx=151548740&sta_cs=0&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CYangquan%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262164&mtime=1542263229&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=00000026d00bfca7245df154de812ff11137&sl=76480590&expires=8h&rt=sh&r=666015184&mlogid=7389441603982393196&vbdid=2565181720&fin=subtitle.tsv&fn=subtitle.tsv&rtype=1&dp-logid=7389441603982393196&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=26fa64dbec2882245568d34ef7dd0a127bb920708ec4c053305a5e1275657320&by=themis)
-  - [qingyun.tsv](https://nj02cm01.baidupcs.com/file/84c278a7b3ad3a885ff5a1866722912e?bkt=p3-0000b87efbc2d34273876f83bf36ea831ffe&fid=1996957962-250528-619315375933202&time=1542263906&sign=FDTAXGERLQBHSKW-DCb740ccc5511e5e8fedcff06b081203-pX%2BewZSl85lr3I%2FtFSdJCYpAoUA%3D&to=88&size=5594328&sta_dx=5594328&sta_cs=1&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CQingdao%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262140&mtime=1542263230&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=0000b87efbc2d34273876f83bf36ea831ffe&sl=76480590&expires=8h&rt=sh&r=851920421&mlogid=7389444053170552784&vbdid=2565181720&fin=qingyun.tsv&fn=qingyun.tsv&rtype=1&dp-logid=7389444053170552784&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=26fa64dbec288224f44525cb9f24ccb0fd8c823a25fb0847305a5e1275657320&by=themis)
-  - [ptt.tsv](https://nj02cm01.baidupcs.com/file/3f859e50f65308bf3087715840f4d945?bkt=p3-0000e663799a17252a5116e69193915f8a22&fid=1996957962-250528-296468751612325&time=1542263920&sign=FDTAXGERLQBHSKW-DCb740ccc5511e5e8fedcff06b081203-qJ3pfV7sSuxnPCniV06HqxHWxMA%3D&to=88&size=18202714&sta_dx=18202714&sta_cs=0&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CQingdao%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262135&mtime=1542263230&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=0000e663799a17252a5116e69193915f8a22&sl=76480590&expires=8h&rt=sh&r=785422652&mlogid=7389446234529744604&vbdid=2565181720&fin=ptt.tsv&fn=ptt.tsv&rtype=1&dp-logid=7389446234529744604&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=26fa64dbec28822459deb4641c297738fc99d1f14b4dfe03305a5e1275657320&by=themis)
-  - [douban_single_turn.tsv](https://nj02cm01.baidupcs.com/file/67fd78295b219703853d0594287d8ffd?bkt=p3-00008628c569c1e7e3ca79865b9ac2f9146f&fid=1996957962-250528-748500324868080&time=1542263933&sign=FDTAXGERLQBHSKWa-DCb740ccc5511e5e8fedcff06b081203-VnG2Dqb7%2BmiH6drNL5eesoABgv0%3D&to=88&size=171360576&sta_dx=171360576&sta_cs=0&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CYangquan%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262128&mtime=1542263230&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=00008628c569c1e7e3ca79865b9ac2f9146f&sl=76480590&expires=8h&rt=sh&r=166462935&mlogid=7389448366121075380&vbdid=2565181720&fin=douban_single_turn.tsv&fn=douban_single_turn.tsv&rtype=1&dp-logid=7389448366121075380&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=78cccb630bb0656e7f7960a3127561e4c3ecf254f194dfe3&by=themis)
-  - [chatterbot.tsv](https://nj02cm01.baidupcs.com/file/bd034754f6e9baac534e6f263303c04a?bkt=p3-1400bd034754f6e9baac534e6f263303c04ac2738a050000000085c9&fid=1996957962-250528-829710954717052&time=1542265190&sign=FDTAXGERLQBHSKW-DCb740ccc5511e5e8fedcff06b081203-B%2BIILB2jm3GiqWsLKjbdDnGZGHs%3D&to=88&size=34249&sta_dx=34249&sta_cs=0&sta_ft=tsv&sta_ct=0&sta_mt=0&fm2=MH%2CQingdao%2CAnywhere%2C%2Cshandong%2Ccmnet&ctime=1542262101&mtime=1542263230&resv0=cdnback&resv1=0&vuk=2540473059&iv=0&htype=&newver=1&newfm=1&secfm=1&flow_ver=3&pkey=1400bd034754f6e9baac534e6f263303c04ac2738a050000000085c9&sl=76480590&expires=8h&rt=sh&r=568354668&mlogid=7389450456936252592&vbdid=2565181720&fin=chatterbot.tsv&fn=chatterbot.tsv&rtype=1&dp-logid=7389450456936252592&dp-callid=0.1.1&hps=1&tsl=80&csl=80&csign=zLxgrBDU281eOpa32c7Xs24SBB0%3D&so=0&ut=6&uter=4&serv=0&uc=1463930515&ti=e3357e20d22cf8486178361f6cd94e618534f0af9d115663&by=themis)
+  - [xiaohuangji.tsv](https://drive.google.com/uc?id=1-ThwDtMZnjRqXp-7drRLO3cGBaZyg3M-&export=download)
+  - [weibo.tsv](https://doc-00-a4-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/igqni3csrfd3tua30lahr9kk2p7qlboq/1542960000000/13270312927614693451/*/1-S4NjA6QlHV7ZjLXkED6faWp-ke55EzS?e=download)
+  - [tieba.tsv](https://doc-0s-a4-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/9k2jdp850q6cdq75lsnaj6tnd5g257pb/1542960000000/13270312927614693451/*/1-BANDqjbiY53wk59ciIiKWll-tHnWDQt?e=download)
+  - [subtitle.tsv](https://doc-00-a4-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/tt4l8il524mrgarhg8nh7kvnjr3irq5s/1542960000000/13270312927614693451/*/1-L2xlZUmhv4PLMfoCEc8vSeZJuLOgq7P?e=download)
+  - [qingyun.tsv](https://drive.google.com/uc?id=1-L9qTG9bLtOtkGoK-0GV6UqmezEIJUpF&export=download)
+  - [ptt.tsv](https://drive.google.com/uc?id=1-BcV2oDVr7hTD7XHICuzaJI6qpt88JZ5&export=download)
+  - [douban_single_turn.tsv](https://drive.google.com/uc?id=1-Akn-90xlM2PWahDpY09BRanPV0veHbA&export=download)
+  - [chatterbot.tsv](https://drive.google.com/uc?id=1-4CguFS0EikGaSOUgBYmMY5X4Z9ajt-q&export=download)
+  ```py
+  from tensorflow import keras
+
+  Chinese_chatbot_corpus_dd = {
+    "xiaohuangji.tsv": "https://drive.google.com/uc?id=1-ThwDtMZnjRqXp-7drRLO3cGBaZyg3M-&export=download",
+    "weibo.tsv": "https://doc-00-a4-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/igqni3csrfd3tua30lahr9kk2p7qlboq/1542960000000/13270312927614693451/*/1-S4NjA6QlHV7ZjLXkED6faWp-ke55EzS?e=download",
+    "tieba.tsv": "https://doc-0s-a4-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/9k2jdp850q6cdq75lsnaj6tnd5g257pb/1542960000000/13270312927614693451/*/1-BANDqjbiY53wk59ciIiKWll-tHnWDQt?e=download",
+    "subtitle.tsv": "https://doc-00-a4-docs.googleusercontent.com/docs/securesc/ha0ro937gcuc7l7deffksulhg5h7mbp1/tt4l8il524mrgarhg8nh7kvnjr3irq5s/1542960000000/13270312927614693451/*/1-L2xlZUmhv4PLMfoCEc8vSeZJuLOgq7P?e=download",
+    "qingyun.tsv": "https://drive.google.com/uc?id=1-L9qTG9bLtOtkGoK-0GV6UqmezEIJUpF&export=download",
+    "ptt.tsv": "https://drive.google.com/uc?id=1-BcV2oDVr7hTD7XHICuzaJI6qpt88JZ5&export=download",
+    "douban_single_turn.tsv": "https://drive.google.com/uc?id=1-Akn-90xlM2PWahDpY09BRanPV0veHbA&export=download",
+    "chatterbot.tsv": "https://drive.google.com/uc?id=1-4CguFS0EikGaSOUgBYmMY5X4Z9ajt-q&export=download"
+  }
+
+  tt = []
+  for kk, vv in Chinese_chatbot_corpus_dd.items():
+      tt.append(keras.utils.get_file(kk, vv))
+  ```
 ## 中文开放聊天语料 tsv 文件解析
   - **加载数据集**
     ```py
@@ -2146,7 +2164,7 @@
     ```shell
     ./chatbot_flask.py -l 0 -b 'ROBO: '
     # using wsgi server
-    waitress-serve --port 7777 --call 'course_chatbot_flask:get_app'
+    waitress-serve --port 7777 --call 'chatbot_flask:get_app'
     ```
     ```python
     host_ip = '127.0.0.1:7777'
@@ -2195,5 +2213,22 @@
     ROBO: 再见
 
     Enter your message >> quit
+    ```
+  - **admin tools**
+    ```py
+    rr = {'op_code': '6001', 'op_values': {'word': 'aa', 'rate': '20', 'type': 'n'}}
+    requests.post("http://%s/course_chatbot/admin_tools" % (host_ip), headers={"Content-type": "application/json"}, data=json.dumps(rr)).text
+
+    rr = {'op_code': '6002', 'op_values': {'word': 'aa'}}
+    requests.post("http://%s/course_chatbot/admin_tools" % (host_ip), headers={"Content-type": "application/json"}, data=json.dumps(rr)).text
+
+    rr = {'op_code': '7001', 'op_values': {'word1': 'aa', 'word2': 'bb'}}
+    requests.post("http://%s/course_chatbot/admin_tools" % (host_ip), headers={"Content-type": "application/json"}, data=json.dumps(rr)).text
+
+    rr = {'op_code': '7002', 'op_values': {'word': 'aa'}}
+    requests.post("http://%s/course_chatbot/admin_tools" % (host_ip), headers={"Content-type": "application/json"}, data=json.dumps(rr)).text
+
+    rr = {'op_code': '8001', 'op_values': {'question': 'eee', 'answer': 'fff', 'topic': 'python'}}
+    requests.post("http://%s/course_chatbot/admin_tools" % (host_ip), headers={"Content-type": "application/json"}, data=json.dumps(rr)).text
     ```
 ***

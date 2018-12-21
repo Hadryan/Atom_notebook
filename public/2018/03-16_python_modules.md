@@ -6,6 +6,9 @@
 
   - [___2018 - 03 - 16 Python Modules___](#2018-03-16-python-modules)
   - [目录](#目录)
+  - [python 执行 shell 命令](#python-执行-shell-命令)
+    - [os 模块](#os-模块)
+    - [subprocess 模块](#subprocess-模块)
   - [argparse 解析参数](#argparse-解析参数)
   	- [argparse 典型格式](#argparse-典型格式)
   	- [parse known args 跳过不能识别的参数](#parse-known-args-跳过不能识别的参数)
@@ -33,6 +36,57 @@
   	- [ElementTree](#elementtree)
 
   <!-- /TOC -->
+***
+
+# python 执行 shell 命令
+## os 模块
+  - 导入
+    ```python
+    import os
+    ```
+  - **os.system** 返回执行状态，输出结果到标准输出，用于执行不需要返回结果的操作
+    ```python
+    os.system('echo 1')
+    # 1
+    # Out[2]: 0
+    ```
+  - **os.popen** 返回执行结果，通过管道的方式，返回一个file-like的对象，里面的内容是脚本输出的内容
+    ```python
+    pp = os.popen('echo 1')
+    pp.read()
+    # Out[8]: '1\n'
+
+    # 重新调用，使用 readlines 读取
+    pp.readlines()
+    # Out[13]: ['1\n']
+    ```
+## subprocess 模块
+  - 导入
+    ```python
+    import subprocess
+    ```
+  - **subprocess.getoutput** 返回执行结果
+    ```python
+    subprocess.getoutput('echo 1')
+    # Out[19]: '1'
+    ```
+  - **subprocess.getstatusoutput** 返回执行状态与结果
+    ```python
+    subprocess.getstatusoutput('echo 1')
+    # Out[20]: (0, '1')
+    ```
+  - **subprocess.Popen** 在子进程中执行一个命令
+    ```python
+    p = subprocess.Popen('echo 1', stdout=subprocess.PIPE, shell=True)
+
+    # 返回执行结果与错误代码
+    p.communicate()
+    # Out[26]: (b'1\n', None)
+
+    # 返回执行状态
+    p.wait()
+    # Out[27]: 0
+    ```
 ***
 
 # argparse 解析参数
