@@ -1935,6 +1935,10 @@
 ***
 
 # 项目应用
+## pip install
+  ```py
+  pip install waitress sklearn jieba flask flask_cors numpy pandas xlrd
+  ```
 ## Excel
   - 使用 jieba 分词以及 sklearn 训练模型
   - 数据库使用 excel 表格，组织多个话题
