@@ -1941,7 +1941,6 @@
   - 会话管理功能
   - 话题选取功能
   ```py
-  #! /usr/bin/env python
   import os
   import numpy as np
   import pandas as pd

@@ -204,7 +204,7 @@ nonzero / where / choose
     ```python
     NumPy | numpy.org | N-dimensional array for numerical computation
     SciPy | scipy.org | Collection of numerical algorithms and toolboxes, including signal processing and optimization
-    MatPlotLib | matplotlib.org | Plotting library for Python                 
+    MatPlotLib | matplotlib.org | Plotting library for Python
     Pandas | pandas.pydata.org | Powerful Python data analysis toolkit        
     Seaborn | stanford.edu/~mwaskom/software/seaborn/ | Statistical data visualization
     Bokeh | bokeh.pydata.org | Interactive web visualization library
@@ -212,7 +212,7 @@ nonzero / where / choose
     NLTK | nltk.org | Natural language toolkit
     Notebook | jupyter.org | Web-based interactive computational environment combines code execution, rich text, mathematics, plots and rich media
     R essentials | conda.pydata.org/docs/r-with-conda.html | R with 80+ of the most used R packages for data science "conda install -c r r-essentials"
-    scikit-learn        数据挖掘 / 机器学习，模型和参数估计的方法，cross-validate是及其学习里面估计参数的重要方法
+    scikit-learn        数据挖掘 / 机器学习，模型和参数估计的方法，cross-validate是机器学习里面估计参数的重要方法
     seaborn         画统计图
     TeansorFlow        Google出的deep learning的python包
     一般建模分析 / 数据准备 / 训练(参数估计) / 模型检验和比较

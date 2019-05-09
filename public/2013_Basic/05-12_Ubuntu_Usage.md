@@ -1143,6 +1143,23 @@
     UNZIP="-O CP936"
     ZIPINFO="-O CP936"
     ```
+## docker 不使用 sudo 执行
+  - 添加 docker group
+    ```sh
+    sudo groupadd docker
+    ```
+  - 将用户加入 docker group
+    ```sh
+    sudo gpasswd -a ${USER} docker
+    ```
+  - 重启 docker 服务
+    ```sh
+    sudo service docker restart
+    ```
+  - 切换当前会话到新 group 或者重启 X 会话
+    ```sh
+    newgrp - docker
+    ```
 ***
 
 # 软件
@@ -1294,6 +1311,7 @@
 ## 7z compress & extract
   - 解压缩7z文件
     ```c
+    sudo apt install p7zip-full
     7za x phpMyAdmin-3.3.8.1-all-languages.7z -r -o./
     参数含义：
     x  代表解压缩文件，并且是按原始目录树解压（还有个参数 e 也是解压缩文件，但其会将所有文件都解压到根下）
@@ -1386,6 +1404,10 @@
   - [libgoo-canvas-perl](https://launchpad.net/ubuntu/+archive/primary/+files/libgoo-canvas-perl_0.06-2ubuntu3_amd64.deb)
   - Install by dpkg
     ```shell
+    wget https://launchpad.net/ubuntu/+archive/primary/+files/libgoocanvas-common_1.0.0-1_all.deb
+    wget https://launchpad.net/ubuntu/+archive/primary/+files/libgoocanvas3_1.0.0-1_amd64.deb
+    wget https://launchpad.net/ubuntu/+archive/primary/+files/libgoo-canvas-perl_0.06-2ubuntu3_amd64.deb
+
     sudo dpkg -i libgoocanvas-common_1.0.0-1_all.deb
     sudo apt install --fix-broken
 
@@ -1423,6 +1445,7 @@
     ```sh
     wget http://jaist.dl.sourceforge.net/project/kmphpfm/mwget/0.1/mwget_0.1.0.orig.tar.bz2
     mv mwget_0.1.0.orig.tar.bz2 ~/local_bin/
+    cd ~/local_bin/
     tar xvf mwget_0.1.0.orig.tar.bz2
     cd mwget_0.1.0.orig/
     ./configure
@@ -1672,6 +1695,8 @@
     ```
   - **Other sources**
     ```shell
+    sudo apt-get install curl
+
     # Atom
     curl -L https://packagecloud.io/AtomEditor/atom/gpgkey | sudo apt-key add -
     sudo sh -c 'echo "deb [arch=amd64] https://packagecloud.io/AtomEditor/atom/any/ any main" > /etc/apt/sources.list.d/atom.list'
@@ -1686,6 +1711,8 @@
     sudo sh -c 'echo "deb [arch=amd64] http://linux.teamviewer.com/deb preview main" >> /etc/apt/sources.list.d/teamviewer.list'
     # Numix
     sudo add-apt-repository ppa:numix/ppa
+    # flat-remix
+    sudo add-apt-repository ppa:daniruiz/flat-remix
 
     # Update
     sudo apt-get update
@@ -1695,23 +1722,25 @@
     sudo apt-get update
     sudo apt-get upgrade
 
-    sudo apt-get install curl git atom
+    sudo apt-get install git atom
 
     sudo apt-get install \
-    audacious cairo-dock calibre cscope curl easystroke expect filezilla git gnome-tweak-tool google-chrome-stable\
+    aria2 audacious axel cairo-dock calibre chrome-gnome-shell cscope curl easystroke expect filezilla flat-remix gnome-tweak-tool google-chrome-stable\
     iptux ibus-pinyin java-common minicom mp3info mysql-client mysql-common mysql-server nfs-common nfs-kernel-server numix-gtk-theme numix-icon-theme numix-blue-gtk-theme numix-icon-theme-circle \
-    pidgin python-gtk2 python-vte python-glade2 r-base r-recommended rename rsync samba seahorse shutter ssh stardict synaptic teamviewer telnet testdisk tftp tftpd tmux tree \
+    p7zip-full pidgin python-gtk2 python-vte python-glade2 r-base r-recommended rename rsync samba seahorse shutter ssh stardict synaptic teamviewer telnet testdisk tftp tftpd tmux tree \
     unrar unzip vim virtualbox virtualbox-ext-pack virtualbox-guest-additions-iso vlc vnc4server wget wireshark zip
 
     sudo apt-get install \
     evolution gksu openjdk-9-jdk
+
+    snap install skype --classic
     ```
   - **Anaconda**
     ```shell
     mv ~/Downloads/Anaconda3-5.1.0-Linux-x86_64.sh ./
     chmod a+x Anaconda3-5.1.0-Linux-x86_64.sh
     sudo mkdir /opt/anaconda3
-    sudo chown leondgarse:leondgarse anaconda3/ -R
+    sudo chown leondgarse:leondgarse /opt/anaconda3/ -R
 
     # 指定安装位置为 /opt/anaconda3
     ./Anaconda3-5.1.0-Linux-x86_64.sh -u
@@ -1723,7 +1752,7 @@
     ```shell
     virtualbox-dkms
 
-    cp  Atom_notebook/ ~/ -rf
+    cp Atom_notebook/ ~/ -rf
     cp Calibre\ Library/ local_bin/ practice_code/ Wallpapers/ ~/ -rf
     cp .atom/ .bashrc .easystroke/ .gitconfig* .icons/ .mozilla/ .ssh/ .thunderbird/ .tmux.conf .vimrc .vim ~/ -rf
     cp .local/share/audacious/ ~/.local/share/ -rf
@@ -1734,11 +1763,18 @@
 
     sudo cp /opt/hadoop-2.7.2/ /opt/ -r
     cd && cp workspace/ Ubuntu_share/ ~/ -rf
+
+    sudo mount /media/DATA/Operating_Systems/squashfs_backup/xxx.squashfs /media/cdrom/
+    cd /media/cdrom/usr/share/themes/
+    sudo cp Flat-Remix* Qogir* Sweet* /usr/share/themes/ -r
+    sudo cp /media/cdrom/usr/share/stardict/dic/* /usr/share/stardict/dic/ -r
+
+    sudo cp ~/Wallpapers/167557-1.png /boot/grub/back.png
     ```
   - **Other applications**
-    - netease cloud music
+    - [netease cloud music](http://d1.music.126.net/dmusic/netease-cloud-music_1.1.0_amd64_ubuntu.deb)
     - osdlyrics
-    - tixati
+    - [tixati](https://download2.tixati.com/download/tixati_2.58-1_amd64.deb)
   - **Other settings**
     - Tweaks -> Apperance / Desktop / Keyboard & Mouse / Startup Applications / Top Bar
     - Settings -> Network -> VPN

@@ -152,7 +152,7 @@
     - 在处理输入数据之后，两个算法的相对性能也可能会发生变化
     - 一般说来发现最好算法的关键环节是反复试错的迭代过程
 ## 原数据链接
-  - [Machine Learningin Action](www.manning.com/MachineLearninginAction)
+  - [Machine Learning in Action](www.manning.com/MachineLearninginAction)
 
   - [Source Code & Data](https://manning-content.s3.amazonaws.com/download/3/29c6e49-7df6-4909-ad1d-18640b3c8aa9/MLiA_SourceCode.zip)
 ***
@@ -189,13 +189,15 @@
 
   # KNN算法
   def classify0(test, dataSet, labels, k):
-     ''' 参数： 待分类数据, 已知数据, 已知数据标签, 选取的k值 '''
+     ''' 参数： 待分类数据, 已知数据 array, 已知数据标签 array, 选取的k值 '''
      # 使用欧氏距离公式 d = ( (A0 - B0)^2 + (A1 - B1)^2 )^0.5
      diffMat = (((dataSet - test) ** 2).sum(1)) ** 0.5
-     # 创建Series, diffMat数据类型可能是ndarray / Series
-     dms = pd.Series(pd.Series(diffMat).values, index = labels)
-     # 取排序后的前k个值，并根据索引计数
-     classCount = dms.sort_values().head(k).groupby(level=0).count()
+
+     # 取排序后的前k个值对应的标签，并根据索引计数
+     # dms = pd.Series(pd.Series(diffMat).values, index = labels)
+     # classCount = dms.sort_values().head(k).groupby(level=0).count()
+     topclasses = labels[diffMat.argsort()[:k]]
+     classCount = pd.value_counts(topclasses)
 
      # 返回排序后值最大的索引
      return classCount.idxmax()
@@ -204,110 +206,117 @@
   运行结果
   ``` python
   group = np.array([[1.0, 1.1], [1.0, 1.0], [0, 0], [0, 0.1]])
-  labels = ['A','A','B','B']
+  labels = np.array(['A','A','B','B'])
 
   classify0([0,0], group, labels, 3)
 
   Out[5]: 'B'
   ```
 ## k近邻算法改进约会网站的配对效果
-   ``` python
-   def datingClassTest(hoRatio = 0.1, k = 5):
-       ''' 参数：指定测试用例所占比例, 指定k值 '''
-       # 读取数据集
-       dating_columns = ['Flight_per_year', 'Video_game_rate', 'Ice_cream_per_week', 'Catagory']
-       df = pd.read_table('machinelearninginaction/Ch02/datingTestSet2.txt', names=dating_columns)
-       datingData = df[dating_columns[:3]]
+  ``` python
+  def datingClassTest(hoRatio = 0.1, k = 5):
+     ''' 参数：指定测试用例所占比例, 指定k值 '''
+     # 读取数据集
+     dating_columns = ['Flight_per_year', 'Video_game_rate', 'Ice_cream_per_week', 'Category']
+     df = pd.read_table('machinelearninginaction/Ch02/datingTestSet2.txt', names=dating_columns)
+     datingData = df[dating_columns[:-1]].values
+     category = df[dating_columns[-1]].values
 
-       # 数据规范化，将取值范围处理成[0, 1]
-       data_min = datingData.min()
-       data_range = datingData.max() - data_min
-       datingData_norm = (datingData - data_min) / (data_range)
+     # 数据规范化，将取值范围处理成[0, 1]
+     data_min = datingData.min(0)
+     data_range = datingData.max(0) - data_min
+     datingData_norm = (datingData - data_min) / (data_range)
 
-       # 计算测试数据量大小，以及错误统计
-       test_volume = int(datingData_norm.shape[0] * hoRatio)
-       error_count = 0
+     # 计算测试数据量大小，以及错误统计
+     test_volume = int(datingData_norm.shape[0] * hoRatio)
+     error_count = 0
 
-       # 测试数据
-       for i in range(test_volume):
-           rc = classify0(datingData_norm.ix[i], datingData_norm.ix[test_volume:], df.Catagory[test_volume:], k)
-           if (rc != df.Catagory.ix[i]):
-               error_count += 1
-               print('Not right! classified result = %d, real result = %d' %(rc, df.Catagory.ix[i]))
-       print('total errors = %d, error rate = %f%%' %(error_count, error_count / float(test_volume ) * 100))
+     # 训练数据
+     x = datingData_norm[test_volume:]
+     y = category[test_volume:]
 
-   ```
-   运行结果
-   ``` python
-   datingClassTest()
-   Not right! classified result = 2, real result = 3
-   Not right! classified result = 3, real result = 1
-   Not right! classified result = 2, real result = 3
-   Not right! classified result = 2, real result = 1
-   total errors = 4, error rate = 4.000000%
-   ```
+     # 测试数据
+     for i in range(test_volume):
+         rc = classify0(datingData_norm[i], x, y, k)
+         if (rc != category[i]):
+             error_count += 1
+             print('Not right! classified result = %d, real result = %d' %(rc, category[i]))
+     print('total errors = %d, error rate = %f%%' %(error_count, error_count / float(test_volume ) *   100))
+
+  ```
+  运行结果
+  ``` python
+  datingClassTest()
+  Not right! classified result = 3, real result = 2
+  Not right! classified result = 2, real result = 3
+  Not right! classified result = 3, real result = 1
+  Not right! classified result = 2, real result = 3
+  Not right! classified result = 2, real result = 1
+  total errors = 5, error rate = 5.000000%
+  ```
 ## 使用k-近邻算法的手写识别系统
-   ``` python
-   from os import listdir
+  ``` python
+  from os import listdir
 
-   def img2vector(filename):
-       ''' 读取转换为文本格式的图片文件 '''
-       fr = open(filename, 'r')
-       line = []
-       for l in fr:
-           line.append(list(l.strip()))
-       arr = np.array(line).ravel()
-       return [int(x) for x in arr]
+  def img2vector(filename):
+      ''' 读取转换为文本格式的图片文件 '''
+      fr = open(filename, 'r')
+      line = []
+      for l in fr:
+          line.append(list(l.strip()))
+      arr = np.array(line).ravel()
+      return [int(x) for x in arr]
 
-   def handwritingClassTest(k = 3):
-       ''' 参数：指定k值 '''
-       # 训练集
-       traing_path = 'machinelearninginaction/Ch02/trainingDigits/'
-       training_file_list = listdir(
-       traing_path)
-       m = len(training_file_list)
-       trainMat = np.zeros((m, 1024))
-       hwlabels = []
+  def handwritingClassTest(k = 3):
+      ''' 参数：指定k值 '''
+      # 训练集
+      traing_path = 'machinelearninginaction/Ch02/trainingDigits/'
+      training_file_list = listdir(
+      traing_path)
+      m = len(training_file_list)
+      trainMat = np.zeros((m, 1024))
+      hwlabels = []
 
-       # 文件名格式类似 0_0.txt，第一个数字表示正确的数值
-       for i in range(m):
-           name = training_file_list[i]
-           classNumStr = int(name.split('_')[0])
-           hwlabels.append(classNumStr)
-           trainMat[i] = img2vector(traing_path + '/' + name)
+      # 文件名格式类似 0_0.txt，第一个数字表示正确的数值
+      for i in range(m):
+          name = training_file_list[i]
+          classNumStr = int(name.split('_')[0])
+          hwlabels.append(classNumStr)
+          trainMat[i] = img2vector(traing_path + '/' + name)
+      hwlabels = np.array(hwlabels)
 
-       # 测试集
-       test_path = 'machinelearninginaction/Ch02/testDigits/'
-       test_file_list = listdir(test_path)
+      # 测试集
+      test_path = 'machinelearninginaction/Ch02/testDigits/'
+      test_file_list = listdir(test_path)
 
-       errorCount = 0.0
-       m_test = len(test_file_list)
-       for i in range(m_test):
-           name = test_file_list[i]
-           real_result = int(name.strip('_')[0])
-           test_arr = img2vector(test_path + '/' + name)
-           rc = classify0(test_arr, trainMat, hwlabels, k)
-           if (rc != real_result):
-               print('Wrong guess! file name = %s, real_result = %d, rc = %d' %(name, real_result, rc))
-               errorCount += 1
+      errorCount = 0.0
+      m_test = len(test_file_list)
+      for i in range(m_test):
+          name = test_file_list[i]
+          real_result = int(name.strip('_')[0])
+          test_arr = img2vector(test_path + '/' + name)
+          rc = classify0(test_arr, trainMat, hwlabels, k)
+          if (rc != real_result):
+              print('Wrong guess! file name = %s, real_result = %d, rc = %d' %(name, real_result, rc))
+              errorCount += 1
 
-       print('error counts = %d, error rates = %f%%' %(errorCount, errorCount / m_test * 100))
-   ```
-   运行结果
-   ``` python
-   handwritingClassTest()
-   Wrong guess! file name = 3_11.txt, real_result = 3, rc = 9
-   Wrong guess! file name = 8_23.txt, real_result = 8, rc = 3
-   Wrong guess! file name = 5_43.txt, real_result = 5, rc = 6
-   Wrong guess! file name = 8_36.txt, real_result = 8, rc = 1
-   Wrong guess! file name = 9_14.txt, real_result = 9, rc = 1
-   Wrong guess! file name = 8_11.txt, real_result = 8, rc = 6
-   Wrong guess! file name = 8_45.txt, real_result = 8, rc = 1
-   Wrong guess! file name = 9_60.txt, real_result = 9, rc = 7
-   Wrong guess! file name = 5_42.txt, real_result = 5, rc = 3
-   Wrong guess! file name = 1_86.txt, real_result = 1, rc = 7
-   error counts = 10, error rates = 1.057082%
-   ```
+      print('error counts = %d, error rates = %f%%' %(errorCount, errorCount / m_test * 100))
+  ```
+  运行结果
+  ``` python
+  handwritingClassTest()
+  Wrong guess! file name = 3_11.txt, real_result = 3, rc = 9
+  Wrong guess! file name = 1_86.txt, real_result = 1, rc = 7
+  Wrong guess! file name = 5_42.txt, real_result = 5, rc = 3
+  Wrong guess! file name = 5_43.txt, real_result = 5, rc = 6
+  Wrong guess! file name = 8_11.txt, real_result = 8, rc = 6
+  Wrong guess! file name = 8_23.txt, real_result = 8, rc = 3
+  Wrong guess! file name = 8_36.txt, real_result = 8, rc = 1
+  Wrong guess! file name = 8_45.txt, real_result = 8, rc = 1
+  Wrong guess! file name = 9_14.txt, real_result = 9, rc = 1
+  Wrong guess! file name = 9_60.txt, real_result = 9, rc = 7
+  error counts = 10, error rates = 1.057082%
+  ```
 ***
 
 # 决策树 Decision trees
@@ -402,7 +411,7 @@
       df = pd.DataFrame(dataSet)
       result = Series()
       # 数据集未划分时的熵值
-      result.set_value(df.columns[-1], calcShannonEnt(df))
+      result.at[df.columns[-1]] = calcShannonEnt(df)
       for i in range(df.shape[1] - 1):
           # 根据每一列特征值划分数据
           grouped = df.groupby(df.iloc[:, i])
@@ -411,10 +420,10 @@
           # 计算划分后每一个数据子集的香农熵，并乘以其概率
           newEntropy = prob * grouped.apply(calcShannonEnt)
           # 记录特征值名称，与对应的划分后香农熵的和
-          result.set_value(newEntropy.index.name, newEntropy.sum())
+          result.at[newEntropy.index.name] = newEntropy.sum()
 
       # 返回香农熵最低的划分方式的列名称
-      return result.argmin()
+      return result.idxmin()
       # return result   # 返回所有划分方式的结果
   ```
   运行结果
@@ -435,7 +444,7 @@
   b    1.200000
   dtype: float64
 
-  chooseBestFeatureToSplit(df)  # return result.argmin()
+  chooseBestFeatureToSplit(df)  # return result.idxmin()
   Out[23]: 'a'
   ```
 ## python递归构建决策树
@@ -452,7 +461,7 @@
           return stamp_row.iloc[0]
       # 如果分类值不相同，但已经没有其他用于分类的列，返回计数最多的特征值
       if (len(df.shape) == 1 or df.shape[1] == 1):
-          return stamp_row.value_counts().argmax()
+          return stamp_row.value_counts().idxmax()
 
       # 选择最好的分类特征列
       bestFeat = chooseBestFeatureToSplit(df)
@@ -466,7 +475,7 @@
       rs = pd.Series(name=bestFeat)
       rs.index.name=bestFeat
       for name, group in grouped:
-           rs.set_value(name, createTree(group))
+           rs.at[name] = createTree(group)
       return rs
   ```
   运行结果
@@ -509,8 +518,8 @@
              no     age
                     pre           soft
                     presbyopic    prescript
-                           hyper         soft
-                           myope    no lenses
+                                  hyper         soft
+                                  myope    no lenses
                     young         soft
              yes    prescript
                     hyper    age
