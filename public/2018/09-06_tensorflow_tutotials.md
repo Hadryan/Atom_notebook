@@ -92,7 +92,7 @@
     ```
   - **管理 Session** 创建 colab 后 -> `Runtime` -> `Manage sessions`
   - **下载训练过程中保存的文件** `打开侧边栏` -> `Files` -> `选择文件下载`
-  - **上传本地文件到 colab** 通过 `Browse` 打开本地文件并上传到 colba，`files.upload` 返回一个上传过文件的字典，`key` 是文件名，`value` 是文件内容
+  - **上传本地文件到 colab** 通过 `Browse` 打开本地文件并上传到 colab，`files.upload` 返回一个上传过文件的字典，`key` 是文件名，`value` 是文件内容
     ```py
     from google.colab import files
 

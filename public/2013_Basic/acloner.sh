@@ -227,8 +227,8 @@ UUID=$DIST_SWAP_UUID       none            swap    sw              0       0
     clean_resource_and_exit "Done!"
 else
     # Backup mode
-    # generate_exclude_list_addition
-    generate_exclude_list_base
+    generate_exclude_list_addition
+    # generate_exclude_list_base
     if [ -e $SQUASHFS_BACKUP_TO ]; then
         read -p "Target file $SQUASHFS_BACKUP_TO exist, overrite it? (Y/n):" RESULT
         if [[ ! $RESULT =~ ^[yY] ]]; then echo 'Please give another name then'; exit; fi

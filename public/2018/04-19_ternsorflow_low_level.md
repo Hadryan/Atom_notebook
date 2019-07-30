@@ -353,13 +353,13 @@
 
     sudo apt update
 
-    # Tensorflow 1.8.0 要求 cuda 版本 9.0，对应的包位于 ubuntu 16.04 中
-    sudo apt -o Dpkg::Options::="--force-overwrite" install cuda-9-0 cuda-drivers
+    # Tensorflow 1.14.0 要求 cuda 版本 10.0，对应的包位于 ubuntu 16.04 中
+    sudo apt -o Dpkg::Options::="--force-overwrite" install cuda-10-0 cuda-drivers
     ```
   - **安装对应版本的 cuDNN** NVIDIA CUDA Deep Neural Network library
-    - [NVIDIA cuDNN](https://developer.nvidia.com/cudnn) 注册并下载对应 CUDA 版本的 cuDNN 包 **cuDNN v7.1.4 Library for Linux**
+    - [NVIDIA cuDNN](https://developer.nvidia.com/cudnn) 注册并下载对应 CUDA 版本的 cuDNN 包 **cuDNN v7.6.1 Library for Linux**
     ```shell
-    tar xvf cudnn-9.0-linux-x64-v7.1.tgz
+    tar xvf cudnn-10.0-linux-x64-v7.6.1.34
     cd cuda/
     sudo cp include/cudnn.h /usr/local/cuda/include
     sudo cp lib64/libcudnn* /usr/local/cuda/lib64
@@ -2108,6 +2108,11 @@
     ![](images/cnn_structure.png)
 ## 卷积层 Convolution
   - **单位节点矩阵** 指的是一个长和宽都为1，但深度不限的节点矩阵
+  - **巻积的数学定义**
+    ```py
+    f(x) * g(x) = ∫(-∞, +∞)f(a)g(x-a)da
+    (f * g)(n) = ∑(τ=-∞, +∞)f(τ)g(n-τ)
+    ```
   - **过滤器 filter** 将当前层神经网络上的一个 **子节点矩阵** 转化为下一层神经网络上的一个 **单位节点矩阵**，常用的过滤器尺寸有 3×3 或 5×5
 
     ![](images/filter_0.png)
@@ -2162,6 +2167,40 @@
     bias = tf.nn.bias_add(conv, biases)
     ''' 将计算结果通过 ReLU 激活函数去线性化 '''
     actived_conv = tf.nn.relu(bias)
+    ```
+  - **巻积计算过程示例**
+    ```py
+    # a 与 k 作巻积运算
+    a = np.arange(12).reshape(3, 4)
+    k = np.array([[1,1,1],[1,1,0],[1,0,0]])
+
+    # k 翻转 180 度
+    k[::-1, ::-1]
+    # Out[55]:
+    # array([[0, 0, 1],
+    #        [0, 1, 1],
+    #        [1, 1, 1]])
+
+    # a 作全 0 扩充
+    np.pad(a, (1, 1), mode='constant')
+    # Out[56]:
+    # array([[ 0,  0,  0,  0,  0,  0],
+    #        [ 0,  0,  1,  2,  3,  0],
+    #        [ 0,  4,  5,  6,  7,  0],
+    #        [ 0,  8,  9, 10, 11,  0],
+    #        [ 0,  0,  0,  0,  0,  0]])
+
+    # 巻积运算为在转化后的 a 上平移转化后 k，对应元素相乘后相加的结果
+    from scipy import ndimage
+    ndimage.convolve(a, k, mode='constant')
+    # Out[57]:
+    # array([[10, 18, 23, 16],
+    #        [27, 40, 46, 28],
+    #        [22, 25, 28, 11]])
+
+    # 使用 scipy.signal 中的函数计算
+    from scipy import signal
+    signal.convolve2d(a, k, mode='same')
     ```
 ## 池化层 Pooling
   - **池化层** 可以非常有效地缩小矩阵的尺寸，从而减少最后全连接层中的参数，既可以加快计算速度也有防止过拟合问题的作用

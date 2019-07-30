@@ -841,8 +841,28 @@
   - 启动，调用模块中指定的方法，如果有 `argparse`，需定义 `--call`
     ```shell
     # 默认端口 8080
-    waitress-serve --port 8041 --call 'hello:create_app'
+    waitress-serve --port 8041 --call hello:create_app
     ```
+  - app 接口 **waitress.serve** 与命令行调用的 **waitress-serve** 使用相同的参数
+    ```py
+    from flask import Flask
+    from waitress import serve
+
+    app = Flask(__name__)
+
+    @app.route("/")
+    def hello():
+        return "Hello World!"
+
+    if __name__ == "__main__":
+        #app.run()
+        serve(app, host='0.0.0.0', port=8080)
+    ```
+  - 参数
+    - **threads** 线程数，默认为 4
+    - **connection_limit** 连接限制数量，默认为 100
+    - **channel_timeout** 将连接置为 inactive 的超时时间，默认为 120
+    - **cleanup_interval** 清理 inactive 连接的时间间隔，默认为 30
 ## Q / A
   - Q: 跨域问题
     ```py

@@ -594,6 +594,38 @@
   def joblib_loop():
       Parallel(n_jobs=4)(delayed(task)(i) for i in range(20))
   ```
+## 线程锁
+  - **全局解释器锁 GIL** Global Interpreter Lock，全局解释器锁。为了解决多线程之间数据完整性和状态同步的问题，设计为在任意时刻只有一个线程在解释器 (CPU) 中运行
+  - **可重入锁 RLock** 可重复可递归调用的锁，在外层使用锁之后，在内层仍然可以使用，并且不发生死锁，当一个线程拥有一个锁的使用权后，再次获取锁的使用权时，不会阻塞，会立马得到使用权
+  - **不可重入锁 Lock** 不可递归调用，递归调用就发生死锁
+  - 可重入锁 RLock 内部维护着一个 **Lock** 和一个 **counter** 变量，counter 记录 acquire 的次数，直到一个线程所有的 acquire 都被 release，其他的线程才能获得资源
+  - thead 的不可重入锁
+    ```py
+    import thread
+    lock = thread.allocate_lock()
+
+    lock.acquire()
+    ...
+    lock.release()
+    ```
+  - theading 的不可重入锁
+    ```py
+    import threading
+    lock = threading.Lock()
+
+    lock.acquire()
+    ...
+    lock.release()
+    ```
+  - threading 的可重入锁 RLock
+    ```py
+    import threading
+    lock = threading.RLock()
+
+    lock.acquire()
+    ...
+    lock.release()
+    ```
 ***
 
 # xml 解析
@@ -924,3 +956,50 @@
     # </a>
     ```
 ***
+
+# crontab
+## 安装
+  - [python-crontab](https://pypi.org/project/python-crontab/)
+    ```sh
+    pip install python-crontab
+    ```
+## 添加 crontab 任务
+  ```py
+  from crontab import CronTab
+
+  # 读取当前用户的 crontab 文件
+  my_user_cron = CronTab(user=True)
+
+  # 创建新的任务
+  job = my_user_cron.new(command='echo 1 >> /home/leondgarse/foo', comment='ECHO')
+  job.setall('* * * * *')
+
+  print("job.comment = %s, job.command = %s" % (job.comment, job.command))
+  print("job.is_enabled() = %s" % (job.is_enabled()))
+  print("job.is_valid() = %s" % (job.is_valid()))
+
+  # 写入文件
+  my_user_cron.write_to_user(user=True)
+  ```
+## 删除 crontab 任务
+  ```py
+  from crontab import CronTab
+
+  # 读取当前用户的 crontab 文件
+  my_user_cron = CronTab(user=True)
+  print(my_user_cron.lines)
+
+  # my_user_cron.remove 删除
+  iter = my_user_cron.find_comment('ECHO')
+  for ii in iter:
+      my_user_cron.remove(ii)
+  print(my_user_cron.lines)
+
+  # remove_all 删除
+  my_user_cron = CronTab(user=True)
+  my_user_cron.remove_all(comment="ECHO")
+  print(my_user_cron.lines)
+
+  # 写入文件
+  my_user_cron.write_to_user(user=True)
+  ```

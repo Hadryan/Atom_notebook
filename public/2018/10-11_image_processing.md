@@ -1371,7 +1371,7 @@
     images_show(images, titles, nrows=2)
     ```
     ![](images/skimage_filters_gabor.png)
-  - **gaussian 滤波** 多维的滤波器，是一种平滑滤波，可以消除高斯噪声
+  - **gaussian 滤波** 多维的滤波器，是一种平滑滤波，可以消除高斯噪声，本质上是将灰度图像 I 和一个 **高斯核** 进行 **卷积** 操作
     ```py
     gaussian(image, sigma=1, output=None, mode='nearest', cval=0, multichannel=None, preserve_range=False, truncate=4.0)
     ```
@@ -1769,3 +1769,166 @@
     cv2.destroyAllWindows()
     ```
 ***
+
+
+```py
+from skimage import io
+image = io.imread('./1.png')
+pp = (255 - image) / 255
+max_line = pp.shape[0]
+max_row = pp.shape[1]
+
+for num_line, pp_line in enumerate(pp[::2, ::2]):
+    for num_row, pp_row in enumerate(pp_line):
+        if pp_row == 1:
+            area_step = 1
+            while True:
+                line_ss = max(0, num_line - area_step)
+                line_ee = min(max_line, num_line + area_step)
+                row_ss = max(0, num_row - area_step)
+                row_ee = min(max_row, num_row + area_step)
+                if pp[line:ss:line_ee, row_ss:row_ee].sum() < 3:
+                    area_step += 1
+                else:
+                  if area_step == 1:
+                      break
+                  else:
+
+
+```
+```py
+from skimage import io
+def ful_fill_hole(im_path, repeat=1):
+  image = io.imread(im_path)
+  pp = (255 - image) / 255
+  max_line = pp.shape[0]
+  max_row = pp.shape[1]
+
+  for _ in range(2 * repeat):
+    for pp_line in pp:
+      left_edge = 0
+      for num_row in range(0, pp.shape[1] - 1):
+        if pp_line[num_row] == 1 and left_edge == 0:
+          left_edge = 1
+
+        if left_edge == 0:
+          continue
+
+        if pp_line[num_row + 1] == 1:
+          pp_line[num_row] = 1
+
+        # if pp_line[num_row] == 0 and pp_line[num_row + 1] == 0:
+        #   left_edge = 0
+
+    pp = pp.transpose()
+
+  return pp, (255 - image) / 255
+
+def display_image_2(pp, tt):
+  # 图片显示
+  fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
+  axes[0].imshow(pp, cmap=plt.cm.gray, interpolation='nearest')
+  axes[0].set_title('Original')
+  axes[1].imshow(tt, cmap=plt.cm.gray, interpolation='nearest')
+  axes[1].set_title('Converted image')
+
+pp, tt = ful_fill_hole('ian15780_label.png', repeat=10)
+display_image_2(pp, tt)
+```
+```py
+from skimage import io
+def ful_fill_hole(im_path, repeat=1):
+  image = io.imread(im_path)
+  pp = (255 - image) / 255
+  max_line = pp.shape[0]
+  max_row = pp.shape[1]
+
+  for _ in range(4 * repeat):
+    for pp_line in pp:
+      left_edge = 0
+      for num_row in range(0, pp.shape[1] - 1):
+        if pp_line[num_row] == 1 and left_edge == 0:
+          left_edge = 1
+
+        if left_edge == 0:
+          continue
+
+        if pp_line[num_row + 1] == 1:
+          pp_line[num_row] = 1
+
+        # if pp_line[num_row] == 0 and pp_line[num_row + 1] == 0:
+        #   left_edge = 0
+
+    pp = pp.transpose()[:, ::-1]
+
+  return pp, (255 - image) / 255
+
+def display_image_2(pp, tt):
+  # 图片显示
+  fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
+  axes[0].imshow(pp, cmap=plt.cm.gray, interpolation='nearest')
+  axes[0].set_title('Original')
+  axes[1].imshow(tt, cmap=plt.cm.gray, interpolation='nearest')
+  axes[1].set_title('Converted image')
+
+pp, tt = ful_fill_hole('ian15780_label.png', repeat=10)
+display_image_2(pp, tt)
+```
+```py
+import numpy as np
+import matplotlib.pyplot as plt
+
+# 扩展曲线边缘，填充空洞
+from skimage import io
+from skimage.morphology import reconstruction
+from skimage.morphology import closing
+from scipy.ndimage import gaussian_filter
+from scipy import ndimage as ndi
+
+pp = io.imread('./1.png')
+tt = gaussian_filter(255 - pp, 1)
+dilated = reconstruction(tt, tt, method='dilation')
+segmentation = ndi.binary_fill_holes(closing(dilated))
+
+# 填充颜色
+from skimage.color import label2rgb
+
+labeled_ss, _ = ndi.label(segmentation)
+image_label_overlay = label2rgb(labeled_ss, image=pp, colors=[[255,255,255], [255, 0, 0]])
+
+# 图片显示
+fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
+axes[0].imshow(pp, cmap=plt.cm.gray, interpolation='nearest')
+axes[0].set_title('Original')
+axes[1].imshow(image_label_overlay, cmap=plt.cm.gray, interpolation='nearest')
+axes[1].set_title('Converted image')
+```
+```py
+def fullfil_hole(im_path, dilation_disk=1, closing_disk=3):
+    im_orig = io.imread(im_path)
+    pp = (255 - im_orig) / 255
+    pp = closing(dilation(pp, disk(dilation_disk)), disk(closing_disk))
+    pp = ndi.binary_fill_holes(pp)
+
+    labeled_pp, _ = ndi.label(pp)
+    image_label_overlay = label2rgb(labeled_pp, image=im_orig, colors=[[255,255,255], [255, 0, 0]])
+
+    # 图片显示
+    fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
+    axes[0].imshow(pp, cmap=plt.cm.gray, interpolation='nearest')
+    axes[0].set_title('Original')
+    axes[1].imshow(image_label_overlay, cmap=plt.cm.gray, interpolation='nearest')
+    axes[1].set_title('Converted image')
+```
+```py
+fullfil_hole('ian12180_label.png', dilation_disk=1, closing_disk=3)
+fullfil_hole('ian14520_label.png', dilation_disk=1, closing_disk=3)
+fullfil_hole('ian14760_label.png', dilation_disk=1, closing_disk=5)
+fullfil_hole('ian15000_label.png', dilation_disk=1, closing_disk=5)
+fullfil_hole('ian15720_label.png', dilation_disk=1, closing_disk=5)
+**fullfil_hole('ian15780_label.png', dilation_disk=2, closing_disk=5)**
+fullfil_hole('ian16740_label.png', dilation_disk=2, closing_disk=3)
+fullfil_hole('ian19620_label.png', dilation_disk=1, closing_disk=3)
+fullfil_hole('ian1980_label.png', dilation_disk=1, closing_disk=3)
+fullfil_hole('ian9660_label.png', dilation_disk=1, closing_disk=3)
+```

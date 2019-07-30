@@ -125,6 +125,17 @@
     ```python
     f = open(path + 'foo', errors='ignore')
     ```
+  - Q: 运行python文件，报错
+    ```sh
+    /usr/bin/env: "python\r": 没有那个文件或目录
+    ```
+    A: 可能创建在windows下，多了\r字符
+    ```sh
+    :set ff # 文件显示为dos格式
+    :set ff=unix # 设置为unix格式
+    :wq
+    ```
+
 ***
 
 # Python2 to Python3
@@ -597,10 +608,10 @@
 
     i = FuncX(3)
     i(5)
-    Out[278]: 15
+    # Out[278]: 15
 
     FuncX(3)(5)
-    Out[279]: 15
+    # Out[279]: 15
     ```
 ***
 

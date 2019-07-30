@@ -180,7 +180,7 @@
   ```
   运行结果
   ```python
-  df = pd.read_table('Ch10/testSet2.txt', header=None)
+  df = pd.read_csv('Ch10/testSet2.txt', header=None, sep='\t')
   c, g = biKmeans(df, 3)
   c
   Out[505]:
@@ -961,7 +961,7 @@
   ```
   运行结果
   ```python
-  df = pd.read_table('Ch13/testSet.txt', header=None)
+  df = pd.read_csv('Ch13/testSet.txt', header=None, sep='\t')
   # 其中 l 是降维之后的数据集, r 是被重构后的原始数据集
   l, r = pca(df.values, 1)
 

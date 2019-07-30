@@ -1160,6 +1160,13 @@
     ```sh
     newgrp - docker
     ```
+## nohup
+  - 当用户注销或者网络断开时，终端会收到 HUP（hangup）信号从而关闭其所有子进程
+  - **nohup** 让提交的命令忽略 hangup 信号，标准输出和标准错误缺省会被重定向到 nohup.out 文件中
+  - 一般可在结尾加上 `&` 将命令同时放入后台运行，也可用 `>filename 2>&1` 来更改缺省的重定向文件名
+    ```sh
+    nohup ./server_flask.py -l 0 -f app.log >> app.log 2>&1 &
+    ```
 ***
 
 # 软件

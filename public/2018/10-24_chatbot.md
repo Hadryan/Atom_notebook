@@ -1035,7 +1035,7 @@
 
 # 基于检索 NLTK
 ## NLP 与 NLTK
-  - **NLP** Natural Language Processing 自然语言处理，通过 NLP 理解自然与阿也能，可以整理和构建知识，以执行自动摘要 / 翻译 / 命名实体识别 / 关系提取 / 情感分析 / 语音识别 / 主题分割等任务
+  - **NLP** Natural Language Processing 自然语言处理，通过 NLP 理解自然语言，可以整理和构建知识，以执行自动摘要 / 翻译 / 命名实体识别 / 关系提取 / 情感分析 / 语音识别 / 主题分割等任务
   - **NLTK** Natural Language Toolkit，用于处理自然语言的 Python 库，为超过 50 个语料库和词汇资源提供了易于使用的接口，还提供了一套用于分类 / 标记化 / 词干化 / 标记 / 解析 / 语义推理的文本处理库，以及工业级 NLP 库的包装器
     ```py
     ! pip install nltk
