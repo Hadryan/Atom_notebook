@@ -408,6 +408,11 @@
     [[22. 28.]
      [49. 64.]]
     ```
+  - Q: could not create cudnn handle: CUDNN_STATUS_INTERNAL_ERROR
+    ```sh
+    rm ~/.nv -rf
+    ```
+
 ## Hello World
   ```python
   import tensorflow as tf

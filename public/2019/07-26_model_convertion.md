@@ -1,4 +1,7 @@
 # ___2019 - 07 - 26 Model Convertion___
+***
+tensorRT
+
 
 # MMDNN
 ## 安装
@@ -100,8 +103,15 @@
   - [onnx/onnx](https://github.com/onnx/onnx)
   - [onnx/models](https://github.com/onnx/models)
   - [onnx/tutorials](https://github.com/onnx/tutorials)
+  - [MMdnn/mmdnn/conversion/onnx/](https://github.com/microsoft/MMdnn/tree/master/mmdnn/conversion/onnx)
+  - [Importing an ONNX model into MXNet](http://mxnet.incubator.apache.org/versions/master/tutorials/onnx/super_resolution.html)
+  - ONNX为AI模型提供了一个开源格式。 它定义了一个可扩展的计算图模型，以及内置运算符和标准数据类型的定义，MMdnn也将支持ONNX格式
+  ```sh
+  pip install onnx
+  ```
 ## mxnet-model-server and ArcFace-ResNet100 (from ONNX model zoo)
   - [ArcFace-ResNet100 (from ONNX model zoo)](https://github.com/awslabs/mxnet-model-server/blob/master/docs/model_zoo.md/#arcface-resnet100_onnx)
+  - [onnx/models/vision/body_analysis/arcface/](https://github.com/onnx/models/tree/master/vision/body_analysis/arcface)
   - [awslabs/mxnet-model-server](ttps://github.com/awslabs/mxnet-model-server)
   ```sh
   pip install mxnet-model-server
@@ -115,3 +125,330 @@
 
   mxnet-model-server --stop
   ```
+## onnx模型转换为Tensorflow模型
+  - [Can not use converted ONNX -> TF graph independently ](https://github.com/onnx/onnx-tensorflow/issues/167)
+  - [Train in Tensorflow, Export to ONNX](https://github.com/onnx/tutorials/blob/master/tutorials/OnnxTensorflowExport.ipynb)
+    ```py
+    import onnx
+    import numpy as np
+    from onnx_tf.backend import prepare
+
+    model = onnx.load('./assets/mnist_model.onnx')
+    tf_rep = prepare(model)
+
+    img = np.load("./assets/image.npz")
+    output = tf_rep.run(img.reshape([1, 1,28,28]))
+
+    print("outpu mat: \n",output)
+    print("The digit is classified as ", np.argmax(output))
+
+    import tensorflow as tf
+    with tf.Session() as persisted_sess:
+        print("load graph")
+        persisted_sess.graph.as_default()
+        tf.import_graph_def(tf_rep.predict_net.graph.as_graph_def(), name='')
+        inp = persisted_sess.graph.get_tensor_by_name(
+            tf_rep.predict_net.tensor_dict[tf_rep.predict_net.external_input[0]].name
+        )
+        out = persisted_sess.graph.get_tensor_by_name(
+            tf_rep.predict_net.tensor_dict[tf_rep.predict_net.external_output[0]].name
+        )
+        res = persisted_sess.run(out, {inp: img.reshape([1, 1,28,28])})
+        print(res)
+        print("The digit is classified as ",np.argmax(res))
+
+    tf_rep.export_graph('tf.pb')
+    ```
+  - 转换完成后，需要对转换出的tf.pb模型进行验证，验证方式如下：
+    ```py
+    import numpy as np
+    import tensorflow as tf
+    from tensorflow.python.platform import gfile
+
+    name = "tf.pb"
+
+    with tf.Session() as persisted_sess:
+        print("load graph")
+        with gfile.FastGFile(name, 'rb') as f:
+            graph_def = tf.GraphDef()
+            graph_def.ParseFromString(f.read())
+
+        persisted_sess.graph.as_default()
+        tf.import_graph_def(graph_def, name='')
+
+        inp = persisted_sess.graph.get_tensor_by_name('0:0')
+        out = persisted_sess.graph.get_tensor_by_name('LogSoftmax:0')
+        #test = np.random.rand(1, 1, 28, 28).astype(np.float32)
+        #feed_dict = {inp: test}
+
+        img = np.load("./assets/image.npz")
+        feed_dict = {inp: img.reshape([1, 1,28,28])}
+
+        classification = persisted_sess.run(out, feed_dict)
+        print(out)
+        print(classification)
+    ```
+## mxnet 模型转化为 tensorflow
+  ```sh
+  cd model-r100-ii/
+  mmtoir -f mxnet -n model-symbol.json -w model-0000.params -d resnet100 --inputShape 3,112,112
+  mmtocode -f tensorflow --IRModelPath resnet100.pb --IRWeightPath resnet100.npy --dstModelPath tf_resnet100.py
+  mmtomodel -f tensorflow -in tf_resnet100.py -iw resnet100.npy -o tf_resnet100 --dump_tag SERVING
+
+  mmconvert -sf mxnet -in model-symbol.json -iw model-0000.params -df tensorflow -om resnet100 --inputShape 3,112,112
+  ```
+  ```py
+  from tensorflow.python.platform import gfile
+  from tensorflow.python.util import compat
+  from tensorflow.core.protobuf import saved_model_pb2
+
+  with gfile.FastGFile('./saved_model.pb', 'rb') as ff:
+      data = compat.as_bytes(ff.read())
+      sm = saved_model_pb2.SavedModel()
+      sm.ParseFromString(data)
+
+  g_in = tf.import_graph_def(sm.meta_graphs[0].graph_def)
+
+  LOGDIR='./logdir'
+  train_writer = tf.summary.FileWriter(LOGDIR)
+  train_writer.add_graph(sess.graph)
+  train_writer.flush()
+  train_writer.close()
+
+  tensorboard --logdir ./logdir/
+  ```
+## mxnet 加载 ONNX 模型
+  ```py
+  import onnx
+  from onnx_tf.backend import prepare
+
+  model = onnx.load('./resnet100.onnx')
+  tf_rep = prepare(model)
+  help(prepare)
+
+  import mxnet as mx
+  import mxnet.contrib.onnx as onnx_mxnet
+
+  sym, arg, aux = onnx_mxnet.import_model('./resnet100.onnx')
+  all_layers = sym.get_internals()
+  sym = all_layers["fc1_output"]
+  ctx = mx.gpu(0)
+  model = mx.mod.Module(symbol=sym, context=ctx, label_names=None)
+  model.bind(data_shapes=[("data", (1, 3, 112, 112))])
+  model.set_params(arg, aux)
+
+  from mtcnn.mtcnn import MTCNN
+  import cv2
+  from src import face_preprocess
+  import numpy as np
+  img = cv2.imread('./3.jpg')
+  img_str = cv2.imencode('.png',img)[1]
+  frame = cv2.imdecode(img_str, cv2.IMREAD_COLOR)
+
+  detector = MTCNN(steps_threshold=[0.6, 0.7, 0.7])
+  ret = detector.detect_faces(frame)
+  bbox = np.array(
+      [
+          [ii["box"][0], ii["box"][1], ii["box"][2] + ii["box"][0], ii["box"][3] + ii["box"][1], ii["confidence"]]
+          for ii in ret
+      ]
+  )
+  points = np.array([list(ii["keypoints"].values()) for ii in ret])
+
+  nimg = face_preprocess.preprocess(frame, bbox[0], points[0], image_size="112,112")
+  aligned = np.transpose(nimg, (2, 0, 1))
+  input_blob = np.expand_dims(aligned, axis=0)
+  data = mx.nd.array(input_blob)
+  db = mx.io.DataBatch(data=(data,))
+  model.forward(db, is_train=False)
+
+  data_names = [graph_input for graph_input in sym.list_inputs()
+                        if graph_input not in arg and graph_input not in aux]
+  mod = mx.mod.Module(symbol=sym, data_names=data_names, context=mx.gpu(0), label_names=None)
+
+
+  # forward on the provided data batch
+  mod.forward(Batch([mx.nd.array(test_image)]))
+  mod.get_outputs()
+  ```
+***
+
+# Tensorflow SavedModel 模型的保存与加载
+saved_model模块主要用于TensorFlow Serving。TF Serving是一个将训练好的模型部署至生产环境的系统，主要的优点在于可以保持Server端与API不变的情况下，部署新的算法或进行试验，同时还有很高的性能。
+```py
+load(sess, tags, export_dir, import_scope=None, **saver_kwargs)
+    Loads the model from a SavedModel as specified by tags. (deprecated)
+
+    Warning: THIS FUNCTION IS DEPRECATED. It will be removed in a future version.
+    Instructions for updating:
+    This function will only be available through the v1 compatibility library as tf.compat.v1.saved_model.loader.load or tf.compat.v1.saved_model.load. There will be a new function for importing SavedModels in Tensorflow 2.0.
+```
+  - SaveModel 与语言无关，可以使用 python 训练模型，然后在 Java 中非常方便的加载模型
+  - 如果使用 Tensorflow Serving server 来部署模型，必须选择 SavedModel 格式
+  - 一个比较完整的 SavedModel 模型包含以下内容
+    ```sh
+    ├── assets  # 可选，可以添加可能需要的外部文件
+    ├── assets.extra  # 可选，是一个库，可以添加其特定assets的地方
+    ├── saved_model.pb  # 是 MetaGraphDef，包含图形结构，MetaGraphDef 是MetaGraph的Protocol Buffer表示
+    └── variables # 保存训练所习得的权重
+        ├── variables.data-00000-of-00001
+        └── variables.index
+    ```
+    保存到文件
+    最简单的保存方法是使用tf.saved_model.simple_save函数，代码如下：
+    tf.saved_model.simple_save(sess,
+                "./model",
+                inputs={"myInput": x},
+                outputs={"myOutput": y})
+加载
+对不同语言而言，加载过程有些类似，这里还是以python为例：
+
+mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
+
+with tf.Session(graph=tf.Graph()) as sess:
+  tf.saved_model.loader.load(sess, ["serve"], "./model")
+  graph = tf.get_default_graph()
+
+  input = np.expand_dims(mnist.test.images[0], 0)
+  x = sess.graph.get_tensor_by_name('myInput:0')
+  y = sess.graph.get_tensor_by_name('myOutput:0')
+  batch_xs, batch_ys = mnist.test.next_batch(1)
+  scores = sess.run(y,
+           feed_dict={x: batch_xs})
+  print("predict: %d, actual: %d" % (np.argmax(scores, 1), np.argmax(batch_ys, 1)))
+
+```py
+sess = tf.InteractiveSession()
+meta_graph_def = tf.saved_model.loader.load(sess, ["serve"], "./")
+print(meta_graph_def.signature_def)
+
+x = sess.graph.get_tensor_by_name("data:0")
+y = sess.graph.get_tensor_by_name("fc1/add_1:0")
+
+from mtcnn.mtcnn import MTCNN
+from skimage.transform import resize
+
+img = plt.imread('./3.jpg')
+detector = MTCNN(steps_threshold=[0.6, 0.7, 0.7])
+ret = detector.detect_faces(img)
+
+bb = ret[0]['box']
+frame = img[bb[0]:bb[0] + bb[2], bb[1]:bb[1] + bb[3]]
+frame = resize(frame, (112, 112))
+
+frame = frame[np.newaxis, :, :, :]
+rr = sess.run(y, feed_dict={x: frame})
+```
+
+saved_model 保存/载入模型
+```py
+class tf.saved_model.builder.SavedModelBuilder
+
+# 初始化方法
+__init__(export_dir)
+
+# 导入graph与变量信息
+add_meta_graph_and_variables(
+    sess,
+    tags,
+    signature_def_map=None,
+    assets_collection=None,
+    legacy_init_op=None,
+    clear_devices=False,
+    main_op=None
+)
+
+# 载入保存好的模型
+tf.saved_model.loader.load(
+    sess,
+    tags,
+    export_dir,
+    **saver_kwargs
+)
+```
+- 要保存一个已经训练好的模型，使用下面三行代码就可以了。
+```py
+builder = tf.saved_model.builder.SavedModelBuilder(saved_model_dir)
+builder.add_meta_graph_and_variables(sess, ['tag_string'])
+builder.save()
+```
+- 首先构造SavedModelBuilder对象，初始化方法只需要传入用于保存模型的目录名，目录不用预先创建。
+- add_meta_graph_and_variables方法导入graph的信息以及变量，这个方法假设变量都已经初始化好了，对于每个SavedModelBuilder这个方法一定要执行一次用于导入第一个meta graph。
+- 第一个参数传入当前的session，包含了graph的结构与所有变量。
+- 第二个参数是给当前需要保存的meta graph一个标签，标签名可以自定义，在之后载入模型的时候，需要根据这个标签名去查找对应的MetaGraphDef，找不到就会报如RuntimeError: MetaGraphDef associated with tags 'foo' could not be found in SavedModel这样的错。标签也可以选用系统定义好的参数，如tf.saved_model.tag_constants.SERVING与tf.saved_model.tag_constants.TRAINING。
+- save方法就是将模型序列化到指定目录底下。
+- 保存好以后到saved_model_dir目录下，会有一个saved_model.pb文件以及variables文件夹。顾名思义，variables保存所有变量，saved_model.pb用于保存模型结构等信息。
+
+- 载入 使用tf.saved_model.loader.load方法就可以载入模型。如
+```py
+meta_graph_def = tf.saved_model.loader.load(sess, ['tag_string'], saved_model_dir)
+```
+- 第一个参数就是当前的session，第二个参数是在保存的时候定义的meta graph的标签，标签一致才能找到对应的meta graph。第三个参数就是模型保存的目录。
+- load完以后，也是从sess对应的graph中获取需要的tensor来inference。如
+```py
+x = sess.graph.get_tensor_by_name('input_x:0')
+y = sess.graph.get_tensor_by_name('predict_y:0')
+
+# 实际的待inference的样本
+_x = ...
+sess.run(y, feed_dict={x: _x})
+```
+- 这样和之前的第二种方法一样，也是要知道tensor的name。那么如何可以在不知道tensor name的情况下使用呢？ 那就需要给add_meta_graph_and_variables方法传入第三个参数，signature_def_map。
+- 使用SignatureDef 关于SignatureDef我的理解是，它定义了一些协议，对我们所需的信息进行封装，我们根据这套协议来获取信息，从而实现创建与使用模型的解耦。SignatureDef的结构以及相关详细的文档在：https://github.com/tensorflow/serving/blob/master/tensorflow_serving/g3doc/signature_defs.md
+```py
+# 构建signature
+tf.saved_model.signature_def_utils.build_signature_def(
+    inputs=None,
+    outputs=None,
+    method_name=None
+)
+
+# 构建tensor info
+tf.saved_model.utils.build_tensor_info(tensor)
+```
+- SignatureDef，将输入输出tensor的信息都进行了封装，并且给他们一个自定义的别名，所以在构建模型的阶段，可以随便给tensor命名，只要在保存训练好的模型的时候，在SignatureDef中给出统一的别名即可。
+- TensorFlow的关于这部分的例子中用到了不少signature_constants，这些constants的用处主要是提供了一个方便统一的命名。在我们自己理解SignatureDef的作用的时候，可以先不用管这些，遇到需要命名的时候，想怎么写怎么写。
+- 假设定义模型输入的别名为“input_x”，输出的别名为“output” ，使用SignatureDef的代码如下
+```py
+builder = tf.saved_model.builder.SavedModelBuilder(saved_model_dir)
+# x 为输入tensor, keep_prob为dropout的prob tensor
+inputs = {'input_x': tf.saved_model.utils.build_tensor_info(x),
+            'keep_prob': tf.saved_model.utils.build_tensor_info(keep_prob)}
+
+# y 为最终需要的输出结果tensor
+outputs = {'output' : tf.saved_model.utils.build_tensor_info(y)}
+
+signature = tf.saved_model.signature_def_utils.build_signature_def(inputs, outputs, 'test_sig_name')
+
+builder.add_meta_graph_and_variables(sess, ['test_saved_model'], {'test_signature':signature})
+builder.save()
+```
+- 保存 上述inputs增加一个keep_prob是为了说明inputs可以有多个， build_tensor_info方法将tensor相关的信息序列化为TensorInfo protocol buffer。
+- inputs，outputs都是dict，key是我们约定的输入输出别名，value就是对具体tensor包装得到的TensorInfo。
+- 然后使用build_signature_def方法构建SignatureDef，第三个参数method_name暂时先随便给一个。
+- 创建好的SignatureDef是用在add_meta_graph_and_variables的第三个参数signature_def_map中，但不是直接传入SignatureDef对象。事实上signature_def_map接收的是一个dict，key是我们自己命名的signature名称，value是SignatureDef对象。
+
+- 载入 载入与使用的代码如下
+```py
+## 略去构建sess的代码
+
+signature_key = 'test_signature'
+input_key = 'input_x'
+output_key = 'output'
+
+meta_graph_def = tf.saved_model.loader.load(sess, ['test_saved_model'], saved_model_dir)
+# 从meta_graph_def中取出SignatureDef对象
+signature = meta_graph_def.signature_def
+
+# 从signature中找出具体输入输出的tensor name
+x_tensor_name = signature[signature_key].inputs[input_key].name
+y_tensor_name = signature[signature_key].outputs[output_key].name
+
+# 获取tensor 并inference
+x = sess.graph.get_tensor_by_name(x_tensor_name)
+y = sess.graph.get_tensor_by_name(y_tensor_name)
+
+# _x 实际输入待inference的data
+sess.run(y, feed_dict={x:_x})
+```
+- 从上面两段代码可以知道，我们只需要约定好输入输出的别名，在保存模型的时候使用这些别名创建signature，输入输出tensor的具体名称已经完全隐藏，这就实现创建模型与使用模型的解耦。

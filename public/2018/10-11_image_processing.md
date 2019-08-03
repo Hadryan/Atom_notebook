@@ -185,11 +185,14 @@
 ## 图片数据类型转化
   - **将二进制图片转化为 array**
     ```py
-    ''' 将二进制图片转化为 array '''
+    ''' io + plt.imread 将二进制图片转化为 array '''
     import io
-
     imm = open('./coffee.jpg', 'rb').read()
     im = plt.imread(io.BytesIO(imm), format='jpg')
+
+    ''' imageio + skimage.io.imread 将二进制图片转化为 array '''
+    from skimage.io import imread
+    im = imread(imm, plugin='imageio')
     ```
   - **PIL Image 与 array**
     ```py

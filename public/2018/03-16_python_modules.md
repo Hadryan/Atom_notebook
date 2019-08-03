@@ -989,15 +989,18 @@
   my_user_cron = CronTab(user=True)
   print(my_user_cron.lines)
 
-  # my_user_cron.remove 删除
-  iter = my_user_cron.find_comment('ECHO')
-  for ii in iter:
-      my_user_cron.remove(ii)
+  # remove_all 删除，可以指定 comment 或 command
+  my_user_cron.remove_all(comment="ECHO")
   print(my_user_cron.lines)
 
-  # remove_all 删除
+  # my_user_cron.remove 删除
   my_user_cron = CronTab(user=True)
-  my_user_cron.remove_all(comment="ECHO")
+  my_user_cron.new(command='echo 1 >> /home/leondgarse/goo', comment='ECHO').setall('* * * * *')
+
+  iter = my_user_cron.find_comment('ECHO')
+  for ii in iter:
+      if 'foo' in ii.command:
+          my_user_cron.remove(ii)
   print(my_user_cron.lines)
 
   # 写入文件
