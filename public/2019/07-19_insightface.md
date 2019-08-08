@@ -9,6 +9,7 @@
   - [JerryJiaGit/facenet_trt](https://github.com/JerryJiaGit/facenet_trt)
   - [Image processing for text recognition](http://blog.mathocr.com/2017/06/25/image-processing-for-text-recognition.html)
   - [Modify From skimage to opencv warpaffine](https://github.com/cftang0827/face_alignment/commit/ae0fac4aa1e5658aa74027ec28eab876606c505e)
+  - [erikbern/ann-benchmarks](https://github.com/erikbern/ann-benchmarks)
 ***
 
 # Insightface MXNet 模型使用
@@ -28,8 +29,8 @@
   home_path = os.environ.get("HOME")
   args = argparse.ArgumentParser().parse_args([])
   args.image_size = '112,112'
-  args.model = os.path.join(home_path, 'workspace/modules/insightface_mxnet_model/model-r100-ii/model,0')
-  args.ga_model = os.path.join(home_path, "workspace/modules/insightface_mxnet_model/gamodel-r50/model,0")
+  args.model = os.path.join(home_path, 'workspace/models/insightface_mxnet_model/model-r100-ii/model,0')
+  args.ga_model = os.path.join(home_path, "workspace/models/insightface_mxnet_model/gamodel-r50/model,0")
   args.gpu = 0
   args.det = 0
   args.flip = 0
@@ -546,36 +547,81 @@
   ```
   ![](images/tf_pb_align_faces.png)
 ## Tensorflow Serving server
-  ```sh
-  tree
-  # .
-  # ├── 1
-  # │   ├── saved_model.pb
-  # │   └── variables
-  # │       ├── variables.data-00000-of-00001
-  # │       └── variables.index
+  - `saved_model_cli` 显示模型 signature_def 信息
+    ```sh
+    cd /home/leondgarse/workspace/models/insightface_mxnet_model/model-r100-ii/tf_resnet100
+    tree
+    # .
+    # ├── 1
+    # │   ├── saved_model.pb
+    # │   └── variables
+    # │       ├── variables.data-00000-of-00001
+    # │       └── variables.index
 
-  tensorflow_model_server --port=8500 --rest_api_port=8501 --model_name=arcface --model_base_path=/home/leondgarse/workspace/insightface-deploy/models/model-r100-ii/tf_resnet100/
+    saved_model_cli show --dir ./1
+    # The given SavedModel contains the following tag-sets:
+    # serve
 
-  curl http://localhost:8501/v1/models/arcface
-  curl -d '{"instances": [[1.1,1.2,0.8,1.3]]}' -X POST http://localhost:8501/v1/models/arcface:predict
-  ```
-  ```py
-  from mtcnn.mtcnn import MTCNN
-  img = plt.imread('3.jpg')
-  detector = MTCNN(steps_threshold=[0.6, 0.7, 0.7])
-  aa = detector.detect_faces(img)
-  bb = aa[0]['box']
-  cc = img[bb[0]: bb[0] + bb[2], bb[1]: bb[1] + bb[2]]
+    saved_model_cli show --dir ./1 --tag_set serve
+    # The given SavedModel MetaGraphDef contains SignatureDefs with the following keys:
+    # SignatureDef key: "serving_default"
 
-  from skimage.transform import resize
-  dd = resize(cc, [112, 112])
-  ee = dd[np.newaxis, :, :, :]
+    saved_model_cli show --dir ./1 --tag_set serve --signature_def serving_default
+    # The given SavedModel SignatureDef contains the following input(s):
+    #   inputs['input'] tensor_info:
+    #       dtype: DT_FLOAT
+    #       shape: (-1, 112, 112, 3)
+    #       name: data:0
+    # The given SavedModel SignatureDef contains the following output(s):
+    #   outputs['output'] tensor_info:
+    #       dtype: DT_FLOAT
+    #       shape: (-1, 512)
+    #       name: fc1/add_1:0
+    # Method name is: tensorflow/serving/predict
+    ```
+  - `tensorflow_model_server` 启动服务
+    ```sh
+    # model_base_path 需要绝对路径
+    tensorflow_model_server --port=8500 --rest_api_port=8501 --model_name=arcface --model_base_path=/home/leondgarse/workspace/models/insightface_mxnet_model/model-r100-ii/tf_resnet100
+    ```
+  - `requests` 请求返回特征值结果
+    ```py
+    import json
+    import requests
+    from skimage.transform import resize
 
-  import requests
-  import json
-  requests.post("http://localhost:8501/v1/models/arcface:predict", data=json.dumps({'data': ee.tolist()}))
-  ```
+    rr = requests.get("http://localhost:8501/v1/models/arcface")
+    print(rr.json())
+    # {'model_version_status': [{'version': '1', 'state': 'AVAILABLE', 'status': {'error_code': 'OK', 'error_message': ''}}]}
+
+    x = plt.imread('grace_hopper.jpg')
+    print(x.shape)
+    # (600, 512, 3)
+
+    xx = resize(x, [112, 112])
+    data = json.dumps({"signature_name": "serving_default", "instances": [xx.tolist()]})
+    json_response = requests.post('http://localhost:8501/v1/models/arcface:predict',data=data, headers=headers)
+    rr = json_response.json()
+    print(rr.keys(), np.shape(rr['predictions']))
+    # dict_keys(['predictions']) (1, 512)
+    ```
+  - `MTCNN` 提取人脸位置后请求结果
+    ```py
+    from mtcnn.mtcnn import MTCNN
+
+    img = plt.imread('grace_hopper.jpg')
+    detector = MTCNN(steps_threshold=[0.6, 0.7, 0.7])
+    aa = detector.detect_faces(img)
+    bb = aa[0]['box']
+    cc = img[bb[1]: bb[1] + bb[3], bb[0]: bb[0] + bb[2]]
+    dd = resize(cc, [112, 112])
+
+    data = json.dumps({"signature_name": "serving_default", "instances": [dd.tolist()]})
+    json_response = requests.post('http://localhost:8501/v1/models/arcface:predict',data=data, headers=headers)
+    rr = json_response.json()
+    print(rr.keys(), np.shape(rr['predictions']))
+    # dict_keys(['predictions']) (1, 512)
+    ```
 ***
 
 # timeit test
@@ -599,3 +645,8 @@
   %timeit bb = np.load('1.npz')['feature']
   1 loop, best of 5: 4.75 s per loop
   ```
+
+http://mobile.yangkeduo.com
+
+https://wx2.qq.com/cgi-bin/mmwebwx-bin/webwxcheckurl?requrl=https%3A%2F%2Fmobile.yangkeduo.com&skey=%40crypt_5da22335_d6ae06079d45d9f7eb0cf7cf527eae27&deviceid=e275027639709443&pass_ticket=oTXTZ%252F8VAzP6wDXIzdJQiQomyTngp4brb5fKVQ7KyD4%252FsTAKF8DLjhqZogYXGZuE&opcode=2&scene=1&username=@975941cb2a35b5bdab443502173670529964db7ca64b3b8f8dd4398e63772af8
+https://wx2.qq.com/cgi-bin/mmwebwx-bin/webwxcheckurl?requrl=http%3A%2F%2Fmobile.yangkeduo.com&amp;skey=%40crypt_5da22335_d6ae06079d45d9f7eb0cf7cf527eae27&amp;deviceid=e275027639709443&amp;pass_ticket=oTXTZ%252F8VAzP6wDXIzdJQiQomyTngp4brb5fKVQ7KyD4%252FsTAKF8DLjhqZogYXGZuE&amp;opcode=2&amp;scene=1&amp;username=@975941cb2a35b5bdab443502173670529964db7ca64b3b8f8dd4398e63772af8

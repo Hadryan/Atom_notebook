@@ -5,6 +5,7 @@ DIST_HOME_MOUNT_POINT=$DIST_ROOT_MOUNT_POINT'/home'
 EXCLUDE_FILE='./rsync_excludes_file_list'
 SYS_PATH_EXCLUDED='proc sys tmp mnt media cdrom media/cdrom0 snap'
 
+# Parsing arguments
 if [ $# -ge 5 ]; then
     # Restore mode
     echo "Restore from a squashfs file."
@@ -13,13 +14,15 @@ if [ $# -ge 5 ]; then
     DIST_ROOT_PATH=$2
     DIST_HOME_PATH=$3
     DIST_SWAP_PATH=$4
-    HOST_NAME=$5
+    DIST_GRUB=$5
+    HOST_NAME=$6
     SOURCE_SYSTEM_PATH='/tmp/mount_point_for_source_squash'
 
     echo "SOURCE_SQUASH_PATH = $SOURCE_SQUASH_PATH"
     echo "DIST_ROOT_PATH = $DIST_ROOT_PATH"
     echo "DIST_HOME_PATH = $DIST_HOME_PATH"
     echo "DIST_SWAP_PATH = $DIST_SWAP_PATH"
+    echo "DIST_GRUB = $DIST_GRUB"
     echo "HOST_NAME = $HOST_NAME"
 elif [ $# -eq 4 ]; then
     # Clone mode
@@ -28,7 +31,8 @@ elif [ $# -eq 4 ]; then
     DIST_ROOT_PATH=$1
     DIST_HOME_PATH=$2
     DIST_SWAP_PATH=$3
-    HOST_NAME=$4
+    DIST_GRUB=$4
+    HOST_NAME=$5
     SOURCE_SYSTEM_PATH='/'
 
     echo "DIST_ROOT_PATH = $DIST_ROOT_PATH"
@@ -44,8 +48,8 @@ elif [ $# -eq 1 ]; then
 
     echo "SQUASHFS_BACKUP_TO = $SQUASHFS_BACKUP_TO"
 else
-    echo "Restore Usage: `echo $0 | xargs basename` <source squash path> <dist root path> <dist home path> <dist swap path> <host name>"
-    echo "Clone   Usage: `echo $0 | xargs basename` <dist root path> <dist home path> <dist swap path> <host name>"
+    echo "Restore Usage: `echo $0 | xargs basename` <source squash path> <dist root disk> <dist home disk> <dist swap disk> <dist grub disk> <host name>"
+    echo "Clone   Usage: `echo $0 | xargs basename` <dist root disk> <dist home disk> <dist swap disk> <dist grub disk> <host name>"
     echo "Backup  Usage: `echo $0 | xargs basename` <squashfs file backup to>"
     exit
 fi
@@ -96,8 +100,9 @@ function clean_resource_and_exit {
     umount $DIST_ROOT_MOUNT_POINT 2>/dev/null
     sleep 1
     if [ $? -eq 0 ]; then
-        rm $DIST_HOME_MOUNT_POINT
-        rm $DIST_ROOT_MOUNT_POINT
+        echo "temp mount path: "$DIST_HOME_MOUNT_POINT" "$DIST_ROOT_MOUNT_POINT" ,remove at your choice"
+        # rm $DIST_HOME_MOUNT_POINT -r
+        # rm $DIST_ROOT_MOUNT_POINT -r
     fi
 
     if [ $WORK_MODE = "RESTORE" ]; then
@@ -135,10 +140,9 @@ DATE_START_S=`date +%s`
 
 if [ $WORK_MODE != "BACKUP" ]; then
     # Clone and Restore mode
-    # Format disks
+    # Format disks, but not force
     umount $DIST_HOME_PATH
     umount $DIST_ROOT_PATH
-
 
     mkfs.ext4 $DIST_ROOT_PATH
     mkfs.ext4 $DIST_HOME_PATH
@@ -171,7 +175,14 @@ if [ $WORK_MODE != "BACKUP" ]; then
     #     --exclude "/*/lost+found" \
     #     --exclude "/lib/modules/*/volatile/*" \
     #     $SOURCE_SYSTEM_PATH/ $DIST_ROOT_MOUNT_POINT
-    if [ $? -ne 0 ]; then clean_resource_and_exit "rsync error"; fi
+    if [ $? -ne 0 ]; then
+        read -p "rsync error, proceed anyway? (Y/n):" RESULT
+        if [[ ! $RESULT =~ ^[yY] ]]; then
+            clean_resource_and_exit "rsync error, exit"
+        else
+            echo 'OK, so we GO ON!'
+        fi
+    fi
 
     # Create excluded system path
     cd $DIST_ROOT_MOUNT_POINT && \
@@ -218,7 +229,7 @@ UUID=$DIST_SWAP_UUID       none            swap    sw              0       0
     # grub-install --boot-directory=$DIST_ROOT_MOUNT_POINT/boot $DIST_ROOT_PATH && \
     # update-grub -o $DIST_ROOT_MOUNT_POINT/boot/grub/grub.cfg
     # chroot_command $DIST_ROOT_MOUNT_POINT grub-install --boot-directory=$DIST_ROOT_MOUNT_POINT/boot ${DIST_ROOT_PATH:0:-1} && \
-    grub-install --boot-directory=$DIST_ROOT_MOUNT_POINT/boot --target=i386-pc ${DIST_ROOT_PATH:0:-1} && \
+    grub-install --boot-directory=$DIST_ROOT_MOUNT_POINT/boot --target=i386-pc $DIST_GRUB && \
     chroot_command $DIST_ROOT_MOUNT_POINT update-grub
 
     if [ $? -ne 0 ]; then clean_resource_and_exit "Install grub error"; fi
