@@ -126,7 +126,7 @@
          [ 2.6265299 ,  3.10868015],
          [-3.53973889, -2.89384326]])
   ```
-  ![](images/kmeans.png)
+  ![](images/kmeans.jpg)
 ## 提高聚类性能 后处理 / 二分k均值算法
   - k均值聚类中簇的数目 k 需要用户预先定义，在指定的k值下，k均值算法收敛到了局部最小值，而非全局最小值，如所有质心可能聚集在数据集的中心点，质心可能位于两个子集的中点
   - **误差平方和 SSE** (Sum of Squared Error)，一种用于度量聚类效果的指标，取数据子集与对应质心距离的平方和
@@ -204,7 +204,7 @@
       c, g = kMeans(df, 3)
       plt.scatter(c[:, 0], c[:, 1], c='r', marker='D', s = 30, alpha = 0.5)
   ```
-  ![](images/bikmeans.png)
+  ![](images/bikmeans.jpg)
 ## 一个地图上两点的距离计算公式
   ```python
   # 球面距离计算，返回距离单位为英里，(A的经纬度, B的经纬度)
@@ -660,7 +660,7 @@
       ```
     - 构建FP树中的路径
 
-      ![](images/fptree.png)
+      ![](images/fptree.jpg)
 ## python实现构建FP树
   ```python
   # 复用 Apriori 算法中的转换函数，转换为只包含 0 / 1 的矩阵，表示某个值是否存在
@@ -968,7 +968,7 @@
   plt.scatter(df.iloc[:, 0], df.iloc[:, 1], marker='^', s=90)
   plt.scatter(r[:, 0], r[:, 1], marker='o', s=50, c='red')
   ```
-  ![](images/pca.png)
+  ![](images/pca.jpg)
   - 原始数据集及第一主成分，只需要保留一维信息即可，因为另一维信息只是对分类缺乏贡献的噪声数据
 ## 利用PCA对半导体制造数据降维
   - 数据集包含590个特征，且存在很多的缺失值，使用平均值来代替缺失值，并对这些特征进行降维处理
@@ -1033,7 +1033,7 @@
   l.shape
   Out[526]: (1567, 6)
   ```
-  ![](images/pca_cumsum.png)
+  ![](images/pca_cumsum.jpg)
 ***
 
 # 利用奇异值分解 SVD 简化数据
@@ -1694,7 +1694,7 @@
 
   plt.legend(loc='best')
   ```
-  ![](images/pegasos.png)
+  ![](images/pegasos.jpg)
 ## python实现mrjob版本的 SVM Pegasos 算法
   - 将该算法划分成map阶段和reduce阶段，确认哪些可以并行，哪些不能并行
   - Pegasos算法大量的时间花费在内积计算上，**内积运算** 可以并行，但 **创建新的权重变量w** 是不能并行的，因此可以将算法改写为MapReduce作业

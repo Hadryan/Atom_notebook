@@ -120,7 +120,7 @@
     - **TensorFlow Core** 最底层API，提供对程序运行的完全控制，其他上层接口基于 TensorFlow Core
     - 上层接口更易用且调用一致，如 **tf.estimator** 用于管理数据集 / 模型 / 训练以及评估
 
-    ![](images/tensorflow_programming_environment.png)
+    ![](images/tensorflow_programming_environment.jpg)
   - **high-level TensorFlow concepts**
     - **Eager** 执行环境，直接返回操作结果 [Eager Execution](https://www.tensorflow.org/programmers_guide/eager)
     - **Datasets API** 导入数据 input pipelines [datasets Importing Data](https://www.tensorflow.org/programmers_guide/datasets)
@@ -2092,7 +2092,7 @@
         steps=200)
     ```
   - 初次调用 **train** 时，保存 checkpoints 与其他文件
-    ![](images/first_train_calls.png)
+    ![](images/first_train_calls.jpg)
     ```python
     print(classifier.model_dir)
     # models/iris
@@ -2134,7 +2134,7 @@
     - Estimator 首先调用模型的 model_fn() 创建 graph
     - 使用最新的 checkpoint 中存储的数据初始化模型参数
     - 即如果 checkpoints 存在，调用 train / evaluate / predict 时，将首先重建模型
-  ![](images/subsequent_calls.png)
+  ![](images/subsequent_calls.jpg)
 ## Avoiding a bad restoration
   - 从 checkpoint 重建模型状态，只适用于模型结构不变的情况，模型参数改变时将报错
     ```python
@@ -2713,7 +2713,7 @@
     ```
   - **dataset.map** 在 dataset 的每一个元素上应用一个转化函数
 
-    ![](images/map.png)
+    ![](images/map.jpg)
     ```python
     # Metadata describing the text columns
     COLUMNS = ['SepalLength', 'SepalWidth',
@@ -2775,10 +2775,10 @@
 ## Custom estimators 与 model function
   - 预定义的模型 pre-made Estimators 是 `tf.estimator.Estimator` 的子类，自定义的模型 custom Estimators 是 `tf.estimator.Estimator` 类的实例化
 
-    ![](images/estimator_types.png)
+    ![](images/estimator_types.jpg)
   - **model_fn** 具体实现自定义模型的算法，包括隐藏层，符合 Estimator 标准的输入输出
 
-    ![](images/full_network.png)
+    ![](images/full_network.jpg)
   - **model_fn 参数结构**
     ```python
     def my_model_fn(
@@ -2805,7 +2805,7 @@
     ```
     - **tf.feature_column.input_layer** 将 feature_columns 转化为输入数据
 
-    ![](images/input_layer.png)
+    ![](images/input_layer.jpg)
   - **定义隐藏层**
     ```python
     # Build the hidden layers, sized according to the 'hidden_units' param.
@@ -2814,7 +2814,7 @@
     ```
     - **tf.layers.dense** 添加一个全连接层，**units 参数** 指定该层中节点数量，**activation 参数** 指定激活函数
 
-    ![](images/add_hidden_layer.png)
+    ![](images/add_hidden_layer.jpg)
   - **定义输出层**
     ```python
     # Compute logits (1 per class).
@@ -2822,7 +2822,7 @@
     ```
     - 输出层使用一个全连接层，不使用激活函数，输出为类别数 `n_classes`
 
-    ![](images/add_logits.png)
+    ![](images/add_logits.jpg)
 ## Implement training, evaluation, and prediction
   - 调用 train / evaluate / predict 时的 Estimator mode 参数
 
@@ -2847,7 +2847,7 @@
     ```
     - **EstimatorSpec 的 predictions 参数** 返回自定义的预测结果，predict 方法将该字典 yield 返回出去
 
-    ![](images/add_predictions.png)
+    ![](images/add_predictions.jpg)
 
   - **损失函数 loss** training / evaluation 需要计算模型的损失
     ```python
@@ -3011,7 +3011,7 @@
     ```
     Open TensorBoard by browsing to: http://localhost:6006
 
-    ![](images/tensor_board_custom_estimator.png)
+    ![](images/tensor_board_custom_estimator.jpg)
 ***
 
 # 计算设备 CPU GPU TPU
@@ -3198,7 +3198,7 @@
     - **Projections panel** 左下部分选择投射方式 T-SNE / PCA / Custom
     - **Inspector panel** 右侧用于搜索特定的单词 / 点，以及最近邻列表，`Show All Data` 显示所有数据，`Isolate *nnn* points` 只显示过滤出的最近邻数据，`Clear selection` 清除过滤条件
     - **Bookmark panel** 右下角用于保存 / 分享
-    ![](images/TensorBoard_Embedding_Projector.png)
+    ![](images/TensorBoard_Embedding_Projector.jpg)
   - **映射方式 Projections** 多维向量映射到三维空间时，降低向量维度
     - **[t-SNE](https://en.wikipedia.org/wiki/T-distributed_stochastic_neighbor_embedding)** T-distributed stochastic neighbor embedding 非线性，非确定性算法，尝试保留数据中本地的最近邻数据，通常是以扭曲全局结构为代价
     - **[PCA](https://en.wikipedia.org/wiki/Principal_component_analysis)** principal component analysis 线性，确定性算法，尝试在尽量少的维度中使用尽量多的数据参数，PCA 倾向于显示数据中大范围的结构，会扭曲本地最近邻数据
@@ -3334,6 +3334,6 @@
     tensorboard --logdir=/tmp/tensorflow/mnist/logs/mnist_with_summaries/
     # TensorBoard 1.10.0 at http://HP-Pavilion-Laptop-15:6006 (Press CTRL+C to quit)
     ```
-    ![](images/tensorboard_scalar.png)
-    ![](images/tensorboard_histograms.png)
+    ![](images/tensorboard_scalar.jpg)
+    ![](images/tensorboard_histograms.jpg)
 ***

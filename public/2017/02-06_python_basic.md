@@ -1393,7 +1393,7 @@
     Out[474]: 2
     ```
 ## 字符串方法
-  ![](images/Selection_017.png)
+  ![](images/Selection_017.jpg)
 ## 示例
   - startswith / in / find / join / split
     ```python

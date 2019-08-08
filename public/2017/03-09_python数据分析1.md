@@ -552,7 +552,7 @@ nonzero / where / choose
   - 通常，用%prun（cProfile）做“宏观的”性能分析，而用%lprun（line_profiler）做“微观的”性能分析
 ## ipython 键盘快捷键
 
-  ![](images/ipython_short_key.png)
+  ![](images/ipython_short_key.jpg)
 ## IPython HTML Notebook
   - IPython Notebook有一种基于JSON的文档格式.ipynb，使你可以轻松分享代码、输出结果以及图片等内容
   - 目前在各种Python研讨会上，一种流行的演示手段就是使用IPython Notebook，然后再将.ipynb文件发布到网上以供所有人查阅
@@ -1194,7 +1194,7 @@ nonzero / where / choose
     z = np.sin(xx**2 + yy**2) / (xx**2 + yy**2)
     h = plt.contourf(x,y,z)
     ```
-    ![](images/numpy_meshgrid_circle.png)
+    ![](images/numpy_meshgrid_circle.jpg)
 
     **在一组值（网格型）上计算函数 `sqrt(x^2+y^2)`**
     ```python
@@ -1205,7 +1205,7 @@ nonzero / where / choose
     plt.colorbar()
     plt.title('Image plot of $\sqrt{x^2 + y^2}$ for a grid of values')
     ```
-    ![](images/numpy_meshgrid_square.png)
+    ![](images/numpy_meshgrid_square.jpg)
   - **np.mgrid** 与 **np.ogrid** 都是类 `np.lib.index_tricks.nd_grid` 的实现
     ```py
     # Construct a multi-dimensional "meshgrid"
@@ -1388,7 +1388,7 @@ nonzero / where / choose
     ax.legend()
     plt.show()
     ```
-    ![](images/numpy_percentile_gca.png)
+    ![](images/numpy_percentile_gca.jpg)
 ## 逻辑运算 any all alltrue allclose logical_and logical_or logical_not logical_xor
   - 布尔值会被强制转换为1（True）和0（False），因此 sum 可以被用来对布尔型数组中的 True 值计数
     ```python

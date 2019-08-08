@@ -120,7 +120,7 @@
     - 暂停状态，此时Activity失去焦点，但是仍对用户可见
     - 停止状态，此时Activity被其他Activity覆盖而完全变暗
     - 终止状态，此时被系统清理出内存
-    ![](images/015.png)
+    ![](images/015.jpg)
   - **完整生命周期**
     - 从最初调用onCreat()到最终调用onDestroy()的整个过程
     - onCreat()用于设置Activity中所有全局状态以初始化系统资源

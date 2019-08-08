@@ -818,7 +818,7 @@
     axes[1].plot(x2, sigmoid(x2))
     axes[1].set_title('Sigmoid(-60, 60)')
     ```
-    ![](images/Sigmoid.png)
+    ![](images/Sigmoid.jpg)
 ## Logistic分类器回归系数
   - 在每个特征 **x** 上乘以一个回归系数 **w** ，然后把所有的结果值相加
     ```
@@ -866,7 +866,7 @@
   plt.legend(loc='best')
   ```
 
-  ![](images/logistic_test.png)
+  ![](images/logistic_test.jpg)
 ## python实现 梯度上升 算法与绘制最佳拟合直线
   - 对于两个特征值 **(x, y)** 的数据集，添加常数项的情况下，得出的回归系数 **w** 含有三个值 **[a, b, c]**
     ```
@@ -933,7 +933,7 @@
   w = gradAscent(dataSet, labelSet)
   plotBestFit(dataSet, labelSet, w)
   ```
-  ![](images/logistic_test_classfied.png)
+  ![](images/logistic_test_classfied.jpg)
 ## python实现 随机梯度上升 算法
   - 梯度上升算法在每次更新回归系数时都需要遍历整个数据集，在数据集变大时，该方法的计算复杂度就会很高
   - 随机梯度上升算法与梯度上升算法的效果相当，但占用更少的计算资源
@@ -972,7 +972,7 @@
   w = stocGradAscent0(dataSet, labelSet)
   plotBestFit(dataSet, labelSet, w)
   ```
-  ![](images/sto_logistic_test_classfied_0.png)
+  ![](images/sto_logistic_test_classfied_0.jpg)
   - 随机梯度上升迭代一次拟合出来的直线效果，错分了三分之一的样本，但计算次数要少很多，增加迭代次数可以提高拟合精度
 ## 参数收敛
   - 一个判断优化算法优劣的可靠方法是看它是否收敛，也就是说参数是否达到了稳定值，是否还会不断地变化
@@ -999,7 +999,7 @@
 
   stackOfWeights(w)
   ```
-  ![](images/stack_weights_0.png)
+  ![](images/stack_weights_0.jpg)
   - 回归系数经过大量迭代才能达到稳定值，并且仍然有局部的波动现象
 ## python实现 改进的随机梯度上升 算法
   - alpha在每次迭代时会随着迭代次数不断减小，这会缓解数据波动或者高频波动
@@ -1033,7 +1033,7 @@
   w = stocGradAscent1(dataSet, labelSet)
   plotBestFit(dataSet, labelSet, w)
   ```
-  ![](images/sto_logistic_test_classfied_1.png)
+  ![](images/sto_logistic_test_classfied_1.jpg)
 
   参数收敛结果
   ```python
@@ -1043,7 +1043,7 @@
   Out[78]: array([  1.34771352,  -2.17005703,  15.89608285])
   stackOfWeights(w[:4000])
   ```
-  ![](images/stack_weights_1.png)
+  ![](images/stack_weights_1.jpg)
   - 该方法比采用固定alpha的方法收敛速度更快
 ## 从疝气病症预测病马的死亡率
   - 疝病是描述马胃肠痛的术语，这种病不一定源自马的胃肠问题，其他问题也可能引发马疝病
@@ -1387,7 +1387,7 @@
   y = (-b - w[0] * x) / w[1]
   plt.plot(x, y)
   ```
-  ![](images/smo_simple.png)
+  ![](images/smo_simple.jpg)
 ## > 利用完整Platt SMO算法加速优化
   - 在几百个点组成的小规模数据集上，简化版SMO算法的运行是没有什么问题的，但是在更大的数据集上的运行速度就会变慢
   - 实现alpha的更改和代数运算的优化环节是一样的，在优化过程中，唯一的不同就是 **选择alpha的方式**，完整版的Platt SMO算法应用了一些能够提速的启发方法
@@ -1743,7 +1743,7 @@
 
   plt.plot([r.thresh, r.thresh], [1.1, 2.1])
   ```
-  ![](images/SimpData.png)
+  ![](images/SimpData.jpg)
 ## python实现完整AdaBoost算法
   - 单层决策树不能完全分类的数据集，通过使用多棵单层决策树，构建出一个能够对该数据集完全正确分类的分类器
   ```python
@@ -1863,7 +1863,7 @@
    [500, 0.24242424242424243],
    [1000, 0.25757575757575757]]
   ```
-  ![](images/error_counts.png)
+  ![](images/error_counts.jpg)
   - 可以发现使用50个分类器时，就达到了较高的性能
 ***
 
@@ -1975,7 +1975,7 @@
   plotROC(dataSet, labelSet, 50)
   Out[218]: 0.89676966292135007
   ```
-  ![](images/roc.png)
+  ![](images/roc.jpg)
   - 50个弱分类器下得到的AUC更好
 ## 基于代价函数的分类器决策控制
   - **非均衡分类问题** 是指在分类器训练时正例数目和反例数目不相等（相差很大）或错分正例和反例的代价不同
@@ -2057,7 +2057,7 @@
   yp = np.dot(xArr, w)
   plotDotLine(xArr, yArr, yp)
   ```
-  ![](images/standRegres.png)
+  ![](images/standRegres.jpg)
 ## 相关系数计算预测值和真实值的匹配程度
   - **相关系数** 计算预测值和真实值的匹配程度，通过命令corrcoef(yEstimate, yActual)来计算，结果越接近1匹配程度越高
     ```python
@@ -2122,7 +2122,7 @@
       plotDotLine(xArr, yArr, yw)
       plt.ylabel('k = %s' %(j))  # ks中元素类型是 %s [ ??? ]
   ```
-  ![](images/lwlr_test.png)
+  ![](images/lwlr_test.jpg)
   - k = 1.0 时权重很大，如同将所有的数据视为等权重，得出的最佳拟合直线与标准的回归基本一致，属于欠拟合
   - k = 0.01 得到了非常好的效果，抓住了数据的潜在模式
   - k = 0.003 纳入了太多的噪声点，拟合的直线与数据点过于贴近，导致了过拟合现象
@@ -2204,7 +2204,7 @@
   plt.plot(exp(np.arange(30)-10))
   plt.title('exp')
   ```
-  ![](images/ridgeRegres.png)
+  ![](images/ridgeRegres.jpg)
   - λ非常小时，可以得到所有系数的原始值，系数与线性回归一致
   - λ非常大时，所有回归系数缩减为0，可以在中间某处找到使得预测的结果最好的λ值
   - 为了定量地找到最佳参数值，还需要进行交叉验证
@@ -2266,7 +2266,7 @@
   array([ 0.0430442 , -0.02274163,  0.13214087,  0.02075182,  2.22403814,
          -0.99895312, -0.11725427,  0.16622915])
   ```
-  ![](images/stageWise.png)
+  ![](images/stageWise.jpg)
   - 结果中 w1 是0，表明它不对目标值造成任何影响，这些特征很可能是不需要的
 ## 权衡偏差与方差
   - 一般认为，误差由三个部分组成：**偏差、测量误差和随机噪声**
@@ -2290,7 +2290,7 @@
     xs = np.arange(0, 1, 0.01)
     plt.plot(xs, y(xs), 'm')
     ```
-    ![](images/standRegres_rawfunc.png)
+    ![](images/standRegres_rawfunc.jpg)
   - 直线所能得到的最佳拟合是 y = 3.0 + 1.7 * x
   - 误差部分就是 0.1 * sin(30 * x) + 0.06 * N(0, 1)
 ***
@@ -2363,7 +2363,7 @@
   plt.plot([0, 0.4], [r[1][False][1]]*2, 'y')
   plt.plot([0.5, 1.0], [r[1][True][1]]*2, 'y')
   ```
-  ![](images/createTree_1.png)
+  ![](images/createTree_1.jpg)
   - 二维数据上多次切分运行结果
   ```python
   df = pd.read_table('Ch09/ex0.txt', header=None)
@@ -2400,7 +2400,7 @@
   plt.plot([0.6, 0.8], [r[1][True][1][True][1][False]] * 2, 'm')
   plt.plot([0.8, 1], [r[1][True][1][True][1][True]] * 2, 'm')
   ```
-  ![](images/createTree_2.png)
+  ![](images/createTree_2.jpg)
 ## python自定义树的一些相关方法
   - 用于判断树，寻找叶节点，左右子树，分割数据集，计算树的平均值等
     ```python
@@ -2520,7 +2520,7 @@
   plotTree(r, [0, 1], [-50, 150], list('rygbckmw') * 10)
   plt.title('After pruning')
   ```
-  ![](images/prune.png)
+  ![](images/prune.jpg)
   - 大量的节点已经被剪掉，但没有像预期的那样剪枝成两部分
 ## python实现模型树 model tree
   - **分段线性** piecewise linear 是指模型由多个线性片段组成
@@ -2579,7 +2579,7 @@
   x2 = np.array([r[0][1], 1])
   plt.plot(x2, r[1][True][1][0] * 1 + r[1][True][1][1] * x2, 'm')
   ```
-  ![](images/model_tree.png)
+  ![](images/model_tree.jpg)
   - 该数据实际是由模型 y = 3.5 + 1.0x 和 y = 0 + 12x 再加上高斯噪声生成的
 ## python进行 树回归 与 标准回归 的预测结果比较
   - 函数 corrcoef 计算相关系数( R2值 )，分析模型的预测结果
@@ -2644,6 +2644,6 @@
   plt.xlabel('bike speed')
   plt.ylabel('IQ')
   ```
-  ![](images/regress_compare.png)
+  ![](images/regress_compare.jpg)
   - 从相关系数来看，该复杂数据集上模型树的结果比回归树好，树回归比简单线性模型好
 ***

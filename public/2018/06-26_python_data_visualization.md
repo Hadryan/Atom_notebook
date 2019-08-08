@@ -73,7 +73,7 @@
   ax.plot_surface(x, y, z, color='b')
   plt.show()
   ```
-  ![](images/mplot3d_1.png)
+  ![](images/mplot3d_1.jpg)
 ## 3D surface color map
   ```python
   '''
@@ -114,7 +114,7 @@
   fig.colorbar(surf, shrink=0.5, aspect=5)
   plt.show()
   ```
-  ![](images/mplot3d_2.png)
+  ![](images/mplot3d_2.jpg)
 ***
 
 # matplotlib
@@ -134,7 +134,7 @@
   ax_2 = fig.add_subplot(122, polar=True)
   ax_2.plot(angles_2, np.arange(1, 7), 'o-')
   ```
-  ![](images/mpl_polar_1.png)
+  ![](images/mpl_polar_1.jpg)
 ## radar
   ```python
   labels = np.array(['aa','bb','cc','dd','ee','ff'])
@@ -156,7 +156,7 @@
   plt.grid(True)
   plt.show()
   ```
-  ![](images/mpl_radar_1.png)
+  ![](images/mpl_radar_1.jpg)
 ## 生成 gif 图片
   - [matplotlib animation](https://matplotlib.org/api/animation_api.html)
   - **matplotlib.animation.FuncAnimation**
@@ -233,7 +233,7 @@
   # bar.print_echarts_options()
   bar.render()
   ```
-  ![](images/pyecharts_start.png)
+  ![](images/pyecharts_start.jpg)
 ## 图形绘制过程
   - 基本上所有的图表类型都是这样绘制的
     - `chart_name = Type()` 初始化具体类型图表
@@ -330,7 +330,7 @@
   bar.add("降水量", attr, v2, mark_line=["average"], mark_point=["max", "min"], is_stack=True, is_convert=True)
   bar.render()
   ```
-  ![](images/pyecharts_bar.png)
+  ![](images/pyecharts_bar.jpg)
 ## Gauge 仪表盘
   ```python
   from pyecharts import Gauge
@@ -339,7 +339,7 @@
             scale_range=[0, 200], is_legend_show=False)
   gauge.render()
   ```
-  ![](images/pyecharts_gauge.png)
+  ![](images/pyecharts_gauge.jpg)
 ## GeoLines 地理坐标系线图
   ```python
   from pyecharts import GeoLines, Style
@@ -393,7 +393,7 @@
   geolines.add("从北京出发", data_beijing, tooltip_formatter="{a} : {c}", **style_geo)
   geolines.render()
   ```
-  ![](images/pyecharts_geolines.png)
+  ![](images/pyecharts_geolines.jpg)
 ## Graph 关系图
   ```python
   from pyecharts import Graph
@@ -416,7 +416,7 @@
             label_text_color=None)
   graph.render()
   ```
-  ![](images/pyecharts_graph.png)
+  ![](images/pyecharts_graph.jpg)
 ## Line 折线/面积图
   ```python
   from pyecharts import Line
@@ -440,7 +440,7 @@
   line.add("商家 A-area", attr, v1, is_fill=True, area_color='#000', area_opacity=0.3)
   line.render()
   ```
-  ![](images/pyecharts_line.png)
+  ![](images/pyecharts_line.jpg)
 ## liquid 水滴图
   ```python
   from pyecharts import Liquid
@@ -466,7 +466,7 @@
              shape=shape, is_liquid_outline_show=False)
   liquid.render()
   ```
-  ![](images/pyecharts_liquid.png)
+  ![](images/pyecharts_liquid.jpg)
 ## Pie 饼图
   ```python
   from pyecharts import Pie
@@ -482,7 +482,7 @@
           is_legend_show=False, is_label_show=True)
   pie.render()
   ```
-  ![](images/pyecharts_pie.png)
+  ![](images/pyecharts_pie.jpg)
 ## Polar 极坐标系
   ```python
   from pyecharts import Polar
@@ -497,7 +497,7 @@
             type='barRadius', is_stack=True)
   polar.render()
   ```
-  ![](images/pyecharts_polar_1.png)
+  ![](images/pyecharts_polar_1.jpg)
   ```python
   from pyecharts import Polar
 
@@ -511,7 +511,7 @@
             type='barAngle', is_stack=True)
   polar.render()
   ```
-  ![](images/pyecharts_polar_2.png)
+  ![](images/pyecharts_polar_2.jpg)
 ## Radar 雷达图
   ```python
   from pyecharts import Radar
@@ -529,7 +529,7 @@
   radar.add("实际开销", v2, item_color="#4e79a7", label_color=["#4e79a7"], is_area_show=False)
   radar.render()
   ```
-  ![](images/pyecharts_radar.png)
+  ![](images/pyecharts_radar.jpg)
 ## WordCloud 词云图
   ```python
   from pyecharts import WordCloud
@@ -546,7 +546,7 @@
   wordcloud.add("", name, value, word_size_range=[20, 100])
   wordcloud.render()
   ```
-  ![](images/pyecharts_wordcloud.png)
+  ![](images/pyecharts_wordcloud.jpg)
 ## 多次显示图表
   - 从 v0.4.0+ 开始，pyecharts 重构了渲染的内部逻辑，改善效率
   - 可以使用同一个引擎对象，减少了部分重复操作，速度有所提高
@@ -614,7 +614,7 @@
     grid.add(line, grid_top="60%")
     grid.render()
     ```
-    ![](images/pyecharts_grid_top_bottom.png)
+    ![](images/pyecharts_grid_top_bottom.jpg)
   - **左右** grid_left / grid_right
     ```python
     from pyecharts import Line, Pie, Grid
@@ -654,7 +654,7 @@
     grid.add(pie, grid_left="60%")
     grid.render()
     ```
-    ![](images/pyecharts_grid_left_right.png)
+    ![](images/pyecharts_grid_left_right.jpg)
 ## Overlap 不同图表叠加在一张图上
   - Overlap 类的使用
     - 引入 `Overlap` 类，`from pyecharts import Overlap`
@@ -685,7 +685,7 @@
   overlap.add(line, yaxis_index=1, is_add_yaxis=True)
   overlap.render()
   ```
-  ![](images/pyecharts_overlap.png)
+  ![](images/pyecharts_overlap.jpg)
 ## Page 同一网页按顺序展示多图
   - Page 类的使用
     - 引入 `Page` 类，`from pyecharts import Page`
@@ -727,7 +727,7 @@
 
   page.render()
   ```
-  ![](images/pyecharts_page.png)
+  ![](images/pyecharts_page.jpg)
 ## Timeline 提供时间线轮播多张图
   - Timeline 类的使用
     - 引入 `Timeline` 类，`from pyecharts import Timeline`
@@ -766,7 +766,7 @@
   timeline.add(pie_5, '2016 年')
   timeline.render()
   ```
-  ![](images/pyecharts_timeline.png)
+  ![](images/pyecharts_timeline.jpg)
 ## pyecharts-snapshot
   - 使用 pyecharts-snapshot 直接将图片保存为 png, pdf, gif 格式的文件
     - 安装 phantomjs `$ npm install -g phantomjs-prebuilt`
@@ -802,5 +802,5 @@
       ax.set_title(theme)
       ax.set_axis_off()
   ```
-  ![](images/pyecharts_theme.png)
+  ![](images/pyecharts_theme.jpg)
 ***

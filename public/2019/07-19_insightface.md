@@ -130,7 +130,7 @@
   # (12, 5) (10, 12)
   # 75.9 ms ± 483 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
   ```
-  ![](images/facenet_mtcnn_multi.png)
+  ![](images/facenet_mtcnn_multi.jpg)
 ## insightface mtcnn
   ```py
   # cd ~/workspace/face_recognition_collection/insightface/deploy
@@ -154,7 +154,7 @@
   # (12, 5) (12, 10)
   # 122 ms ± 5.73 ms per loop (mean ± std. dev. of 7 runs, 10 loops each)
   ```
-  ![](images/insightface_mtcnn_multi.png)
+  ![](images/insightface_mtcnn_multi.jpg)
 ## MTCNN-Tensorflow
   ```py
   # cd ~/workspace/face_recognition_collection/MTCNN-Tensorflow/
@@ -197,7 +197,7 @@
   # (10, 5) (10, 10)
   # 190 ms ± 4.31 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
   ```
-  ![](images/MTCNN-Tensorflow_mtcnn_multi.png)
+  ![](images/MTCNN-Tensorflow_mtcnn_multi.jpg)
 ## mtcnn.MTCNN
   ```py
   # cd ~/workspace/face_recognition_collection
@@ -234,7 +234,7 @@
       points.append(lms[i][0])
       points.append(lms[i][1])
   ```
-  ![](images/MTCNN_package_mtcnn_multi.png)
+  ![](images/MTCNN_package_mtcnn_multi.jpg)
 
 ***
 
@@ -516,7 +516,7 @@
   print(emb.shape)
   # (11, 512)
   ```
-  ![](images/tf_pb_model_faces.png)
+  ![](images/tf_pb_model_faces.jpg)
 ## 人脸对齐
   ```py
   from skimage.transform import SimilarityTransform
@@ -545,7 +545,7 @@
   plt.axis('off')
   plt.tight_layout()
   ```
-  ![](images/tf_pb_align_faces.png)
+  ![](images/tf_pb_align_faces.jpg)
 ## Tensorflow Serving server
   - `saved_model_cli` 显示模型 signature_def 信息
     ```sh

@@ -588,7 +588,7 @@ sess.run(y, feed_dict={x:_x})
     x = tf.keras.applications.mobilenet.preprocess_input(
         x[tf.newaxis,...])
     ```
-    ![](images/tf_serve_grace_hopper.png)
+    ![](images/tf_serve_grace_hopper.jpg)
   - **模型使用与保存 tf.saved_model.save**
     ```py
     #tf.keras.applications.vgg19.decode_predictions
@@ -887,11 +887,20 @@ model.compile(optimizer=tf.train.AdamOptimizer(), loss='sparse_categorical_cross
 model.fit(train_images, train_labels, epochs=epochs)
 ```
 ```py
+from skimage.io import imread, imsave
+import glob2
+
 for pp in glob2.glob('png/*.png'):
+    print(pp)
     jj = os.path.basename(pp).split('.')[0] + '.jpg'
     jj = os.path.join('jpg', jj)
     img = imread(pp)
     if img.shape[2] == 4:
         img[:, :, :3][img[:, :, 3] == 0] = [255, 255, 255]
     imsave(jj, img[:, :, :3])
+```
+```sh
+find ./* -iname '*.png'
+grep -srinI '\.png)'
+sed -i 's/\.png)$/.jpg)/' ./*.md
 ```

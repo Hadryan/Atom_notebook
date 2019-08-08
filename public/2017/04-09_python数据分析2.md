@@ -163,7 +163,7 @@
     plt.subplot(224).scatter(np.arange(30), np.arange(30) + 3 * randn(30))
     ```
 
-  ![](images/figure_1-5.png)
+  ![](images/figure_1-5.jpg)
 ## subplots方法
   - plt.subplots
     ```python
@@ -192,7 +192,7 @@
     plt.subplots_adjust(wspace=0, hspace=0)        # 将间距收缩到了0
     ```
 
-  ![](images/figure_3.png)
+  ![](images/figure_3.jpg)
 ## 颜色 color / 线型 linestyle(ls) / 标记 marker / 线宽 linewidth / 标签 label
   - matplotlib的plot函数接受一组X和Y坐标，还可以接受一个表示颜色和线型的字符串缩写
     ```python
@@ -224,7 +224,7 @@
     plt.legend(loc = 'upper left')
     ```
 
-  ![](images/figure_1-7.png)
+  ![](images/figure_1-7.jpg)
 ## 刻度 set_xticks / set_xtickslabels / 标题 set_title / set_xlabel / 范围 set_xlim / 图例 legend
   - pyplot接口的设计目的就是交互式使用，如xlim / xticks / xticklabels / xlabel / title方法，分别控制图表的范围 / 刻度位置 / 刻度标签 / 轴名称 / 图标题
   - 使用方式有以下两种：
@@ -266,7 +266,7 @@
     ax.legend(loc='best')        # loc指定要将图例放在哪
     ```
 
-  ![](images/figure_1-4.png)
+  ![](images/figure_1-4.jpg)
 ## drawstyle 选项修改线型图中，非实际数据点的插值方式，默认是按线性方式插值
   ```python
   data = randn(30).cumsum()
@@ -274,7 +274,7 @@
   plt.plot(data, 'k-', drawstyle='steps-post', label='steps-post')
   plt.legend(loc='best')        # 图例
   ```
-  ![](images/figure_1-1.png)
+  ![](images/figure_1-1.jpg)
 ## axes指定绘图区域
   - 划定X / Y轴范围绘图
     ```python
@@ -310,7 +310,7 @@
   ax.add_patch(circ)
   ax.add_patch(pgon)
   ```
-  ![](images/figure_1-3.png)
+  ![](images/figure_1-3.jpg)
   ```python
   # 绘制国旗
   def star(coord, size, rotate, tangleNum = 5):
@@ -435,7 +435,7 @@
     df_p.plot(ax = axes[1, 1], kind='barh', stacked=True)
     ```
 
-  ![](images/figure_3-2.png)
+  ![](images/figure_3-2.jpg)
 ## 直方图 hist / 密度图 kde
   - 直方图（histogram）是一种可以对值频率进行离散化显示的柱状图
   - Series的hist / kind = 'hist'方法用于生成直方图
@@ -451,7 +451,7 @@
     values.plot(kind = 'kde', style = 'k--')
     ```
 
-  ![](images/figure_1-6.png)
+  ![](images/figure_1-6.jpg)
 ## 散布图 scatter
   - 散布图（scatter plot）是观察两个一维数据序列之间的关系的有效手段
     ```python
@@ -466,7 +466,7 @@
     df = DataFrame({'sin' : np.sin(x), 'cos': np.cos(x), 'sin + cos':np.sin(x)+np.cos(x)}, index = x)
     pd.scatter_matrix(df, diagonal='kde', alpha=0.3, c='k')
     ```
-    ![](images/figure_2.png)
+    ![](images/figure_2.jpg)
 ***
 
 # Python图形化工具生态系统
@@ -2770,7 +2770,7 @@
   result['Zinc, Zn'].order().plot(kind='barh')
   ```
 
-  ![](images/figure_1.png)
+  ![](images/figure_1.jpg)
   ```python
   # 统计各营养成分最为丰富的食物
   by_nutrient = ndata.groupby(['nutgroup', 'nutrient'])
@@ -3149,7 +3149,7 @@
     ax.set_title('%s: %s' % (code, english_mapping[code]))
   ```
 
-  ![](images/figure_1-8.png)
+  ![](images/figure_1-8.jpg)
   ```python
   从图中可以看出，大部分数据都集中在人口最稠密的城市太子港
   Basemap对象有一个非常方便的readshapefile方法，可以叠加来自shapefile的地图数据
@@ -3172,7 +3172,7 @@
   ax.set_title('%s: %s' % (code_to_play, english_mapping[code_to_play]))
   ```
 
-  ![](images/figure_1-11.png)
+  ![](images/figure_1-11.jpg)
 ***
 
 # 自然语言工具包NLTK语料库
@@ -3252,7 +3252,7 @@
     cfd.plot()
     ```
 
-  ![](images/figure_1-2.png)
+  ![](images/figure_1-2.jpg)
 ***
 
 # 2012联邦选举委员会数据库
@@ -3317,7 +3317,7 @@
   # 绘制柱状图
   over_2mm.plot(kind='barh')
   ```
-  ![](images/figure_1-9.png)
+  ![](images/figure_1-9.jpg)
   ```python
   # 统计对Obama和Romney总出资额最高的职业和企业
   def get_top_amounts(group, key, n=5):
@@ -3346,7 +3346,7 @@
   normed_sums[:-2].plot(kind='barh', stacked=True)
   ```
 
-  ![](images/figure_1-10.png)
+  ![](images/figure_1-10.jpg)
 ***
 
 # python GUI的基本框架 (wx)

@@ -169,7 +169,7 @@
     plt.figure(1, figsize=(3, 3))
     plt.imshow(digits.images[-1], cmap=plt.cm.gray_r, interpolation='nearest')
     ```
-    ![](images/sikit-learn_digit8.png)
+    ![](images/sikit-learn_digit8.jpg)
 
   - **transform / fit_transform 方法** 在数据转化 / 分解等模型中通常使用 **fit 方法** 训练模型，**transform 方法** 转化数据，**fit_transform 方法** 是合并 fit 与 transform 的方法
 ## 模型存储 Model persistence
@@ -540,7 +540,7 @@
 ## 根据数据以及问题类型选取合适的估计模型
   - [Choosing the right estimator](http://scikit-learn.org/stable/tutorial/machine_learning_map/index.html)
 
-  ![](images/ml_map.png)
+  ![](images/ml_map.jpg)
 ***
 
 # sklearn 中的监督学习算法
@@ -638,7 +638,7 @@
         plt.plot(test, regr.predict(test))
         plt.scatter(this_X, y, s=3)
     ```
-    ![](images/sk_linear_model.png)
+    ![](images/sk_linear_model.jpg)
   - **岭回归 Ridge** 在高维数据中的一种解决方法是 **将一部分回归系数 β 缩减到0**，减少了模型的复杂度，但同时增大了模型偏差
     ```python
     # 使用岭回归 Ridge 模型
@@ -652,7 +652,7 @@
         plt.plot(test, regr.predict(test))
         plt.scatter(this_X, y, s=3)
     ```
-    ![](images/sk_ridge.png)
+    ![](images/sk_ridge.jpg)
   - **权衡偏差与方差 bias/variance tradeoff** 岭回归模型中的 alpha 参数增大，会导致更大的偏差与更小的方差，调整 alpha 参数可以使得模型的效果最好
     ```python
     # 调整alpha值，在 diabetes 数据集上测试模型拟合效果
@@ -755,7 +755,7 @@
     # RBF kernel (Radial Basis Function)
     svc = svm.SVC(kernel='rbf')
     ```
-    ![](images/svm_kernels.png)
+    ![](images/svm_kernels.jpg)
   - 其他链接
     - [plot iris exercise](http://scikit-learn.org/stable/_downloads/plot_iris_exercise.py)
     - [Libsvm GUI]( http://scikit-learn.org/stable/auto_examples/applications/svm_gui.html#sphx-glr-auto-examples-applications-svm-gui-py)
@@ -1240,7 +1240,7 @@
     plt.legend(prop=dict(size=12))
     plt.show()
     ```
-    ![](images/pipe_pca.png)
+    ![](images/pipe_pca.jpg)
 ***
 
 # 综合使用示例
@@ -1457,9 +1457,9 @@
    [  0   2   0   2   0  11   0]
    [  0   1   1   4   1   0  29]]
   ```
-  ![](images/eigenface_predict.png)
+  ![](images/eigenface_predict.jpg)
 
-  ![](images/eigenface_faces.png)
+  ![](images/eigenface_faces.jpg)
 ## 20个新闻组数据集 20 newsgroups dataset 文本分析
   - 该数据集包含大约 20,000 新闻组文档，平均分布在20个不同的新闻组，主要用于文本分析的机器学习算法实验，如文本分类与文本聚类
   - **主要步骤**

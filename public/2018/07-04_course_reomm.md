@@ -18,7 +18,7 @@
     ss = Series(tt)
     ss.plot(kind='barh')
     ```
-    ![](images/user_persona_barh.png)
+    ![](images/user_persona_barh.jpg)
   - **pyecharts Radar**
     ```python
     from pyecharts import Radar
@@ -32,7 +32,7 @@
     radar.add("python", [ss.values], line_width=2)
     radar.render()
     ```
-    ![](images/user_persona_radar.png)
+    ![](images/user_persona_radar.jpg)
   - **pyecharts** Timeline 所有图的维度是一样的
     ```python
     ''' Timeline NOT working '''
@@ -86,7 +86,7 @@
         tt = {ii['name']: ii['score'] for ii in kk['modules']}
         plot_radar_ax_polar(ax, list(tt.keys()), list(tt.values()), title=kk['name'])
     ```
-    ![](images/user_persona_radar_4.png)
+    ![](images/user_persona_radar_4.jpg)
 ## 课程推荐 过滤分数
   ```python
   import json
@@ -216,7 +216,7 @@
     - **潜在因素** 综合考虑答题过程中的多种因素，如答题速度 / 连续答对或答错等，提高算法收敛速度
   - **Python 技能评定** [Unlimited Online Developer, IT and Cyber Security Training | Pluralsight](https://www.pluralsight.com/)
 
-    ![](./images/score_path_2.png)
+    ![](./images/score_path_2.jpg)
 
     ```python
     mmin = np.array([20, 67, 100, 91, 85, 79, 97, 112, 109, 122, 135, 146, 157, 168, 180, 190, 192, 202, 212])
@@ -495,10 +495,10 @@
   tt.question_record.shape
   # Out[568]: (20,)
   ```
-  ![](./images/plot_user_data_true.png)
-  ![](./images/plot_user_data_false.png)
-  ![](./images/plot_user_data.png)
-  ![](./images/plot_user_data_2.png)
+  ![](./images/plot_user_data_true.jpg)
+  ![](./images/plot_user_data_false.jpg)
+  ![](./images/plot_user_data.jpg)
+  ![](./images/plot_user_data_2.jpg)
 ## 保存用户信息数据
   - [user_ability_level_test_dict](user_ability_level_test_dict.py)
   - **类初始化**
@@ -1063,7 +1063,7 @@
       - 不同的时间 / 地点 / 场景，用户对信息的偏好有所不同，如工作 / 通勤 / 旅游等
       - 比如通过获取用户实时位置判断是否在旅游区，与之前经常出现的所在地进行对比，确认当前是在家还是在旅游
 
-    ![](images/tt_input.png)
+    ![](images/tt_input.jpg)
   - **量化指标**
     - 点击率 / 阅读时间 / 点赞 / 评论 / 转发等，是可以 **量化的指标**，能够用模型直接拟合做预估，看线上提升情况可以知道推荐效果
     - 但是完全使用量化指标并不全面，比如刷评论 / 转发等情况，可能会迷惑后台的数据分析
@@ -1073,20 +1073,20 @@
     - 不同推荐场景需要不同的模型架构，需要不断尝试优化，比如小视频推荐，关键的推荐机制可能不是用户画像特征，可以根据视频的点击率进行推荐，而文章推荐精准投送要求会比较高
     - **算法实验平台** 灵活地尝试多种算法组合，最终选取推荐效果比较好的算法，比如目前流行的将 LR 和 DNN 结合，Facebook 的 LR 和 GBDT 算法结合
 
-    ![](images/tt_algorism.png)
+    ![](images/tt_algorism.jpg)
   - **典型推荐特征** 要达到不错的效果，需要综合考虑多种应用场景
     - **相关性特征** 解决内容和用户的匹配，即文章画像与用户画像一致性比较高，则进行相应推荐，**显性匹配** 包括关键词匹配 / 分类匹配 / 来源匹配 / 主题匹配等，**隐性匹配** 如 FM 模型从用户向量与内容向量的距离得出匹配度
     - **环境特征** 解决基础特征匹配，如地理位置 / 时间
     - **热度特征** 解决用户冷启动推荐，包括全局热度 / 分类热度 / 主题热度 / 关键词热度等，**冷启动** 是在用户画像还没有建立时的推荐
     - **协同特征** 解决算法越推越窄的问题，即基于用户的推荐，通过用户行为分析不同用户间相似性，如点击相似 / 兴趣分类相似 / 主题相似 / 兴趣词相似 / 甚至向量相似，从而扩展模型的探索能力
 
-    ![](images/tt_scenario.png)
+    ![](images/tt_scenario.jpg)
   - **召回策略**
     - 每次推荐时不使用全部的内容库，而是从海量内容中筛选出千级别的内容库
     - 召回策略最重要的要求是性能要极致，一般超时不能超过 50 毫秒
     - **召回策略的倒排思路** 离线维护一个倒排，倒排的 key 可以是分类 / topic / 实体 / 来源等，排序考虑热度 / 新鲜度 / 动作等，线上召回可以迅速从倒排中根据用户兴趣标签对内容做截断，高效的从很大的内容库中筛选出一小部分内容
 
-    ![](images/tt_recall.png)
+    ![](images/tt_recall.jpg)
 ## 内容分析
   - **内容分析** 包括文本分析 / 图片分析 / 视频分析
   - **文本分析**
@@ -1109,14 +1109,14 @@
     - 中国足球再细分中甲 / 中超 / 国家队等
     - 根据不同的问题难度，每个元分类器可以异构，像有些分类 SVM 效果很好，有些要结合 CNN，有些要结合 RNN 再处理
 
-    ![](images/tt_topic_layer.png)
+    ![](images/tt_topic_layer.jpg)
   - **实体词识别算法**
     - 基于分词结果和词性标注选取候选，期间可能需要根据知识库做一些拼接
     - 有些实体是几个词的组合，需要确定哪几个词结合在一起能映射实体的描述
     - 如果结果映射多个实体还要通过词向量 / topic 分布甚至词频本身等去歧
     - 最后计算一个相关性模型
 
-    ![](images/tt_topic_word.png)
+    ![](images/tt_topic_word.jpg)
   - **内容安全**
     - 分享内容识别技术主要鉴黄模型 / 谩骂模型 / 低俗模型，模型更注重召回率，准确率甚至可以牺牲一些
     - 泛低质识别涉及的情况非常多，像假新闻 / 黑稿 / 题文不符 / 标题党 / 内容质量低等，这部分内容由机器理解是非常难的，需要大量反馈信息，包括其他样本信息比对，还需要结合人工复审，将阈值提高
@@ -1138,7 +1138,7 @@
     - **实时训练** 省资源并且反馈快，对信息流产品非常重要，用户行为信息可以被模型快速捕捉并反馈至下一次的推荐效果，线上目前基于 **storm 集群** 实时处理样本数据，包括点击 / 展现 / 收藏 / 分享等动作类型
     - **训练过程** 线上服务器记录实时特征，导入到 Kafka 文件队列中，然后进一步导入 Storm 集群处理 Kafka 数据，客户端回传推荐的 label 构造训练样本，随后根据最新样本进行在线训练更新模型参数，最终线上模型得到更新
 
-    ![](images/tt_train.png)
+    ![](images/tt_train.jpg)
 ## 评估分析
   - **评估** 的意义在于，很多优化最终可能是负向效果，很多因素都会影响推荐效果，如侯选集合变化 / 召回模块的改进或增加 / 推荐特征的增加 / 模型架构的改进 / 算法参数的优化等
   - **全面的推荐系统** 需要完备的评估体系 / 强大的实验平台 / 易用的经验分析工具
@@ -1154,7 +1154,7 @@
     - **系统** 自动生成实验数据对比 / 实验数据置信度 / 实验结论总结 / 实验优化建议
     - 线上实验平台只能通过数据指标变化推测用户体验的变化，但数据指标和用户体验存在差异，很多指标不能完全量化，很多改进仍然要通过人工分析，重大改进需要 **人工评估二次确认**
 
-    ![](images/tt_test.png)
+    ![](images/tt_test.jpg)
 ***
 
 # 简历解析及推荐算法
@@ -1215,5 +1215,5 @@
   - 分别计算 **应聘者满足企业的程度** 与 **企业待遇满足应聘者的程度**，计算其加权调和平均数
   - 按照互惠得分排序，选取 top-K，可以为应聘者推荐企业，或者向企业推荐应聘者简历
 
-  ![](images/resume_recomm.png)
+  ![](images/resume_recomm.jpg)
 ***

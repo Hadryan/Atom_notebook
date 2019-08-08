@@ -224,7 +224,7 @@
         plt.imshow(train_images[i], cmap=plt.cm.binary)
         plt.xlabel(class_names[train_labels[i]])
     ```
-    ![](images/tensorflow_mnist_fashion.png)
+    ![](images/tensorflow_mnist_fashion.jpg)
   - **keras 模型训练 / 验证**
     ```py
     model = keras.Sequential([
@@ -301,7 +301,7 @@
       plt.subplot(num_rows, 2*num_cols, 2*i+2)
       plot_value_array(i, predictions, test_labels)
     ```
-    ![](images/tensorflow_mnist_fashion_predict.png)
+    ![](images/tensorflow_mnist_fashion_predict.jpg)
 ## Keras 文本分类 IMDB 电影评论数据集
   - **pad_sequences** 将序列中的元素长度整理成相同长度
     ```py
@@ -427,7 +427,7 @@
 
     fig.tight_layout()
     ```
-    ![](images/tensorflow_text_classifier.png)
+    ![](images/tensorflow_text_classifier.jpg)
 ## Keras 回归预测 Boston 房价数据集
   - **EarlyStopping** 在指定的监控数据停止提高时，停止训练，可以防止过拟合
     ```py
@@ -537,7 +537,7 @@
     plt.ylabel('Mean Abs Error [1000$]')
     fig.tight_layout()
     ```
-    ![](images/tensorlow_regression_boston_mae.png)
+    ![](images/tensorlow_regression_boston_mae.jpg)
     ```py
     ''' 预测值偏差 '''
     fig = plt.figure()
@@ -558,7 +558,7 @@
 
     fig.tight_layout()
     ```
-    ![](images/tensorlow_regression_boston_predict.png)
+    ![](images/tensorlow_regression_boston_predict.jpg)
 ## 过拟合与欠拟合
   - **欠拟合 Underfitting** 模型没有充分学习训练数据集上的数据相关性，在测试数据集上仍有提升空间，通常由于模型太简单 / 过度正则化 / 训练时间不够
   - **过拟合 Overfitting** 模型在训练数据集上获得很高的正确率，但学习的数据相关性不适用于测试数据集，使测试数据集上的正确率降低
@@ -583,7 +583,7 @@
 
     plt.plot(train_data[0])
     ```
-    ![](images/tensorflow_overfit_imdb_data.png)
+    ![](images/tensorflow_overfit_imdb_data.jpg)
   - **定义 keras 模型** 定义多个模型，复杂模型更容易过拟合
     ```py
     def define_simple_model(hidden_units):
@@ -638,7 +638,7 @@
         ('smaller', smaller_history),
         ('bigger', bigger_history)])
     ```
-    ![](images/tensorflow_overfit_models.png)
+    ![](images/tensorflow_overfit_models.jpg)
 
     最大的模型可以更好地拟合训练数据集，但是会有更大的过拟合
   - **添加权重正则化 weight regularization** 在损失函数中添加权重的相关项，使模型选择更小的权重
@@ -664,7 +664,7 @@
         ('baseline', baseline_history),
         ('l2', l2_history)])
     ```
-    ![](images/tensorflow_overfit_l2.png)
+    ![](images/tensorflow_overfit_l2.jpg)
   - **添加 dropout 层** 训练过程中随机丢弃上一层输出中的某些特征，如将 `[0.2, 0.5, 1.3, 0.8, 1.1]` 转化为 `[0, 0.5, 1.3, 0, 1.1]`，通常 `dropout rate` 设置为 **0.2 - 0.5**
     ```py
     dpt_model = keras.Sequential([
@@ -694,7 +694,7 @@
         ('dropout', dpt_history),
         ('dropout with l2', dpt_with_l2_history)])
     ```
-    ![](images/tensorflow_overfit_dropout.png)
+    ![](images/tensorflow_overfit_dropout.jpg)
 ## Keras 模型保存与加载
   - 依赖 `h5py` `pyyaml`
     ```shell
@@ -1123,7 +1123,7 @@
         plt.ylim([0, 500])
     fig.tight_layout()
     ```
-    ![](images/tensoeflow_census_base_regular.png)
+    ![](images/tensoeflow_census_base_regular.jpg)
 
     两种正则化方式都将参数的分布向 0 压缩了，L2 正则化更好地限制了偏离很大的分布，L1 正则化产生了更多的 0 值
   - **tf.estimator.DNNClassifier 定义 DNN 模型**
@@ -1575,7 +1575,7 @@
     plt.xlabel("Predicted")
     plt.ylabel("True")
     ```
-    ![](images/tensorflow_text_classifier_confusion_matrix.png)
+    ![](images/tensorflow_text_classifier_confusion_matrix.jpg)
   - **进一步提高模型效果**
     - **使用情绪数据 sentiment 做回归预测** 不使用简单的 pos / neg 划分进行分类预测，而是将情绪数据 sentiment 作为连续值做回归预测，使用 `DNN Regressor` 替换 `DNN Classifier`
     - **定义更大的模型** 示例中使用较小的模型以节省内存占用，对于更大的单词向量空间，可以定义更大的模型，提高准确率
@@ -2161,7 +2161,7 @@
 
     plt.show()
     ```
-    ![](images/output_30_0.png)
+    ![](images/output_30_0.jpg)
   - **模型评估 Evaluate the model on the test dataset**
     - **tf.keras.utils.get_file** / **tf.data.TextLineDataset** 加载测试数据集
     - **tfe.metrics.Accuracy** 计算正确率
@@ -2689,7 +2689,7 @@
     ```
   - **Encoder and decoder 模型结构**
 
-    ![](images/tensorflow_encoder_decoder_structure.png)
+    ![](images/tensorflow_encoder_decoder_structure.jpg)
     - **Encoder** 每个输入应用注意力机制分配一个权重向量，转化为一个输出 `[batch_size, max_length, hidden_size]`，以及一个隐藏状态 `(batch_size, hidden_size)`，用于 `Decoder` 预测句子的下一个单词
     - **Decoder 伪代码 pseudo-code:** 使用 `Bahdanau attention` 注意力机制
       - **Input** = x_input_to_decoder, encoder_output, hidden_state
@@ -2700,7 +2700,7 @@
       - **merged_vector** = concat(embedding_output, context_vector)
       - **output**, **state** = gru(merged_vector)
 
-      ![](images/tensorflow_encoder_decoder_latex.png)
+      ![](images/tensorflow_encoder_decoder_latex.jpg)
   - **Encoder 模型定义**
     ```py
     def gru(units):
@@ -2926,26 +2926,26 @@
     # Input: <start> hace mucho frio aqui . <end>
     # Predicted translation: it s too cold here . <end>
     ```
-    ![](images/tensorflow_translate_attention_cold.png)
+    ![](images/tensorflow_translate_attention_cold.jpg)
     ```py
     translate('esta es mi vida.', encoder, decoder, inp_lang, targ_lang, max_length_inp, max_length_targ)
     # Input: <start> esta es mi vida . <end>
     # Predicted translation: this is my life . <end>
     ```
-    ![](images/tensorflow_translate_attention_life.png)
+    ![](images/tensorflow_translate_attention_life.jpg)
     ```py
     translate('¿todavia estan en casa?', encoder, decoder, inp_lang, targ_lang, max_length_inp, max_length_targ)
     # Input: <start> ¿ todavia estan en casa ? <end>
     # Predicted translation: are you still at home ? <end>
     ```
-    ![](images/tensorflow_translate_attention_home.png)
+    ![](images/tensorflow_translate_attention_home.jpg)
     ```py
     # wrong translation
     translate('trata de averiguarlo.', encoder, decoder, inp_lang, targ_lang, max_length_inp, max_length_targ)
     # Input: <start> trata de averiguarlo . <end>
     # Predicted translation: try to figure it out . <end>
     ```
-    ![](images/tensorflow_translate_attention_try.png)
+    ![](images/tensorflow_translate_attention_try.jpg)
   - **重新加载模型测试**
     ```py
     # restoring the latest checkpoint in checkpoint_dir
@@ -3384,7 +3384,7 @@
     plt.title('Loss Plot')
     plt.show()
     ```
-    ![](images/tensorflow_image_caption_loss.png)
+    ![](images/tensorflow_image_caption_loss.jpg)
   - **模型预测，生成图片标题**
     -  在模型预测时，Decoder 的输入使用上一次的预测结果，而不是 teacher forcing 产生的输入
     ```py
@@ -3447,7 +3447,7 @@
 
     plot_attention(image, result, attention_plot)
     ```
-    ![](images/tensorflow_image_caption_prediction.png)
+    ![](images/tensorflow_image_caption_prediction.jpg)
 ## Eager 执行环境与 Keras 定义 DCGAN 模型生成手写数字图片
   - [DCGAN: An example with tf.keras and eager](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/eager/python/examples/generative_examples/dcgan.ipynb)
   - **深度卷积对抗生成网络 DCGAN** Deep Convolutional Generative Adverserial Networks https://arxiv.org/pdf/1511.06434.pdf
@@ -3516,7 +3516,7 @@
         plt.imshow(pp.reshape(28, 28), cmap='gray')
         plt.axis('off')
     ```
-    ![](images/tensorflow_DCGAN_generator_test.png)
+    ![](images/tensorflow_DCGAN_generator_test.jpg)
   - **Discriminator 模型定义** 用于区分是真实的手写数字图片，还是 Generator 产生的图片
     ```py
     class Discriminator(tf.keras.Model):
@@ -3688,7 +3688,7 @@
     print(tf.argmax(model(aa), axis=1).numpy())
     # [9 5 9 4 0 1 6 4 8 6 7 9 2 6 9 7]
     ```
-    ![](images/tensorflow_dcgan_epoch_0150.png)
+    ![](images/tensorflow_dcgan_epoch_0150.jpg)
   - **重新加载模型**
     ```py
     # restoring the latest checkpoint in checkpoint_dir
@@ -3836,14 +3836,14 @@
         plt.imshow(pp.reshape(28, 28), cmap='gray')
         plt.axis('off')
     ```
-    ![](images/tensorflow_VAE_model_sample_test.png)
+    ![](images/tensorflow_VAE_model_sample_test.jpg)
   - **定义损失函数与优化器**
     - VAE 网络的训练过程，将 **ELBO 边际似然函数下界 evidence lower bound** 最大化
 
-      ![](images/tensorflow_VAE_ELBO_1.png)
+      ![](images/tensorflow_VAE_ELBO_1.jpg)
     - 在实际使用时，优化期望值的单样本 **蒙特卡洛估计 Monte Carlo estimate**
 
-      ![](images/tensorflow_VAE_ELBO_2.png)
+      ![](images/tensorflow_VAE_ELBO_2.jpg)
 
       其中 `z` 使用的是按照 **重新参数化 Reparameterization** 从 `q(z|x)` 中的采样值
     ```py
@@ -3952,7 +3952,7 @@
     print(tf.argmax(model(aa), axis=1).numpy())
     # [3 0 0 6 4 4 6 8 6 4 1 2 8 1 8 0]
     ```
-    ![](images/tensorflow_vae_epoch_0100.png)
+    ![](images/tensorflow_vae_epoch_0100.jpg)
   - **GIF 图片显示生成结果**
     ```py
     ''' Display an image using the epoch number '''
@@ -3997,7 +3997,7 @@
     - **极深网络 ResNet / DenseNet** 通过引入 **residual network 残差网络结构** 到 `CNN` 网络结构中，从输入源直接向输出源多连接了一条传递线，用来进行残差计算，是一种 **恒等映射 identity mapping**，这就是 **shortcut connection**，也叫 **skip connection**
     - 其效果是为了防止网络层数增加而导致的梯度弥散问题与退化问题，并且对于 CNN 的性能有明显的提升
 
-    ![](images/tensorflow_pix2pix_skip_connection.png)
+    ![](images/tensorflow_pix2pix_skip_connection.jpg)
   - **加载 CMP Facade 数据集** 每张图片左边是建筑物的真实图片，右边是表面轮廓图片，训练 `conditional GAN` 模型为图片上色，将表面轮廓图片转化为真实建筑物图片
     - [Index of /~tinghuiz/projects/pix2pix/datasets](https://people.eecs.berkeley.edu/~tinghuiz/projects/pix2pix/datasets/)
     ```py
@@ -4030,7 +4030,7 @@
 
     show_cmp_image(real_image, input_image)
     ```
-    ![](images/tensorflow_pix2pix_cmp.png)
+    ![](images/tensorflow_pix2pix_cmp.jpg)
   - **创建 dataset**
     - **Random jittering** 将图片大小处理成 `286 x 286`，然后随机裁剪成 `256 x 256` 大小
     - **Random mirroring** 随机将图片水平翻转
@@ -4107,7 +4107,7 @@
 
     show_cmp_image(bb[0] * 0.5 + 0.5, aa[0] * 0.5 + 0.5)
     ```
-    ![](images/tensorflow_pix2pix_cmp_train.png)
+    ![](images/tensorflow_pix2pix_cmp_train.jpg)
   - **Generator 模型定义**
     - **Generator 结构** 是一个修改的 `U-Net`
     - 每个 **Encoder** 即 `Downsample` 的结构是 `Conv -> Batchnorm -> Leaky ReLU`
@@ -4429,7 +4429,7 @@
     train(train_dataset, EPOCHS, test_input, test_target)
     # Time taken for epoch 1 is 126.98980689048767 sec
     ```
-    ![](images/tensorflow_pix2pix_train.png)
+    ![](images/tensorflow_pix2pix_train.jpg)
   - **重新加载模型测试**
     ```py
     # restoring the latest checkpoint in checkpoint_dir
@@ -4455,7 +4455,7 @@
     rr = np.concatenate(rr, axis=0)
     plt.imsave(fname='./tt.png', arr=rr, format='png', dpi=100)
     ```
-    ![](images/tensorflow_pix2pix_test.png)
+    ![](images/tensorflow_pix2pix_test.jpg)
 ## Neural Style Transfer 转化图片内容与风格
   - [Neural Style Transfer with tf.keras](https://github.com/tensorflow/models/blob/master/research/nst_blogpost/4_Neural_Style_Transfer_with_Eager_Execution.ipynb)
   - [A Neural Algorithm of Artistic Style](https://arxiv.org/pdf/1508.06576)
@@ -4545,7 +4545,7 @@
 
     fig.tight_layout()
     ```
-    ![](images/tensorflow_content_style_show.png)
+    ![](images/tensorflow_content_style_show.jpg)
   - **图片预处理 load_and_process_img / deprocess_img**
     - **load_and_process_img** 函数加载图片，并应用 `vgg19.preprocess_input` 的输入预处理过程，输出图片的每个通道按照 ImageNet 数据集的平均值 `[103.939, 116.779, 123.68]` 进行正则化，图片格式为 `BGR`
     - **deprocess_img** 是 `vgg19.preprocess_input` 的反向处理过程，并将图片的像素值限定在 `[0, 255]`
@@ -4662,10 +4662,10 @@
   - **定义模型损失 Content Loss 与 Style Loss**
     - **内容损失 Content Loss** 计算转化图片与目标图片内容向量的欧氏距离
 
-      ![](images/tensorflow_content_style_content_loss.png)
+      ![](images/tensorflow_content_style_content_loss.jpg)
     - **风格损失 Style Loss** 首先将风格向量转化为 **格拉姆矩阵 gram matrix**，然后计算转化图片与目标图片这两个向量的欧氏距离，最后取每一层输出的加权和
 
-      ![](images/tensorflow_content_style_style_loss.png)
+      ![](images/tensorflow_content_style_style_loss.jpg)
 
     ```py
     # Content Loss
@@ -4892,7 +4892,7 @@
     - [V-Net: Fully Convolutional Neural Networks for Volumetric Medical Image Segmentation](http://campar.in.tum.de/pub/milletari2016Vnet/milletari2016Vnet.pdf)
     - 度量两个集合 / 向量 / 字符串 / 图片的相似程度 overlap
 
-    ![](images/tensorflow_carvana_dice_loss.png)
+    ![](images/tensorflow_carvana_dice_loss.jpg)
   - **Kaggle Carvana Image Masking Challenge**
     - [Accept Kaggle Carvana Image Masking Challenge Competition Rules](https://www.kaggle.com/c/carvana-image-masking-challenge/rules)
     - 该数据集 **训练样本 train** 包含大量 **jpg 格式** 的汽车图片，维度 `(1280, 1918, 3)`，每辆车都有 **16** 张不同角度的图片，图片命名每辆车有单独的 ID，命名从 **01-16** 编号
@@ -4972,7 +4972,7 @@
     plt.suptitle("Examples of Images and their Masks")
     plt.show()
     ```
-    ![](images/tensorflow_carvana_show.png)
+    ![](images/tensorflow_carvana_show.jpg)
   - **分割训练验证数据集 train_test_split**
     ```py
     from sklearn.model_selection import train_test_split
@@ -5143,7 +5143,7 @@
         plt.axis('off')
         plt.show()
     ```
-    ![](images/tensorflow_carvana_dataset_show.png)
+    ![](images/tensorflow_carvana_dataset_show.jpg)
   - **tf.keras 定义 U-Net 模型**
     - **U-Net 模型** 在图片分割任务上有很好的效果，同时在小数据集上可以很好地避免过拟合，因为图片像素块的数量可以远大于图片数量
     - 在原始的 U-Net 模型基础上，每个模块添加 **批归一化 batch normalization**
@@ -5277,7 +5277,7 @@
 
     plt.show()
     ```
-    ![](images/tensorflow_carvana_train_dice_loss.png)
+    ![](images/tensorflow_carvana_train_dice_loss.jpg)
   - **模型加载，图形化显示模型在验证数据集上的效果**
     - 在竞赛 / 部署中会在测试数据集上使用图片的全部像素验证模型效果
     - 如果已经定义了完整的模型架构，在加载模型可以使用 `load_weights` 只加载模型权重
@@ -5316,7 +5316,7 @@
     plt.suptitle("Examples of Input Image, Label, and Prediction")
     plt.show()
     ```
-    ![](images/tensorflow_carvana_val_predict.png)
+    ![](images/tensorflow_carvana_val_predict.jpg)
 ## GraphDef 加载 InceptionV3 模型用于图片识别 Image Recognition
   - [Rethinking the Inception Architecture for Computer Vision](https://arxiv.org/pdf/1512.00567)
   - **Inception-v3** 是在 `ImageNet Large Visual Recognition Challenge` 数据集上训练用来进行图片分类的模型，按照 `ImageNet` 数据集将图片分为 1000 个类别，`top-5 错误率` 能达到 3.46%
@@ -5438,5 +5438,5 @@
 
     classify_image(os.path.join(dest_path, 'cropped_panda.jpg'))
     ```
-    ![](images/tensorflow_imagenet_recognise.png)
+    ![](images/tensorflow_imagenet_recognise.jpg)
 ***

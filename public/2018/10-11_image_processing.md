@@ -63,7 +63,7 @@
   plt.imsave('./coffee.jpg', data.coffee())
   plt.imshow(plt.imread('./coffee.jpg'))
   ```
-  ![](images/image_processing_coffee.png)
+  ![](images/image_processing_coffee.jpg)
 ## 将长方形图片转化为圆形
   ```python
   ''' 将长方形图片转化为圆形 '''
@@ -93,7 +93,7 @@
 
   plt.imsave('./image_processing_coffee_circle.png', imm)
   ```
-  ![](images/image_processing_coffee_circle.png)
+  ![](images/image_processing_coffee_circle.jpg)
 ## 裁剪图片四周的空白像素
   ```py
   ''' 裁剪图片四周的空白像素 '''
@@ -167,7 +167,7 @@
   tt = separate_image_nums(im_path, pix_thread=0.6, margin=5, RELOAD=True)
   imshow_nums(tt)
   ```
-  ![](images/image_processing_mnist.png)
+  ![](images/image_processing_mnist.jpg)
 
   **不同模型测试**
   ```py
@@ -239,7 +239,7 @@
     plt.axis('off')
     plt.tight_layout()
     ```
-    ![](images/skimage_otsu_camera.png)
+    ![](images/skimage_otsu_camera.jpg)
 ## Sobel 边缘检测算子
   - **Sobel 算子** 是一个离散微分算子 discrete differentiation operator，是典型的基于一阶导数的边缘检测算子，主要用于边缘检测
   - **图像边缘** 相素值会发生显著的变化了，表示这一改变的一个方法是使用导数，梯度值的大变预示着图像中内容的显著变化
@@ -256,7 +256,7 @@
     io.imshow(np.concatenate([img_as_float(camera), edges], 1))
     plt.axis('off')
     ```
-    ![](images/skimage_sobel.png)
+    ![](images/skimage_sobel.jpg)
 ## Canny 边缘检测算子
   - **Canny 边缘检测算法** 是 John F. Canny 于 1986 年开发出来的一个多级边缘检测算法
   - **Canny 边缘检测** 是从不同视觉对象中提取有用的结构信息，并大大减少要处理的数据量的一种技术，目前已广泛应用于各种计算机视觉系统
@@ -298,7 +298,7 @@
         aa.set_axis_off()
         aa.set_title(tt)
     ```
-    ![](images/skimage_canny.png)
+    ![](images/skimage_canny.jpg)
 ## Watershed 水线阈值分割算法
   - **watershed** 水线阈值分割算法，也称分水岭或流域阈值算法，用于分割图像中重叠的目标物体，可以看成是一种特殊的自适应迭代阈值方法
   - **水线阈值分割算法**
@@ -347,7 +347,7 @@
     for aa in ax: aa.axis('off')
     plt.tight_layout()
     ```
-    ![](images/skimage_watershed.png)
+    ![](images/skimage_watershed.jpg)
 ## Anisotropic diffusion 各项异性扩散算法
   ```py
   skimage.segmentation.random_walker: random walker segmentation
@@ -396,7 +396,7 @@
     io.imshow(np.concatenate([image, filt_real, filt_imag], 1))
     plt.axis('off')
     ```
-    ![](images/skimage_gabor_coins.png)
+    ![](images/skimage_gabor_coins.jpg)
 ***
 
 # skimage
@@ -458,7 +458,7 @@
     io.imshow(camera)
     plt.axis('off')
     ```
-    ![](images/skimage_half_circle.png)
+    ![](images/skimage_half_circle.jpg)
 ## 子模块
   - 大部分的功能位于子模块中，需要单独导入
     ```py
@@ -675,7 +675,7 @@
     plt.axis('off')
     plt.tight_layout()
     ```
-    ![](images/skimage_pyramid.png)
+    ![](images/skimage_pyramid.jpg)
 ## color 图像颜色转换
   - skimage 中的 HSV 颜色取值范围是 `0-1` 的 float 值
     ```py
@@ -690,7 +690,7 @@
     ax.imshow(all_hues, extent=(0, 1, 0, 0.2))
     ax.set_axis_off()
     ```
-    ![](images/skimage_hue.png)
+    ![](images/skimage_hue.jpg)
   - **转化色彩模式** 转化 RGB HSV CMYK YUV 等，使用 `color` 子模块中的方法
     - **RGB** 三个通道分别代表 红 / 绿/ 蓝
     - **HSV** 三个通道分别代表 色调 hue / 饱和度 saturation / 明度 value
@@ -767,7 +767,7 @@
     io.imshow(np.concatenate([idd, iid], 1))
     plt.axis('off')
     ```
-    ![](images/skimage_color_label2rgb.png)
+    ![](images/skimage_color_label2rgb.jpg)
   - **合并相临颜色 与 label2rgb 上色**
     ```py
     ''' constructs a Region Adjacency Graph (RAG) and merges regions which are similar in color'''
@@ -793,7 +793,7 @@
 
     plt.tight_layout()
     ```
-    ![](images/skimage_RAG.png)
+    ![](images/skimage_RAG.jpg)
   - **颜色反色** inverted image / complementary image
     ```py
     from skimage import util
@@ -802,7 +802,7 @@
 
     io.imshow(np.concatenate([img, inverted_img], 1))
     ```
-    ![](images/skimage_invert.png)
+    ![](images/skimage_invert.jpg)
 ## exposure 与像素分布直方图 histogram
   - **plt.hist** 可以直接绘制图像的像素分布直方图
     ```py
@@ -816,7 +816,7 @@
     plt.hist(img[:, :, 2].flatten(), bins=256, facecolor='b', edgecolor='b', alpha=0.5)
     plt.tight_layout()
     ```
-    ![](images/skimage_hist_rgb.png)
+    ![](images/skimage_hist_rgb.jpg)
   - **exposure.histogram** 返回图像的像素分布，直方图一般是针对灰度图的
     - 第一个值是像素值在每个区间的数量
     - 第二个值是每个区间的中点，不同于 `np.histogram` 返回区间的边界
@@ -851,7 +851,7 @@
 
     plt.tight_layout()
     ```
-    ![](images/skimage_histogram.png)
+    ![](images/skimage_histogram.jpg)
   - **图像显示辅助函数** 绘制图片直方图以及累积分布
     ```py
     from skimage import img_as_float, exposure, data
@@ -923,7 +923,7 @@
 
     fig.tight_layout()
     ```
-    ![](images/skimage_equalize_hist.png)
+    ![](images/skimage_equalize_hist.jpg)
 ## exposure 调整对比度与亮度
   - **exposure.adjust_gamma** gamma 调整，`输出 O = gain * (输入 I ** gamma)`
     ```py
@@ -947,7 +947,7 @@
         plot_img_and_hist(im, ax[0], ax[1], img_title=tt)
     fig.tight_layout()
     ```
-    ![](images/skimage_gamma.png)
+    ![](images/skimage_gamma.jpg)
   - **exposure.adjust_log** 对数调整，`输出 O = gain * log(1 + 输入 I)`
     ```py
     adjust_log(image, gain=1, inv=False)
@@ -956,7 +956,7 @@
     igg = exposure.adjust_log(image)
     plot_img_and_hist(igg)
     ```
-    ![](images/skimage_log.png)
+    ![](images/skimage_log.jpg)
     - **inv 参数** 为 `True` 时执行 **反对数校正 inverse logarithmic correction**，`O = gain*(2**I - 1)`
   - **exposure.adjust_sigmoid** sigmoid 调整，`输出 O = 1/(1 + exp*(gain*(cutoff - 输入 I)))`
     ```py
@@ -966,7 +966,7 @@
     iss = exposure.adjust_sigmoid(image)
     plot_img_and_hist(iss)
     ```
-    ![](images/skimage_sigmoid.png)
+    ![](images/skimage_sigmoid.jpg)
   - **exposure.is_low_contrast** 判断图像对比度是否偏低
     ```py
     is_low_contrast(image, fraction_threshold=0.05, lower_percentile=1, upper_percentile=99, method='linear')
@@ -1093,7 +1093,7 @@
 
     image_show_shape(img)
     ```
-    ![](images/skimage_draw_line_aa.png)
+    ![](images/skimage_draw_line_aa.jpg)
   - **set_color** 设置颜色
     ```py
     set_color(image, coords, color, alpha=1)
@@ -1122,7 +1122,7 @@
     img[rr, cc] = 1
     image_show_shape(img)
     ```
-    ![](images/skimage_draw_circle.png)
+    ![](images/skimage_draw_circle.jpg)
   - **rectangle** 长方形
     ```py
     rectangle(start, end=None, extent=None, shape=None)
@@ -1149,7 +1149,7 @@
     plt.xticks(range(0, 20, 2))
     plt.grid()
     ```
-    ![](images/skimage_draw_rectangle.png)
+    ![](images/skimage_draw_rectangle.jpg)
   - **polygon / polygon_perimeter** 多边形 / 多边形画线
     ```py
     polygon(r, c, shape=None)
@@ -1172,7 +1172,7 @@
     img[rr, cc] = (1, 1, 0)
     image_show_shape(img)
     ```
-    ![](images/skimage_draw_polygon.png)
+    ![](images/skimage_draw_polygon.jpg)
   - **ellipse** 椭圆
     ```py
     ellipse(r, c, r_radius, c_radius, shape=None, rotation=0.0)
@@ -1186,7 +1186,7 @@
     img[rr, cc] = 1
     image_show_shape(img)
     ```
-    ![](images/skimage_draw_ellipse.png)
+    ![](images/skimage_draw_ellipse.jpg)
   - **bezier_curve** 贝塞尔曲线，类似矢量曲线，使用三个点绘制的二次方贝塞尔曲线
     ```py
     bezier_curve(r0, c0, r1, c1, r2, c2, weight, shape=None)
@@ -1204,7 +1204,7 @@
     img[20, 70] = 1
     image_show_shape(img)
     ```
-    ![](images/skimage_draw_bezier_curve.png)
+    ![](images/skimage_draw_bezier_curve.jpg)
   - **circle_perimeter / circle_perimeter_aa** 圆周曲线，即空心圆，`circle_perimeter_aa` 为 anti-aliased 版本
     ```py
     circle_perimeter(r, c, radius, method='bresenham', shape=None)
@@ -1221,7 +1221,7 @@
     img[rr, cc] = 1
     image_show_shape(img)
     ```
-    ![](images/skimage_draw_circle_perimeter.png)
+    ![](images/skimage_draw_circle_perimeter.jpg)
   - **ellipse_perimeter** 空心椭圆
     ```py
     ellipse_perimeter(r, c, r_radius, c_radius, orientation=0, shape=None)
@@ -1234,7 +1234,7 @@
     img[rr, cc] = 1
     image_show_shape(img)
     ```
-    ![](images/skimage_draw_ellipse_perimeter.png)
+    ![](images/skimage_draw_ellipse_perimeter.jpg)
 ## filters 图像自动阈值分割
   - **图像阈值分割** 利用图像中 **目标区域** 与 **背景** 在灰度特性上的差异，选取一个比较合理的阈值，将图像分为两部分
   - **threshold_otsu** 计算 Otsu 算法的分割阈值
@@ -1293,7 +1293,7 @@
 
     images_show([image, ibb_1, ibb_2, ibb_3], ['Origin', 'mean 15', 'median 31', 'generic with param'])
     ```
-    ![](images/skimage_filters_threshold_local.png)
+    ![](images/skimage_filters_threshold_local.jpg)
 ## filters 图像过滤
   - **图像滤波** 可以有两种效果
     - 平滑滤波，用来抑制噪声
@@ -1328,7 +1328,7 @@
     titles = ['origin', 'sobel', 'roberts', 'scharr', 'prewitt', 'canny']
     images_show(images, titles, nrows=2)
     ```
-    ![](images/skimage_filters_edges.png)
+    ![](images/skimage_filters_edges.jpg)
   - **水平 / 垂直边缘检测** `sobel_h / prewitt_h / scharr_h` / `sobel_v / prewitt_v / scharr_v`
     - 分别应用不用的梯度过滤函数 kernel，选取部分边缘
     - `sobel_h`  kernel 为 `[[3, 10, 3], [0, 0, 0], [-3, -10, -3]]`
@@ -1341,7 +1341,7 @@
 
     images_show([edges_h, edges_v], ['sobel_h', 'sobel_v'])
     ```
-    ![](images/skimage_filters_edges_hv.png)
+    ![](images/skimage_filters_edges_hv.jpg)
   - **交叉边缘检测** `roberts_neg_diag` / `roberts_pos_diag`
     - 分别应用不用的梯度过滤函数 kernel，选取部分边缘
     - `roberts_neg_diag` kernel 为 `[[0, 1], [-1, 0]]`
@@ -1354,7 +1354,7 @@
 
     images_show([edges_neg, edges_pos], ['roberts_neg_diag', 'roberts_pos_diag'])
     ```
-    ![](images/skimage_filters_edges_diag.png)
+    ![](images/skimage_filters_edges_diag.jpg)
   - **gabor 滤波** 可用来进行边缘检测和纹理特征提取
     ```py
     # Return real and imaginary responses to Gabor filter.
@@ -1373,7 +1373,7 @@
     titles = ['Original', 'Real freq=0.6', 'Imag freq=0.6', 'Original', 'Real freq=0.4', 'Imag freq=0.4']
     images_show(images, titles, nrows=2)
     ```
-    ![](images/skimage_filters_gabor.png)
+    ![](images/skimage_filters_gabor.jpg)
   - **gaussian 滤波** 多维的滤波器，是一种平滑滤波，可以消除高斯噪声，本质上是将灰度图像 I 和一个 **高斯核** 进行 **卷积** 操作
     ```py
     gaussian(image, sigma=1, output=None, mode='nearest', cval=0, multichannel=None, preserve_range=False, truncate=4.0)
@@ -1402,7 +1402,7 @@
     igg3 = filters.gaussian(imm, sigma=5, multichannel=True)
     images_show([imm, igg1, igg2, igg3], ['Origin', 'sigma=0.4', 'sigma=1', 'sigma=5'])
     ```
-    ![](images/skimage_filters_gaussian.png)
+    ![](images/skimage_filters_gaussian.jpg)
   - **median 中值滤波** 一种非线性平滑滤波，将每一像素点的灰度值设置为 **该点某邻域窗口** 内的所有像素点灰度值的 **中值**，从而消除孤立的噪声点，位于 `skimage.filters.rank`，可以通过 `skimage.filters` 直接调用
     ```py
     median(image, selem=None, out=None, mask=None, shift_x=False, shift_y=False)
@@ -1417,7 +1417,7 @@
     med2 = filters.median(img, disk(9))
     images_show([img, med1, med2], ['Origin', 'selem=5', 'selem=9'])
     ```
-    ![](images/skimage_filters_median.png)
+    ![](images/skimage_filters_median.jpg)
 ## 图像分割 Image Segmentation
   - **图像分割 Image segmentation** 在一幅图像中标记出感兴趣的部分
   - **使用 skimage 的硬币图像 coins**
@@ -1445,7 +1445,7 @@
     axes[1].plot(hist[1][:-1], hist[0], lw=2)
     axes[1].set_title('histogram of gray values')
     ```
-    ![](images/skimage_segmentation_show_coins.png)
+    ![](images/skimage_segmentation_show_coins.jpg)
   - **阈值 Thresholding 过滤** 根据阈值过滤灰度值，分割物体与背景
     ```py
     fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
@@ -1454,7 +1454,7 @@
     img_show(coins > 150, title='coins > 150', ax=axes[1])
     plt.tight_layout()
     ```
-    ![](images/skimage_segmentation_threshhold.png)
+    ![](images/skimage_segmentation_threshhold.jpg)
   - **检测图像边缘分割物体与背景 Edge-based segmentation** 使用 Canny 边缘检测算法
     ```py
     ''' Canny 检测图像边缘 '''
@@ -1476,7 +1476,7 @@
     img_show(coins_cleaned, title='removing small objects', ax=axes[2])
     plt.tight_layout()
     ```
-    ![](images/skimage_segmentation_canny.png)
+    ![](images/skimage_segmentation_canny.jpg)
 
     由于其中一个硬币的图像边缘轮廓未闭合，填充时没有正确标记出
   - **根据区域检测分割物体与背景 Region-based segmentation** 使用 watershed
@@ -1502,7 +1502,7 @@
     img_show(segmentation, title='segmentation', ax=axes[2])
     plt.tight_layout()
     ```
-    ![](images/skimage_segmentation_watershed.png)
+    ![](images/skimage_segmentation_watershed.jpg)
   - **label2rgb** 为图片上色
     ```py
     from skimage.color import label2rgb
@@ -1516,7 +1516,7 @@
     axes[0].contour(segmentation, [0.5], linewidths=1.2, colors='y')
     img_show(image_label_overlay, title='Labeled image', ax=axes[1])
     ```
-    ![](images/skimage_segmentation_label.png)
+    ![](images/skimage_segmentation_label.jpg)
 ## morphology 形态学滤波
   - 对图像进行形态学变换。变换对象一般为灰度图或二值图
   - **selem** 结构化元素 structuring element，模块 `morphology.selem`，包括圆形 ball / 矩形 rectangle / 方形 square / 八角星形 star / 圆盘形 disk 等
@@ -1557,7 +1557,7 @@
     idd3 = dilation(imm, square(3))
     images_show([imm, idd1, idd2, idd3], ['Original', 'Default', 'Square=1', 'Square=3'])
     ```
-    ![](images/skimage_morphology_dilation.png)
+    ![](images/skimage_morphology_dilation.jpg)
   - **erosion / binary_erosion** 形态腐蚀，与膨胀相反的操作，将点 `(i,j)` 设置为以该点为中心周围像素的 **最小值**，可用来提取骨干信息 / 去掉毛刺 / 去掉孤立的像素
     ```py
     erosion(image, selem=None, out=None, shift_x=False, shift_y=False)
@@ -1571,7 +1571,7 @@
     iee3 = erosion(imm, square(25))
     images_show([imm, iee1, iee2, iee3], ['Original', 'Default', 'Square=10', 'Square=25'])
     ```
-    ![](images/skimage_morphology_erosion.png)
+    ![](images/skimage_morphology_erosion.jpg)
   - **opening / binary_opening** 形态学开算法，先腐蚀再膨胀，可以消除白色噪点，并连接小的暗色区块，类似在亮色之间扩大暗色的分割
     The morphological opening on an image is defined as an erosion followed by a dilation. Opening can remove small bright spots (i.e. "salt") and connect small dark cracks. This tends to "open" up (dark) gaps between (bright) features.
     ```py
@@ -1590,7 +1590,7 @@
     ioo = opening(bad_connection, square(3))
     images_show([bad_connection, ioo], ['Original', 'Square=3'])
     ```
-    ![](images/skimage_morphology_opening.png)
+    ![](images/skimage_morphology_opening.jpg)
   - **closing / binary_closing** 形态学闭运算，先膨胀再腐蚀，可一消除黑色噪点，并链接小的两色区块，可用来填充孔洞
     ```py
     closing(image, selem=None, out=None)
@@ -1605,7 +1605,7 @@
     icc = closing(broken_line, square(3))
     images_show([broken_line, icc], ['Original', 'Square=3'])
     ```
-    ![](images/skimage_morphology_closing.png)
+    ![](images/skimage_morphology_closing.jpg)
   - **white_tophat** 白帽，将原图像减去它的开运算值，返回比结构化元素 selem 小的白点
     ```py
     white_tophat(image, selem=None, out=None)
@@ -1623,7 +1623,7 @@
     iww3 = white_tophat(bright_on_grey, disk(1))
     images_show([bright_on_grey, iww1, iww2, iww3], ['Original', 'Square=3', 'Square=1', 'Disk=1'])
     ```
-    ![](images/skimage_morphology_white_tophat.png)
+    ![](images/skimage_morphology_white_tophat.jpg)
   - **black_tophat** 黑帽，将图像的闭运算值减去原图像，返回比结构化元素 selem 小的黑点，且将这些黑点反色
     ```py
     black_tophat(image, selem=None, out=None)
@@ -1641,7 +1641,7 @@
     ibb3 = black_tophat(dark_on_grey, disk(1))
     images_show([dark_on_grey, ibb1, ibb2, ibb3], ['Original', 'Square=3', 'Square=5', 'Disk=1'])
     ```
-    ![](images/skimage_morphology_black_tophat.png)
+    ![](images/skimage_morphology_black_tophat.jpg)
 ## filters.rank 高级滤波
   - **函数形式** 调用形式基本类似
     ```py
@@ -1683,7 +1683,7 @@
     titles = ['Original', 'autolevel', 'enhance_contrast', 'gradient', 'maximum', 'otsu', 'sum', 'threshold']
     images_show(images, titles, nrows=2)
     ```
-    ![](images/skimage_filters_rank.png)
+    ![](images/skimage_filters_rank.jpg)
 ***
 
 # 处理视频文件

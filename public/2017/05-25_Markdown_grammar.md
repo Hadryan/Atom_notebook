@@ -559,24 +559,24 @@ ___2017 - 05 - 25 Markdown Grammar___
 
     ![](https://tex.s2cms.ru/svg/%7B%0A%20%20%5Cint%5Climits_%7B-%5Cinfty%7D%5E%7B%5Cinfty%7D%0A%20%20e%5E%7B-x%5E2%7D%20%5C%2C%20dx%20%3D%20%5Csqrt%7B%5Cpi%7D%0A%7D)
   - **LaTeX 公式示例** github 不支持显示
-    - ![](images/LaTex_1.png)
+    - ![](images/LaTex_1.jpg)
       ```latex
       __$\hat{r}_{ui} = b_{ui} = \mu + b_u + b_i$__
       ```
-    - ![](images/LaTex_2.png)
+    - ![](images/LaTex_2.jpg)
       ```latex
       $\hat{r}_{ui} = \frac{\sum\limits_{v \in N^k_i(u)} \text{sim}(u. v) \cdot r_{vi}}
        {\sum\limits_{v \in N^k_i(u)} \text{sim}(u, v)}$
       ```
-    - ![](images/LaTex_3.png)
+    - ![](images/LaTex_3.jpg)
       ```latex
       **$x_{1,2} = {-b\pm\sqrt{b^2 - 4ac} \over 2a}$**
       ```
-    - ![](images/LaTex_4.png)
+    - ![](images/LaTex_4.jpg)
       ```latex
       $$|\vec{A}|=\sqrt{A_x^2 + A_y^2 + A_z^2}(1)$$
       ```
-    - ![](images/LaTex_5.png)
+    - ![](images/LaTex_5.jpg)
       ```latex
       $$T^{\mu\nu}=\begin{pmatrix}
       \varepsilon&0&0&0\\
@@ -585,7 +585,7 @@ ___2017 - 05 - 25 Markdown Grammar___
       0&0&0&\varepsilon/3
       \end{pmatrix},$$
       ```
-    - ![](images/LaTex_6.png)
+    - ![](images/LaTex_6.jpg)
       ```latex
       $$P_\omega={n_\omega\over 2}\hbar\omega\,{1+R\over 1-v^2}\int\limits_{-1}^{1}dx\,(x-v)|x-v|,$$
       ```

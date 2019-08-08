@@ -474,7 +474,7 @@
 ## 基线法估计配置 Baselines estimates configuration
   - **正则化平方差 regularized squared error**
 
-    ![](images/LaTex_rse.png)
+    ![](images/LaTex_rse.jpg)
   - **Baselines** 有两种估计方法，算法标准 [Kor10](http://surprise.readthedocs.io/en/stable/notation_standards.html#koren-2010)
     - **SGD** 随机梯度下降 Stochastic Gradient Descent
     - **ALS** 交替最小二乘 Alternating Least Squares
@@ -1044,32 +1044,32 @@
     ```
     计算给定用户 user 与物品 item 的基线 baseline
 
-    ![](images/LaTex_NormalPredictor.png)
+    ![](images/LaTex_NormalPredictor.jpg)
 ## KNN 相关算法
   - **KNNBasic** 位于 `surprise.prediction_algorithms.knns.KNNBasic`，基本的协同过滤算法
     ```python
     help(surprise.KNNBasic)
     __init__(self, k=40, min_k=1, sim_options={}, verbose=True, **kwargs)
     ```
-    ![](images/LaTex_KNNBasic.png)
+    ![](images/LaTex_KNNBasic.jpg)
   - **KNNWithMeans**，位于 `surprise.prediction_algorithms.knns.KNNWithMeans`，基本的协同过滤算法，考虑每个用户的评分平均值
     ```python
     help(surprise.KNNWithMeans)
     __init__(self, k=40, min_k=1, sim_options={}, verbose=True, **kwargs)
     ```
-    ![](images/LaTex_KNNWithMeans.png)
+    ![](images/LaTex_KNNWithMeans.jpg)
   - **KNNWithZScore**，位于 `surprise.prediction_algorithms.knns.KNNWithZScore`，基本的协同过滤算法，考虑每个用户的正态标准化 z-score normalization
     ```python
     help(surprise.KNNWithZScore)
     __init__(self, k=40, min_k=1, sim_options={}, verbose=True, **kwargs)
     ```
-    ![](images/LaTex_KNNWithZScore.png)
+    ![](images/LaTex_KNNWithZScore.jpg)
   - **KNNBaseline**，位于 `surprise.prediction_algorithms.knns.KNNBaseline`，基本的协同过滤算法，考虑基线得分 baseline rating，一般 **pearson_baseline** 有更好地预测效果
     ```python
     help(surprise.KNNBaseline)
     __init__(self, k=40, min_k=1, sim_options={}, verbose=True, **kwargs)
     ```
-    ![](images/LaTex_KNNBaseline.png)
+    ![](images/LaTex_KNNBaseline.jpg)
 ## 矩阵分解 Matrix Factorization 相关算法
   - **SVD**，位于 `surprise.prediction_algorithms.matrix_factorization.SVD`
     ```python
@@ -1081,13 +1081,13 @@
     - **PMF** Probabilistic Matrix Factorization，概率矩阵分解，SVD 的 `biased` 设置为 `False` 时，等价于 PMF
     - 预测值 $\hat{r}_{ui}$ 设置为
 
-      ![](images/LaTex_SVD_1.png)
+      ![](images/LaTex_SVD_1.jpg)
     - 预测未知值时，将一下正则化平方误差 regularized squared error 缩减到最小
 
-      ![](images/LaTex_SVD_2.png)
+      ![](images/LaTex_SVD_2.jpg)
     - 缩减过程使用随机梯度下降 SGD stochastic gradient descent
 
-      ![](images/LaTex_SVD_3.png)
+      ![](images/LaTex_SVD_3.jpg)
   - **SVDpp**，位于 `surprise.prediction_algorithms.matrix_factorization.SVDpp`，扩展的 SVD 算法，考虑隐式评分 implicit ratings
     ```python
     help(surprise.SVDpp)
@@ -1096,7 +1096,7 @@
           lr_yj=None, reg_yj=None,
           reg_bu=None, reg_bi=None, reg_pu=None, reg_qi=None, random_state=None, verbose=False)
     ```
-    ![](images/LaTex_SVDpp.png)
+    ![](images/LaTex_SVDpp.jpg)
   - **NMF**，位于 `surprise.prediction_algorithms.matrix_factorization.NMF`，基于非负矩阵分解 Non-negative Matrix Factorization 的协同过滤算法
     ```python
     help(surprise.NMF)
@@ -1106,10 +1106,10 @@
     ```
     - 预测值 $\hat{r}_{ui}$ 设置为
 
-      ![](images/LaTex_NMF_1.png)
+      ![](images/LaTex_NMF_1.jpg)
     - 缩减过程使用随机梯度下降 SGD
 
-      ![](images/LaTex_NMF_2.png)
+      ![](images/LaTex_NMF_2.jpg)
 ## Slope One 算法
   - **SlopeOne**，位于 `surprise.prediction_algorithms.slope_one.SlopeOne`，简单高效的协同过滤算法
     ```python
@@ -1117,10 +1117,10 @@
     ```
   - 预测值 $\hat{r}_{ui}$ 设置为
 
-    ![](images/LaTex_SlopeOne_1.png)
+    ![](images/LaTex_SlopeOne_1.jpg)
   - 其中 $R_i(u)$ 是关联物品的集合，`dev(i,j)` 表示物品 i 与它的关联项目 j 之间的差值
 
-    ![](images/LaTex_SlopeOne_2.png)
+    ![](images/LaTex_SlopeOne_2.jpg)
 ## 协同聚类 Co-clustering
   - **CoClustering**，位于 `surprise.prediction_algorithms.co_clustering.CoClustering`，基于协同聚类 Co-clustering 的协同过滤算法
     ```python
@@ -1129,7 +1129,7 @@
     ```
   - 用户以及物品划分到簇 `Cu` / `Ci`，以及协同聚类 `Cui` 中，簇的划分使用类似 `k-means` 的算法，预测值 $\hat{r}_{ui}$ 设置为
 
-    ![](images/LaTex_CoClustering.png)
+    ![](images/LaTex_CoClustering.jpg)
   - 其中 $\overline{C_{ui}}$ 表示 `Cui` 的平均得分值，$\overline{C_{u}}$ 表示用户 u 的簇的平均得分值，$\overline{C_{i}}$ 表示物品 i 的簇的平均得分值
 ***
 
@@ -1197,10 +1197,10 @@
   - **fcp**，位于 `surprise.accuracy.fcp`，计算预测值的 Fraction of Concordant Pairs
   - **mae**，位于 `surprise.accuracy.mae`，计算预测值的平均绝对误差 Mean Absolute Error
 
-    ![](images/LaTex_mae.png)
+    ![](images/LaTex_mae.jpg)
   - **rmse**，位于 `surprise.accuracy.rmse`，计算预测值的均方根误差 Root Mean Squared Error
 
-    ![](images/LaTex_rmse.png)
+    ![](images/LaTex_rmse.jpg)
 ***
 
 # dataset 模块
