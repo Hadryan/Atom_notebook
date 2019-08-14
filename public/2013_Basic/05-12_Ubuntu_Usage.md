@@ -500,8 +500,10 @@
     #             用户  组
     -rw-r--r--  1 1066 leondgarse 9402 3月   7 12:19 foo
     ```
-    A: 在 mount 时，指定 uid / gid
+    A: 添加对应的 samba 用户，同时在 mount 时，指定 uid / gid
     ```shell
+    sudo smbpasswd -a test
+    
     # uid / gid 为本地用户的 uid / gid
     $ sudo mount -t cifs -o uid=1000,gid=1000,file_mode=0777,dir_mode=0777,username=leondgarse,password=123456 //192.168.7.11/leondgarse /media/samba/
     ```

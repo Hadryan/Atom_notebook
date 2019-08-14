@@ -412,7 +412,6 @@
     ```sh
     rm ~/.nv -rf
     ```
-
 ## Hello World
   ```python
   import tensorflow as tf

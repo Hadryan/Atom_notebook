@@ -87,8 +87,6 @@
       for cc in bb:
           rr = plt.Rectangle(cc[:2], cc[2] - cc[0], cc[3] - cc[1], fill=False, color='r')
           ax.add_patch(rr)
-
-      %timeit detector(imgm)
       return bb, pp
   ```
 ## facenet mtcnn
@@ -105,18 +103,18 @@
   from skimage.io import imread
 
   with tf.Graph().as_default():
-      with tf.variable_scope("", reuse=tf.AUTO_REUSE):
-          gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
-          sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False))
-          with sess.as_default():
-              pnet, rnet, onet = align.detect_face.create_mtcnn(sess, None)
+      gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=1.0, allow_growth = True)
+      config = tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False)
+      sess = tf.Session(config=config)
+      with sess.as_default():
+          pnet, rnet, onet = align.detect_face.create_mtcnn(sess, None)
   # For test
-  minsize = 20  # minimum size of face
-  threshold = [0.6, 0.7, 0.8]  # three steps's threshold
+  minsize = 40  # minimum size of face
+  threshold = [0.9, 0.6, 0.7]  # three steps's threshold
   factor = 0.709  # scale factor
 
   def face_detection_align(img):
-      return align.detect_face.detect_face(img, 40, pnet, rnet, onet, threshold, factor)
+      return align.detect_face.detect_face(img, minsize, pnet, rnet, onet, threshold, factor)
 
   img = imread('../../test_img/Anthony_Hopkins_0002.jpg')
   print(face_detection_align(img))
@@ -235,7 +233,61 @@
       points.append(lms[i][1])
   ```
   ![](images/MTCNN_package_mtcnn_multi.jpg)
+## caffe MTCNN
+  ```py
+  # cd ~/workspace/face_recognition_collection/MTCNN/python-caffe
+  import skimage, cv2
+  from MtcnnDetector import FaceDetector
+  img = imread('../../test_img/Fotos_anuales_del_deporte_de_2012.jpg')
+  detector = FaceDetector(minsize=40, fastresize=False, model_dir='../../insightface/deploy/mtcnn-model/')
+  detector.detectface(img)
+  def test_mtcnn_multi_face(img_name, detector, image_type="RGB"):
+      fig = plt.figure()
+      ax = fig.add_subplot()
 
+      if image_type == "RGB":
+          imgm = skimage.io.imread(img_name)
+          ax.imshow(imgm)
+      else:
+          imgm = cv2.imread(img_name)
+          ax.imshow(imgm[:, :, ::-1])
+
+      bb, pp, _ = detector(imgm)
+      print(bb.shape, pp.shape)
+
+      for cc in bb:
+          rr = plt.Rectangle(cc[:2], cc[2] - cc[0], cc[3] - cc[1], fill=False, color='r')
+          ax.add_patch(rr)
+      return bb, pp
+  test_mtcnn_multi_face(img_name, detector.detectface)
+  ```
+## TensorFlow mtcnn pb
+```py
+# cd ~/workspace/face_recognition_collection/MTCNN/tensorflow
+import cv2
+from mtcnn import MTCNN
+
+det = MTCNN('./mtcnn.pb')
+img = cv2.imread('../../test_img/Anthony_Hopkins_0002.jpg')
+
+det.detect(img)
+# (array([[ 65.71266,  74.45414, 187.65063, 172.71921]], dtype=float32),
+#  array([0.99999845], dtype=float32),
+#  array([[113.4738  , 113.50406 , 138.02603 , 159.49994 , 158.71802 ,
+#          102.397964, 147.4054  , 125.014786, 105.924614, 145.5773  ]],
+#        dtype=float32))
+```
+```py
+bb, cc, pp = det.detect(img)
+bb = np.array([[ii[1], ii[0], ii[3], ii[2]] for ii in bb])
+# Out[21]: array([[ 74.45414,  65.71266, 172.71921, 187.65063]], dtype=float32)
+pp = np.array([ii.reshape(2, 5)[::-1].T for ii in pp])
+# array([[[102.397964, 113.4738  ],
+#         [147.4054  , 113.50406 ],
+#         [125.014786, 138.02603 ],
+#         [105.924614, 159.49994 ],
+#         [145.5773  , 158.71802 ]]], dtype=float32)
+```
 ***
 
 # Insightface caffe MTCNN model to TensorFlow
@@ -600,6 +652,7 @@
 
     xx = resize(x, [112, 112])
     data = json.dumps({"signature_name": "serving_default", "instances": [xx.tolist()]})
+    headers = {"content-type": "application/json"}
     json_response = requests.post('http://localhost:8501/v1/models/arcface:predict',data=data, headers=headers)
     rr = json_response.json()
     print(rr.keys(), np.shape(rr['predictions']))
@@ -617,6 +670,7 @@
     dd = resize(cc, [112, 112])
 
     data = json.dumps({"signature_name": "serving_default", "instances": [dd.tolist()]})
+    headers = {"content-type": "application/json"}
     json_response = requests.post('http://localhost:8501/v1/models/arcface:predict',data=data, headers=headers)
     rr = json_response.json()
     print(rr.keys(), np.shape(rr['predictions']))
@@ -624,7 +678,8 @@
     ```
 ***
 
-# timeit test
+# Test commands
+## timeit test
   - mxnet, threads = 1, 1:18.42
   - mxnet, threads = 20, 0:56.99
   - TensorFlow, threads = 1, 1:27.22
@@ -645,8 +700,95 @@
   %timeit bb = np.load('1.npz')['feature']
   1 loop, best of 5: 4.75 s per loop
   ```
+  ```py
+  In [23]: %timeit mtcnn.detect(img)
+  16.7 ms ± 383 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
 
-http://mobile.yangkeduo.com
+  In [24]: %timeit mtcnn.detect(img)
+  16.9 ms ± 369 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
 
-https://wx2.qq.com/cgi-bin/mmwebwx-bin/webwxcheckurl?requrl=https%3A%2F%2Fmobile.yangkeduo.com&skey=%40crypt_5da22335_d6ae06079d45d9f7eb0cf7cf527eae27&deviceid=e275027639709443&pass_ticket=oTXTZ%252F8VAzP6wDXIzdJQiQomyTngp4brb5fKVQ7KyD4%252FsTAKF8DLjhqZogYXGZuE&opcode=2&scene=1&username=@975941cb2a35b5bdab443502173670529964db7ca64b3b8f8dd4398e63772af8
-https://wx2.qq.com/cgi-bin/mmwebwx-bin/webwxcheckurl?requrl=http%3A%2F%2Fmobile.yangkeduo.com&amp;skey=%40crypt_5da22335_d6ae06079d45d9f7eb0cf7cf527eae27&amp;deviceid=e275027639709443&amp;pass_ticket=oTXTZ%252F8VAzP6wDXIzdJQiQomyTngp4brb5fKVQ7KyD4%252FsTAKF8DLjhqZogYXGZuE&amp;opcode=2&amp;scene=1&amp;username=@975941cb2a35b5bdab443502173670529964db7ca64b3b8f8dd4398e63772af8
+  In [25]: %timeit detector.detectface(img)
+  30.5 ms ± 107 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
+
+  In [26]: %timeit detector.detectface(img)
+  30.3 ms ± 114 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
+
+  In [27]: %timeit detector.detectface(img)
+  29.7 ms ± 385 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
+  ```
+  ```py
+  In [22]: %timeit -n 100 det_tfo.detect_faces(imr)
+  73.5 ms ± 607 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+
+  In [23]: %timeit -n 100 det_caffe.detectface(imb)
+  30.9 ms ± 650 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+
+  In [24]: %timeit -n 100 det_tfp.detect(imb)
+  17.1 ms ± 488 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+
+  os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+  In [9]: %timeit -n 100 det_tfp.detect(imb)
+  35.6 ms ± 316 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+  ```
+## log test
+```sh
+grep -srnI 'date in requests' app.log | sort -n -k 11
+grep -srnI 'End' app.log | sort -n -k 9
+
+grep -srnI 'End' app.log | cut -d : -f 7 > foo
+grep -srnI 'date in requests' app.log | cut -d : -f 7 > goo
+```
+```py
+def plot_hist_from_log_file(file_name, key, bins=20, latest=None):
+    with open(file_name, 'r') as ff:
+        ll = ff.readlines()
+    aa = [float(ii.strip().split()[-1]) for ii in ll if key in ii]
+    if latest:
+      aa = aa[-latest:]
+    plt.hist(aa, bins=bins)
+```
+```sh
+sudo apt-get install -y nvidia-docker2
+docker run --runtime=nvidia -v /home/tdtest/workspace/:/home/tdtest/workspace -it tensorflow/tensorflow:latest-gpu-py3 bash
+
+pip install --upgrade pip
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple sklearn scikit-image waitress python-crontab opencv-python mtcnn requests
+
+apt update && apt install python3-opencv
+
+nohup ./server_flask.py -l 0 > app.log 2>&1 &
+
+docker ps -a | grep tensorflow | cut -d ' ' -f 1
+docker exec  -p 8082:9082 -it `docker ps -a | grep tensorflow | cut -d ' ' -f 1` bash
+
+docker commit `docker ps -a | grep tensorflow | cut -d ' ' -f 1` insightface
+docker run -e CUDA_VISIBLE_DEVICES='1' -v /home/tdtest/workspace/:/workspace -it -p 9082:8082 -w /workspace/insightface-master insightface:latest ./server_flask.py
+```
+mtcnn.MTCNN --> 1615 MB
+facenet mtcnn -> 1615 MB
+insightface mtcnn -> 961 MB
+```py
+cd ~/workspace/face_recognition_collection/facenet/src
+import tensorflow as tf
+import align.detect_face
+from skimage.io import imread
+
+g = tf.Graph()
+with g.as_default():
+  with g.device("cpu"):
+      sess = tf.Session()
+      with sess.as_default():
+          pnet, rnet, onet = align.detect_face.create_mtcnn(sess, None)
+minsize = 40  # minimum size of face
+threshold = [0.9, 0.6, 0.7]  # three steps's threshold
+factor = 0.709  # scale factor
+
+def face_detection_align(img):
+    return align.detect_face.detect_face(img, minsize, pnet, rnet, onet, threshold, factor)
+img = imread('../../test_img/Anthony_Hopkins_0002.jpg')
+face_detection_align(img)
+face_detection_align(img)
+face_detection_align(img)
+face_detection_align(img)
+face_detection_align(img)
+```

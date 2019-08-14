@@ -1,7 +1,17 @@
 # ___2019 - 07 - 26 Model Convertion___
 ***
-tensorRT
-
+- tensorRT
+- [encode/uvicorn](https://github.com/encode/uvicorn)
+- [david-cao/gRPCBenchmarks](https://github.com/david-cao/gRPCBenchmarks)
+- [使用 GPU](https://www.tensorflow.org/guide/using_gpu)
+- [numpy.linalg.norm](https://docs.scipy.org/doc/numpy-1.13.0/reference/generated/numpy.linalg.norm.html)
+- [Python Numpy计算各类距离](https://blog.csdn.net/liukuan73/article/details/80494779)
+- [相似度计算方法](https://www.cnblogs.com/chenxiangzhen/p/10648503.html)
+- [MTCNN人脸及特征点检测---代码应用详解（基于ncnn架构）](https://blog.csdn.net/fuwenyan/article/details/77573755)
+- [MTCNN解读：Joint Face Detection and Alignment using Multi-task Cascaded Convolutional Networks](https://blog.csdn.net/fuwenyan/article/details/73201680)
+- [tensorflow中的batch_normalization实现](https://www.cnblogs.com/jiangxinyang/p/9394353.html)
+- [谈谈Tensorflow的Batch Normalization](https://www.jianshu.com/p/0312e04e4e83)
+- [docker/tensorflow/tensorflow](https://hub.docker.com/r/tensorflow/tensorflow/)
 
 # MMDNN
 ## 安装
@@ -274,19 +284,10 @@ tensorRT
 ***
 
 # Tensorflow SavedModel 模型的保存与加载
-A SavedModel contains a complete TensorFlow program, including weights and computation. It does not require the original model building code to run, which makes it useful for sharing or deployin
-saved_model模块主要用于TensorFlow Serving。TF Serving是一个将训练好的模型部署至生产环境的系统，主要的优点在于可以保持Server端与API不变的情况下，部署新的算法或进行试验，同时还有很高的性能。
-```py
-load(sess, tags, export_dir, import_scope=None, **saver_kwargs)
-    Loads the model from a SavedModel as specified by tags. (deprecated)
-
-    Warning: THIS FUNCTION IS DEPRECATED. It will be removed in a future version.
-    Instructions for updating:
-    This function will only be available through the v1 compatibility library as tf.compat.v1.saved_model.loader.load or tf.compat.v1.saved_model.load. There will be a new function for importing SavedModels in Tensorflow 2.0.
-```
-  - SaveModel 与语言无关，可以使用 python 训练模型，然后在 Java 中非常方便的加载模型
-  - 如果使用 Tensorflow Serving server 来部署模型，必须选择 SavedModel 格式
-  - 一个比较完整的 SavedModel 模型包含以下内容
+## SavedModel 保存与加载
+  - **SavedModel** 是一种独立于语言且可恢复的序列化格式，使较高级别的系统和工具可以创建、使用和转换 TensorFlow 模型，包含完整的 TensorFlow 程序，包括权重和计算图，可以使用 python 训练模型，然后在 Java 中非常方便的加载模型
+  - TensorFlow 提供了多种与 SavedModel 交互的方式，包括 `tf.saved_model API` / `tf.estimator.Estimator` 和命令行界面，如使用 `TensorFlow Serving` 将训练好的模型部署至生产环境
+  - 一个比较完整的 SavedModel 模型文件夹包含以下内容
     ```sh
     ├── assets  # 可选，可以添加可能需要的外部文件
     ├── assets.extra  # 可选，是一个库，可以添加其特定assets的地方
@@ -295,166 +296,160 @@ load(sess, tags, export_dir, import_scope=None, **saver_kwargs)
         ├── variables.data-00000-of-00001
         └── variables.index
     ```
-    保存到文件
-    最简单的保存方法是使用tf.saved_model.simple_save函数，代码如下：
-    tf.saved_model.simple_save(sess,
-                "./model",
-                inputs={"myInput": x},
-                outputs={"myOutput": y})
-加载
-对不同语言而言，加载过程有些类似，这里还是以python为例：
+  - **tf.saved_model.simple_save** 简单保存，创建 SavedModel 的最简单方法
+    ```py
+    tf.saved_model.simple_save(sess, "./model", inputs={"myInput": x, "Input_2": z}, outputs={"myOutput": y})
+    ```
+  - **加载** 加载后作为特定 MetaGraphDef 的一部分提供的变量、资源和签名子集将恢复到提供的会话中
+    ```py
+    # Loads the model from a SavedModel as specified by tags. (deprecated)
+    # This function will only be available through the v1 compatibility library as tf.compat.v1.saved_model.loader.load or tf.compat.v1.saved_model.load. There will be a new function for importing SavedModels in Tensorflow 2.0.
+    load(sess, tags, export_dir, import_scope=None, **saver_kwargs)
+    ```
+    ```py
+    export_dir = ...
+    ...
+    with tf.Session(graph=tf.Graph()) as sess:
+      tf.saved_model.loader.load(sess, [tag_constants.TRAINING], export_dir)
+      ...
+    ```
+  - **MNIST 示例**
+    ```py
+    mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
 
-mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
+    with tf.Session(graph=tf.Graph()) as sess:
+      tf.saved_model.loader.load(sess, ["serve"], "./model")
+      graph = tf.get_default_graph()
 
-with tf.Session(graph=tf.Graph()) as sess:
-  tf.saved_model.loader.load(sess, ["serve"], "./model")
-  graph = tf.get_default_graph()
+      input = np.expand_dims(mnist.test.images[0], 0)
+      x = sess.graph.get_tensor_by_name('myInput:0')
+      y = sess.graph.get_tensor_by_name('myOutput:0')
+      batch_xs, batch_ys = mnist.test.next_batch(1)
+      scores = sess.run(y,
+               feed_dict={x: batch_xs})
+      print("predict: %d, actual: %d" % (np.argmax(scores, 1), np.argmax(batch_ys, 1)))    
+    ```
+  - 在 **TensorFlow Serving** 中加载和提供 SavedModel
+    ```sh
+    tensorflow_model_server --port=port-numbers --model_name=your-model-name --model_base_path=your_model_base_path
+    ```
+  - **simple_save** 配置 SavedModel 的模型能够通过 `TensorFlow Serving` 进行加载，并支持 `Predict API`，要访问 `classify API` / `regress API` / `multi-inference API`，需要使用 builder API 或 tf.estimator.Estimator 手动构建 SavedModel
+## 使用 SavedModelBuilder 保存模型
+  - **tf.saved_model.builder.SavedModelBuilder** 构造 SavedModelBuilder 对象，提供了保存多个 MetaGraphDef 的功能，初始化方法只需要传入用于保存模型的目录名，目录不用预先创建
+    ```py
+    class tf.saved_model.builder.SavedModelBuilder
+    __init__(export_dir)
+    ```
+    - **MetaGraph** 是一种数据流图，并包含相关变量、资源和签名
+    - **MetaGraphDef** 是 MetaGraph 的协议缓冲区表示法
+    - **签名** 是一组与图有关的输入和输出
+  - **add_meta_graph_and_variables** 方法导入graph的信息以及变量，这个方法假设变量都已经初始化好了，对于每个 SavedModelBuilder 一定要执行一次用于导入第一个meta graph
+    ```py
+    # 导入graph与变量信息
+    add_meta_graph_and_variables(
+            self, sess, tags, signature_def_map=None, assets_collection=None,
+            legacy_init_op=None, clear_devices=False, main_op=None,
+            strip_default_attrs=False, saver=None)
+    ```
+    - **sess** 当前的session，包含 graph 的结构与所有变量
+    - **tags** 给当前需要保存的 meta graph 一个标签，在载入模型的时候，需要根据这个标签名去查找对应的 MetaGraphDef，找不到会报 RuntimeError
+    - **signature_def_map** 定义模型的 Signature，指定模型的输入 / 输出 tensor 等
+    - 通过 `strip_default_attrs=True` 确保向前兼容性
+  - 必须使用用户指定的 **标签** 对每个添加到 SavedModel 的 MetaGraphDef 进行标注
+    - 标签提供了一种方法来识别要加载和恢复的特定 MetaGraphDef，以及共享的变量和资源子集
+    - 标签一般会标注 MetaGraphDef 的功能（例如服务或训练），有时也会标注特定的硬件方面的信息（如 GPU）
+    - 标签可以选用系统定义好的参数，如 `tf.saved_model.tag_constants.SERVING` 与 `tf.saved_model.tag_constants.TRAINING`
+  - **save** 将模型序列化到指定目录底下，保存好以后，目录下会有一个 saved_model.pb 文件以及 variables 文件夹
+    ```py
+    builder = tf.saved_model.builder.SavedModelBuilder(saved_model_dir)
+    builder.add_meta_graph_and_variables(sess, ['tag_string'])
+    builder.save()
+    ```
+  - 使用 SavedModelBuilder 构建 SavedModel 的典型方法
+    ```py
+    export_dir = ...
+    ...
+    builder = tf.saved_model.builder.SavedModelBuilder(export_dir)
+    with tf.Session(graph=tf.Graph()) as sess:
+      ...
+      builder.add_meta_graph_and_variables(sess,
+                                           [tag_constants.TRAINING],
+                                           signature_def_map=foo_signatures,
+                                           assets_collection=foo_assets,
+                                           strip_default_attrs=True)
+    ...
+    # Add a second MetaGraphDef for inference.
+    with tf.Session(graph=tf.Graph()) as sess:
+      ...
+      builder.add_meta_graph([tag_constants.SERVING], strip_default_attrs=True)
+    ...
+    builder.save()
+    ```
+  - **tf.saved_model.loader.load** 载入模型
+    ```py
+    tf.saved_model.loader.load(sess, tags, export_dir, import_scope=None, **saver_kwargs)
+    ```
+    ```py
+    meta_graph_def = tf.saved_model.loader.load(sess, ['tag_string'], saved_model_dir)
+    ```
+  - load 完以后，可以从 sess 对应的 graph 中获取需要的 tensor 来 inference
+    ```py
+    x = sess.graph.get_tensor_by_name('input_x:0')
+    y = sess.graph.get_tensor_by_name('predict_y:0')
 
-  input = np.expand_dims(mnist.test.images[0], 0)
-  x = sess.graph.get_tensor_by_name('myInput:0')
-  y = sess.graph.get_tensor_by_name('myOutput:0')
-  batch_xs, batch_ys = mnist.test.next_batch(1)
-  scores = sess.run(y,
-           feed_dict={x: batch_xs})
-  print("predict: %d, actual: %d" % (np.argmax(scores, 1), np.argmax(batch_ys, 1)))
+    # 实际的待inference的样本
+    _x = ...
+    sess.run(y, feed_dict={x: _x})
+    ```
+## 指定 Signature 保存模型
+  - add_meta_graph_and_variables 的参数可以指定博阿村模型时的 Signature
+    ```py
+    tf.saved_model.signature_def_utils.build_signature_def(inputs=None, outputs=None, method_name=None)
 
-```py
-sess = tf.InteractiveSession()
-meta_graph_def = tf.saved_model.loader.load(sess, ["serve"], "./")
-print(meta_graph_def.signature_def)
+    # 构建tensor info
+    tf.saved_model.utils.build_tensor_info(tensor)
+    ```
+    - inputs / outputs 都是 dict，key 是约定的输入输出别名，value 是对具体 tensor 包装得到的 TensorInfo
+  - 典型用法
+    ```py
+    builder = tf.saved_model.builder.SavedModelBuilder(saved_model_dir)
+    # x 为输入tensor, keep_prob为dropout的prob tensor
+    inputs = {'input_x': tf.saved_model.utils.build_tensor_info(x),
+                'keep_prob': tf.saved_model.utils.build_tensor_info(keep_prob)}
 
-x = sess.graph.get_tensor_by_name("data:0")
-y = sess.graph.get_tensor_by_name("fc1/add_1:0")
+    # y 为最终需要的输出结果tensor
+    outputs = {'output' : tf.saved_model.utils.build_tensor_info(y)}
 
-from mtcnn.mtcnn import MTCNN
-from skimage.transform import resize
+    signature = tf.saved_model.signature_def_utils.build_signature_def(inputs, outputs, 'test_sig_name')
 
-img = plt.imread('./3.jpg')
-detector = MTCNN(steps_threshold=[0.6, 0.7, 0.7])
-ret = detector.detect_faces(img)
+    builder.add_meta_graph_and_variables(sess, ['test_saved_model'], {'test_signature':signature})
+    builder.save()
+    ```
+    - add_meta_graph_and_variables 的 signature_def_map 参数接收的是一个 dict，key 是自己命名的 signature 名称，value 是 SignatureDef 对象
+  - **模型载入**
+    ```py
+    ## 略去构建sess的代码
 
-bb = ret[0]['box']
-frame = img[bb[0]:bb[0] + bb[2], bb[1]:bb[1] + bb[3]]
-frame = resize(frame, (112, 112))
+    signature_key = 'test_signature'
+    input_key = 'input_x'
+    output_key = 'output'
 
-frame = frame[np.newaxis, :, :, :]
-rr = sess.run(y, feed_dict={x: frame})
-```
+    meta_graph_def = tf.saved_model.loader.load(sess, ['test_saved_model'], saved_model_dir)
+    # 从meta_graph_def中取出SignatureDef对象
+    signature = meta_graph_def.signature_def
 
-saved_model 保存/载入模型
-```py
-class tf.saved_model.builder.SavedModelBuilder
+    # 从signature中找出具体输入输出的tensor name
+    x_tensor_name = signature[signature_key].inputs[input_key].name
+    y_tensor_name = signature[signature_key].outputs[output_key].name
 
-# 初始化方法
-__init__(export_dir)
+    # 获取tensor 并inference
+    x = sess.graph.get_tensor_by_name(x_tensor_name)
+    y = sess.graph.get_tensor_by_name(y_tensor_name)
 
-# 导入graph与变量信息
-add_meta_graph_and_variables(
-    sess,
-    tags,
-    signature_def_map=None,
-    assets_collection=None,
-    legacy_init_op=None,
-    clear_devices=False,
-    main_op=None
-)
-
-# 载入保存好的模型
-tf.saved_model.loader.load(
-    sess,
-    tags,
-    export_dir,
-    **saver_kwargs
-)
-```
-- 要保存一个已经训练好的模型，使用下面三行代码就可以了。
-```py
-builder = tf.saved_model.builder.SavedModelBuilder(saved_model_dir)
-builder.add_meta_graph_and_variables(sess, ['tag_string'])
-builder.save()
-```
-- 首先构造SavedModelBuilder对象，初始化方法只需要传入用于保存模型的目录名，目录不用预先创建。
-- add_meta_graph_and_variables方法导入graph的信息以及变量，这个方法假设变量都已经初始化好了，对于每个SavedModelBuilder这个方法一定要执行一次用于导入第一个meta graph。
-- 第一个参数传入当前的session，包含了graph的结构与所有变量。
-- 第二个参数是给当前需要保存的meta graph一个标签，标签名可以自定义，在之后载入模型的时候，需要根据这个标签名去查找对应的MetaGraphDef，找不到就会报如RuntimeError: MetaGraphDef associated with tags 'foo' could not be found in SavedModel这样的错。标签也可以选用系统定义好的参数，如tf.saved_model.tag_constants.SERVING与tf.saved_model.tag_constants.TRAINING。
-- save方法就是将模型序列化到指定目录底下。
-- 保存好以后到saved_model_dir目录下，会有一个saved_model.pb文件以及variables文件夹。顾名思义，variables保存所有变量，saved_model.pb用于保存模型结构等信息。
-
-- 载入 使用tf.saved_model.loader.load方法就可以载入模型。如
-```py
-meta_graph_def = tf.saved_model.loader.load(sess, ['tag_string'], saved_model_dir)
-```
-- 第一个参数就是当前的session，第二个参数是在保存的时候定义的meta graph的标签，标签一致才能找到对应的meta graph。第三个参数就是模型保存的目录。
-- load完以后，也是从sess对应的graph中获取需要的tensor来inference。如
-```py
-x = sess.graph.get_tensor_by_name('input_x:0')
-y = sess.graph.get_tensor_by_name('predict_y:0')
-
-# 实际的待inference的样本
-_x = ...
-sess.run(y, feed_dict={x: _x})
-```
-- 这样和之前的第二种方法一样，也是要知道tensor的name。那么如何可以在不知道tensor name的情况下使用呢？ 那就需要给add_meta_graph_and_variables方法传入第三个参数，signature_def_map。
-- 使用SignatureDef 关于SignatureDef我的理解是，它定义了一些协议，对我们所需的信息进行封装，我们根据这套协议来获取信息，从而实现创建与使用模型的解耦。SignatureDef的结构以及相关详细的文档在：https://github.com/tensorflow/serving/blob/master/tensorflow_serving/g3doc/signature_defs.md
-```py
-# 构建signature
-tf.saved_model.signature_def_utils.build_signature_def(
-    inputs=None,
-    outputs=None,
-    method_name=None
-)
-
-# 构建tensor info
-tf.saved_model.utils.build_tensor_info(tensor)
-```
-- SignatureDef，将输入输出tensor的信息都进行了封装，并且给他们一个自定义的别名，所以在构建模型的阶段，可以随便给tensor命名，只要在保存训练好的模型的时候，在SignatureDef中给出统一的别名即可。
-- TensorFlow的关于这部分的例子中用到了不少signature_constants，这些constants的用处主要是提供了一个方便统一的命名。在我们自己理解SignatureDef的作用的时候，可以先不用管这些，遇到需要命名的时候，想怎么写怎么写。
-- 假设定义模型输入的别名为“input_x”，输出的别名为“output” ，使用SignatureDef的代码如下
-```py
-builder = tf.saved_model.builder.SavedModelBuilder(saved_model_dir)
-# x 为输入tensor, keep_prob为dropout的prob tensor
-inputs = {'input_x': tf.saved_model.utils.build_tensor_info(x),
-            'keep_prob': tf.saved_model.utils.build_tensor_info(keep_prob)}
-
-# y 为最终需要的输出结果tensor
-outputs = {'output' : tf.saved_model.utils.build_tensor_info(y)}
-
-signature = tf.saved_model.signature_def_utils.build_signature_def(inputs, outputs, 'test_sig_name')
-
-builder.add_meta_graph_and_variables(sess, ['test_saved_model'], {'test_signature':signature})
-builder.save()
-```
-- 保存 上述inputs增加一个keep_prob是为了说明inputs可以有多个， build_tensor_info方法将tensor相关的信息序列化为TensorInfo protocol buffer。
-- inputs，outputs都是dict，key是我们约定的输入输出别名，value就是对具体tensor包装得到的TensorInfo。
-- 然后使用build_signature_def方法构建SignatureDef，第三个参数method_name暂时先随便给一个。
-- 创建好的SignatureDef是用在add_meta_graph_and_variables的第三个参数signature_def_map中，但不是直接传入SignatureDef对象。事实上signature_def_map接收的是一个dict，key是我们自己命名的signature名称，value是SignatureDef对象。
-
-- 载入 载入与使用的代码如下
-```py
-## 略去构建sess的代码
-
-signature_key = 'test_signature'
-input_key = 'input_x'
-output_key = 'output'
-
-meta_graph_def = tf.saved_model.loader.load(sess, ['test_saved_model'], saved_model_dir)
-# 从meta_graph_def中取出SignatureDef对象
-signature = meta_graph_def.signature_def
-
-# 从signature中找出具体输入输出的tensor name
-x_tensor_name = signature[signature_key].inputs[input_key].name
-y_tensor_name = signature[signature_key].outputs[output_key].name
-
-# 获取tensor 并inference
-x = sess.graph.get_tensor_by_name(x_tensor_name)
-y = sess.graph.get_tensor_by_name(y_tensor_name)
-
-# _x 实际输入待inference的data
-sess.run(y, feed_dict={x:_x})
-```
-- 从上面两段代码可以知道，我们只需要约定好输入输出的别名，在保存模型的时候使用这些别名创建signature，输入输出tensor的具体名称已经完全隐藏，这就实现创建模型与使用模型的解耦。
-
-## SignatureDefs in SavedModel for TensorFlow Serving
+    # _x 实际输入待inference的data
+    sess.run(y, feed_dict={x:_x})
+    ```
+## SavedModel 中的 SignatureDefs 定义类型
   - **SignatureDefs** 定义函数的输入输出，在使用 SavedModel 时可以指定
   - SignatureDef 结构
     - **inputs** TensorInfo 的字典格式
@@ -544,16 +539,94 @@ sess.run(y, feed_dict={x:_x})
       }
     }
     ```
-## keras session
-  ```py
-  import keras.backend.tensorflow_backend as KTF
-  import tensorflow as tf
-  config = tf.ConfigProto()
-  config.gpu_options.allow_growth=True   
-  sess = tf.Session(config=config)
+## C++ 加载 SavedModel 模型
+  - **C++ 加载模型** SavedModel 加载后的版本称为 SavedModelBundle，其中包含 MetaGraphDef 和加载时所在的会话。
+    ```c
+    const string export_dir = ...
+    SavedModelBundle bundle;
+    ...
+    LoadSavedModel(session_options, run_options, export_dir, {kSavedModelTagTrain}, &bundle);
+    ```
+## 使用 keras 训练与保存模型 pb 文件
+  - **在 Fashion MNIST 上训练 keras 分类器**
+    ```py
+    from tensorflow import keras
 
-  KTF.set_session(sess)
-  ```
+    # Error in 1.14: could not create cudnn handle: CUDNN_STATUS_INTERNAL_ERROR
+    # set_session is removed in tf 2.0
+    config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
+    sess = tf.Session(config=config)
+    keras.backend.set_session(sess)
+
+    fasion_mnist = keras.datasets.fashion_mnist
+    (train_images, train_labels), (test_images, test_labels) = fasion_mnist.load_data()
+    print(train_images.shape, train_labels.shape, test_images.shape, test_labels.shape)
+    # (60000, 28, 28) (60000,) (10000, 28, 28) (10000,)
+
+    train_images = train_images / 255.0
+    test_images = test_images / 255.0
+    train_images = train_images.reshape(train_images.shape[0], 28, 28, 1)
+    test_images = test_images.reshape(test_images.shape[0], 28, 28, 1)
+    class_names = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
+    print(train_images.shape, train_labels.shape, test_images.shape, test_labels.shape)
+    # (60000, 28, 28, 1) (60000,) (10000, 28, 28, 1) (10000,)
+
+    model = keras.Sequential([
+        keras.layers.Conv2D(input_shape=(28, 28, 1), filters=8, kernel_size=3, strides=2, activation='relu', name='Conv1'),
+        keras.layers.Flatten(),
+        keras.layers.Dense(10, activation=tf.nn.softmax, name="Softmax")
+    ])
+    model.summary()
+
+    testing = False
+    epochs = 5
+    model.compile(optimizer=tf.train.AdamOptimizer(), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    model.fit(train_images, train_labels, epochs=epochs)
+
+    test_loss, test_acc = model.evaluate(test_images, test_labels)
+    print('\nTest accuracy: {}'.format(test_acc))
+    # Test accuracy: 0.8719000220298767
+    ```
+  - **保存模型 pb 文件**
+    ```py
+    # Fetch the Keras session and save the model
+    # The signature definition is defined by the input and output tensors,
+    # and stored with the default serving key
+    import tempfile
+
+    MODEL_DIR = tempfile.mktemp()
+    version = 1
+    export_path = os.path.join(MODEL_DIR, str(version))
+    print('export_path = {}\n'.format(export_path))
+    # export_path = /tmp/tmp36fw8qod/1
+
+    if os.path.isdir(export_path):
+      print('\nAlready saved a model, cleaning up\n')
+      !rm -r {export_path}
+
+    tf.saved_model.simple_save(
+        keras.backend.get_session(),
+        export_path,
+        inputs={'input_image': model.input},
+        outputs={t.name:t for t in model.outputs})
+
+    print('\nSaved model:')
+    !ls -l {export_path}
+    # Saved model:
+    # total 72
+    # -rw-r--r-- 1 leondgarse leondgarse 65984 八月 13 12:00 saved_model.pb
+    # drwxr-xr-x 2 leondgarse leondgarse  4096 八月 13 12:00 variables
+    ```
+  - **模型测试与 serving**
+    ```py
+    !saved_model_cli show --dir {export_path} --all
+
+    %%bash --bg
+    nohup tensorflow_model_server \
+      --rest_api_port=8501 \
+      --model_name=fashion_model \
+      --model_base_path="${MODEL_DIR}" >server.log 2>&1
+    ```
 ***
 
 # TF 2.0 Beta 使用 SavedModel 格式
@@ -656,11 +729,14 @@ sess.run(y, feed_dict={x:_x})
     ```
   - **assets** 目录包含 TensorFlow graph 会使用的文件，如初始化单词表的文件
   - **assets.extra** 目录包含任何 TensorFlow graph 不用的文件，如接口调用示例等
-
 ## tensorflow_model_server 使用模型启动服务
   - **启动服务**
     ```sh
-    apt-get install tensorflow-model-server
+    echo "deb [arch=amd64] http://storage.googleapis.com/tensorflow-serving-apt stable tensorflow-model-server tensorflow-model-server-universal" | sudo tee /etc/apt/sources.list.d/tensorflow-serving.list
+    curl https://storage.googleapis.com/tensorflow-serving-apt/tensorflow-serving.release.pub.gpg | sudo apt-key add -
+    sudo apt update
+
+    sudo apt-get install tensorflow-model-server
 
     nohup tensorflow_model_server \
         --rest_api_port=8501 \
@@ -854,53 +930,86 @@ sess.run(y, feed_dict={x:_x})
     ```
   - **tf.estimator.export.build_raw_serving_input_receiver_fn** 可以用于创建输入功能
 ***
-```py
-from tensorflow import keras
 
-# Error in 1.14: could not create cudnn handle: CUDNN_STATUS_INTERNAL_ERROR
-# set_session is removed in tf 2.0
-config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
-sess = tf.Session(config=config)
-keras.backend.set_session(sess)
+## png to jpg
+  ```py
+  from skimage.io import imread, imsave
+  import glob2
 
-fasion_mnist = keras.datasets.fashion_mnist
-(train_images, train_labels), (test_images, test_labels) = fasion_mnist.load_data()
-print(train_images.shape, train_labels.shape, test_images.shape, test_labels.shape)
+  for pp in glob2.glob('*.png'):
+      print(pp)
+      jj = os.path.basename(pp).split('.')[0] + '.jpg'
+      # jj = os.path.join('jpg', jj)
+      img = imread(pp)
+      if img.shape[2] == 4:
+          img[img[:, :, 3] == 0] = [255, 255, 255, 255]
+      imsave(jj, img[:, :, :3])
+  ```
+  ```sh
+  find ./* -iname '*.png'
+  grep -srinI '\.png)'
+  sed -i 's/\.png)$/.jpg)/' ./*.md
+  ```
+## inspect_checkpoint
+  ```py
+  检查某个检查点中的变量
+  我们可以使用 inspect_checkpoint 库快速检查某个检查点中的变量。
 
-train_images = train_images / 255.0
-test_images = test_images / 255.0
-train_images = train_images.reshape(train_images.shape[0], 28, 28, 1)
-test_images = test_images.reshape(test_images.shape[0], 28, 28, 1)
-class_names = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
-print(train_images.shape, train_labels.shape, test_images.shape, test_labels.shape)
+  继续前面所示的保存/恢复示例：
 
-model = keras.Sequential([
-    keras.layers.Conv2D(input_shape=(28, 28, 1), filters=8, kernel_size=3, strides=2, activation='relu', name='Conv1'),
-    keras.layers.Flatten(),
-    keras.layers.Dense(10, activation=tf.nn.softmax, name="Softmax")
-])
-model.summary()
+  # import the inspect_checkpoint library
+  from tensorflow.python.tools import inspect_checkpoint as chkp
 
-testing = False
-epochs = 5
-model.compile(optimizer=tf.train.AdamOptimizer(), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-model.fit(train_images, train_labels, epochs=epochs)
-```
-```py
-from skimage.io import imread, imsave
-import glob2
+  # print all tensors in checkpoint file
+  chkp.print_tensors_in_checkpoint_file("/tmp/model.ckpt", tensor_name='', all_tensors=True)
 
-for pp in glob2.glob('png/*.png'):
-    print(pp)
-    jj = os.path.basename(pp).split('.')[0] + '.jpg'
-    jj = os.path.join('jpg', jj)
-    img = imread(pp)
-    if img.shape[2] == 4:
-        img[:, :, :3][img[:, :, 3] == 0] = [255, 255, 255]
-    imsave(jj, img[:, :, :3])
-```
-```sh
-find ./* -iname '*.png'
-grep -srinI '\.png)'
-sed -i 's/\.png)$/.jpg)/' ./*.md
-```
+  # tensor_name:  v1
+  # [ 1.  1.  1.]
+  # tensor_name:  v2
+  # [-1. -1. -1. -1. -1.]
+
+  # print only tensor v1 in checkpoint file
+  chkp.print_tensors_in_checkpoint_file("/tmp/model.ckpt", tensor_name='v1', all_tensors=False)
+
+  # tensor_name:  v1
+  # [ 1.  1.  1.]
+
+  # print only tensor v2 in checkpoint file
+  chkp.print_tensors_in_checkpoint_file("/tmp/model.ckpt", tensor_name='v2', all_tensors=False)
+
+  # tensor_name:  v2
+  # [-1. -1. -1. -1. -1.]
+  ```
+## insightface
+  ```py
+  sess = tf.InteractiveSession()
+  meta_graph_def = tf.saved_model.loader.load(sess, ["serve"], "./")
+  print(meta_graph_def.signature_def)
+
+  x = sess.graph.get_tensor_by_name("data:0")
+  y = sess.graph.get_tensor_by_name("fc1/add_1:0")
+
+  from mtcnn.mtcnn import MTCNN
+  from skimage.transform import resize
+
+  img = plt.imread('./3.jpg')
+  detector = MTCNN(steps_threshold=[0.6, 0.7, 0.7])
+  ret = detector.detect_faces(img)
+
+  bb = ret[0]['box']
+  frame = img[bb[0]:bb[0] + bb[2], bb[1]:bb[1] + bb[3]]
+  frame = resize(frame, (112, 112))
+
+  frame = frame[np.newaxis, :, :, :]
+  rr = sess.run(y, feed_dict={x: frame})
+  ```
+## keras session
+  ```py
+  import keras.backend.tensorflow_backend as KTF
+  import tensorflow as tf
+  config = tf.ConfigProto()
+  config.gpu_options.allow_growth=True   
+  sess = tf.Session(config=config)
+
+  KTF.set_session(sess)
+  ```
