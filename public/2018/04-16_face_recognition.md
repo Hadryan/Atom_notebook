@@ -1077,7 +1077,7 @@
           net = tf.squeeze(net, [1, 2], name='fc8/squeezed')
           return net, slim.flatten(pool5)
   ```
-## alexnet nodel
+## alexnet model
   ```python
   def alexnet_model(features, labels, mode):
       xs = features['x']
@@ -1094,8 +1094,8 @@
           return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
       # if labels.shape.ndims == 1: labels = tf.expand_dims(labels, axis=-1)
-      loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.argmax(labels, axis=-1), logits=outputs))
-      # loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=outputs))
+      # loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.argmax(labels, axis=-1), logits=outputs))
+      loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=outputs))
       # loss = tf.losses.mean_squared_error(tf.argmax(labels, axis=-1), prediction)
       global_step = tf.train.get_global_step()
       learning_rate = tf.train.exponential_decay(LEARNING_RATE_BASE, global_step, decay_steps=DECAY_STEPS, decay_rate=DECAY_RATE)

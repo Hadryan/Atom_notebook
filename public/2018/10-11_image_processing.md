@@ -713,7 +713,7 @@
     coffee = data.coffee()
     coffee_bgr = coffee[:, :, ::-1]]
     ```
-  - **skimage.color.convert_colorspace** 转化色彩模式的同意接口
+  - **skimage.color.convert_colorspace** 转化色彩模式的统一接口
     - 支持的色彩模式 'RGB', 'HSV', 'RGB CIE', 'XYZ', 'YUV', 'YIQ', 'YPbPr', 'YCbCr', 'YDbDr'
     ```py
     from skimage import data
@@ -1688,7 +1688,7 @@
 
 # 处理视频文件
   - 视频文件通常不支持随机位置读取，不能并行化处理，因此应尽量避免直接处理视频文件
-  - **ffmpeg** 将视频的每一阵数据转化为图片
+  - **ffmpeg** 将视频的每一帧数据转化为图片
     ```py
     vv = os.path.expanduser('~/Videos/NARWHAL_838701_alternate_19014.720p.mp4')
 
@@ -1771,8 +1771,41 @@
     video_capture.release()
     cv2.destroyAllWindows()
     ```
+  - **imutils**
+    ```py
+    from imutils.video import VideoStream
+    import cv2
+
+    vs = VideoStream(src=0).start()
+    while True:
+        frame = vs.read()
+        cv2.imshow("Frame", frame)
+        key = cv2.waitKey(1) & 0xFF
+        # if the `q` key was pressed, break from the loop
+        if key == ord("q"):
+            break
+
+    # Release handle to the webcam
+    cv2.destroyAllWindows()
+    vs.stop()
+    ```
 ***
 
+# CV2 显示中文
+  ```py
+  import cv2
+  from PIL import Image, ImageDraw, ImageFont
+  from skimage.data import coffee
+
+  # 字体 字体*.ttc的存放路径一般是： /usr/share/fonts/opentype/noto/ 查找指令locate *.ttc
+  font = ImageFont.truetype('NotoSansCJK-Black.ttc', 40)
+
+  iaa = Image.fromarray(coffee())
+  draw = ImageDraw.Draw(iaa)
+  draw.text((100, 100), "你好", font=font, fill=(255,0,0))
+  cv2.imshow('aaa', np.asarray(iaa)[:, :, ::-1])
+  ```
+***
 
 ```py
 from skimage import io
@@ -1929,7 +1962,7 @@ fullfil_hole('ian14520_label.png', dilation_disk=1, closing_disk=3)
 fullfil_hole('ian14760_label.png', dilation_disk=1, closing_disk=5)
 fullfil_hole('ian15000_label.png', dilation_disk=1, closing_disk=5)
 fullfil_hole('ian15720_label.png', dilation_disk=1, closing_disk=5)
-**fullfil_hole('ian15780_label.png', dilation_disk=2, closing_disk=5)**
+fullfil_hole('ian15780_label.png', dilation_disk=2, closing_disk=5)
 fullfil_hole('ian16740_label.png', dilation_disk=2, closing_disk=3)
 fullfil_hole('ian19620_label.png', dilation_disk=1, closing_disk=3)
 fullfil_hole('ian1980_label.png', dilation_disk=1, closing_disk=3)

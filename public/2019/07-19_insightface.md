@@ -2,13 +2,9 @@
 ***
 
 # Related projects
-  - [weakref](https://docs.python.org/3/library/weakref.html)
   - [deepinsight/insightface](https://github.com/deepinsight/insightface)
   - [AITTSMD/MTCNN-Tensorflow](https://github.com/AITTSMD/MTCNN-Tensorflow)
   - [ipazc/mtcnn](https://github.com/ipazc/mtcnn)
-  - [JerryJiaGit/facenet_trt](https://github.com/JerryJiaGit/facenet_trt)
-  - [Image processing for text recognition](http://blog.mathocr.com/2017/06/25/image-processing-for-text-recognition.html)
-  - [Modify From skimage to opencv warpaffine](https://github.com/cftang0827/face_alignment/commit/ae0fac4aa1e5658aa74027ec28eab876606c505e)
   - [erikbern/ann-benchmarks](https://github.com/erikbern/ann-benchmarks)
 ***
 
@@ -46,8 +42,7 @@
 
   # landmarks
   plt.imshow(img)
-  for ii in bb:
-       plt.scatter(ii[0], ii[1])
+  plt.scatter(ii[:, 0], ii[:, 1])
 
   # cropped image
   plt.imshow(img[aa[1]:aa[3], aa[0]:aa[2], :])
@@ -262,32 +257,32 @@
   test_mtcnn_multi_face(img_name, detector.detectface)
   ```
 ## TensorFlow mtcnn pb
-```py
-# cd ~/workspace/face_recognition_collection/MTCNN/tensorflow
-import cv2
-from mtcnn import MTCNN
+  ```py
+  # cd ~/workspace/face_recognition_collection/MTCNN/tensorflow
+  import cv2
+  from mtcnn import MTCNN
 
-det = MTCNN('./mtcnn.pb')
-img = cv2.imread('../../test_img/Anthony_Hopkins_0002.jpg')
+  det = MTCNN('./mtcnn.pb')
+  img = cv2.imread('../../test_img/Anthony_Hopkins_0002.jpg')
 
-det.detect(img)
-# (array([[ 65.71266,  74.45414, 187.65063, 172.71921]], dtype=float32),
-#  array([0.99999845], dtype=float32),
-#  array([[113.4738  , 113.50406 , 138.02603 , 159.49994 , 158.71802 ,
-#          102.397964, 147.4054  , 125.014786, 105.924614, 145.5773  ]],
-#        dtype=float32))
-```
-```py
-bb, cc, pp = det.detect(img)
-bb = np.array([[ii[1], ii[0], ii[3], ii[2]] for ii in bb])
-# Out[21]: array([[ 74.45414,  65.71266, 172.71921, 187.65063]], dtype=float32)
-pp = np.array([ii.reshape(2, 5)[::-1].T for ii in pp])
-# array([[[102.397964, 113.4738  ],
-#         [147.4054  , 113.50406 ],
-#         [125.014786, 138.02603 ],
-#         [105.924614, 159.49994 ],
-#         [145.5773  , 158.71802 ]]], dtype=float32)
-```
+  det.detect(img)
+  # (array([[ 65.71266,  74.45414, 187.65063, 172.71921]], dtype=float32),
+  #  array([0.99999845], dtype=float32),
+  #  array([[113.4738  , 113.50406 , 138.02603 , 159.49994 , 158.71802 ,
+  #          102.397964, 147.4054  , 125.014786, 105.924614, 145.5773  ]],
+  #        dtype=float32))
+  ```
+  ```py
+  bb, cc, pp = det.detect(img)
+  bb = np.array([[ii[1], ii[0], ii[3], ii[2]] for ii in bb])
+  # Out[21]: array([[ 74.45414,  65.71266, 172.71921, 187.65063]], dtype=float32)
+  pp = np.array([ii.reshape(2, 5)[::-1].T for ii in pp])
+  # array([[[102.397964, 113.4738  ],
+  #         [147.4054  , 113.50406 ],
+  #         [125.014786, 138.02603 ],
+  #         [105.924614, 159.49994 ],
+  #         [145.5773  , 158.71802 ]]], dtype=float32)
+  ```
 ***
 
 # Insightface caffe MTCNN model to TensorFlow
@@ -730,65 +725,23 @@ pp = np.array([ii.reshape(2, 5)[::-1].T for ii in pp])
   In [9]: %timeit -n 100 det_tfp.detect(imb)
   35.6 ms ± 316 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
   ```
-## log test
-```sh
-grep -srnI 'date in requests' app.log | sort -n -k 11
-grep -srnI 'End' app.log | sort -n -k 9
+***
 
-grep -srnI 'End' app.log | cut -d : -f 7 > foo
-grep -srnI 'date in requests' app.log | cut -d : -f 7 > goo
-```
-```py
-def plot_hist_from_log_file(file_name, key, bins=20, latest=None):
-    with open(file_name, 'r') as ff:
-        ll = ff.readlines()
-    aa = [float(ii.strip().split()[-1]) for ii in ll if key in ii]
-    if latest:
-      aa = aa[-latest:]
-    plt.hist(aa, bins=bins)
-```
-```sh
-sudo apt-get install -y nvidia-docker2
-docker run --runtime=nvidia -v /home/tdtest/workspace/:/home/tdtest/workspace -it tensorflow/tensorflow:latest-gpu-py3 bash
+# Docker
+  ```sh
+  sudo apt-get install -y nvidia-docker2
+  docker run --runtime=nvidia -v /home/tdtest/workspace/:/home/tdtest/workspace -it tensorflow/tensorflow:latest-gpu-py3 bash
 
-pip install --upgrade pip
-pip install -i https://pypi.tuna.tsinghua.edu.cn/simple sklearn scikit-image waitress python-crontab opencv-python mtcnn requests
+  pip install --upgrade pip
+  pip install -i https://pypi.tuna.tsinghua.edu.cn/simple sklearn scikit-image waitress python-crontab opencv-python mtcnn requests
 
-apt update && apt install python3-opencv
+  apt update && apt install python3-opencv
 
-nohup ./server_flask.py -l 0 > app.log 2>&1 &
+  nohup ./server_flask.py -l 0 > app.log 2>&1 &
 
-docker ps -a | grep tensorflow | cut -d ' ' -f 1
-docker exec  -p 8082:9082 -it `docker ps -a | grep tensorflow | cut -d ' ' -f 1` bash
+  docker ps -a | grep tensorflow | cut -d ' ' -f 1
+  docker exec  -p 8082:9082 -it `docker ps -a | grep tensorflow | cut -d ' ' -f 1` bash
 
-docker commit `docker ps -a | grep tensorflow | cut -d ' ' -f 1` insightface
-docker run -e CUDA_VISIBLE_DEVICES='1' -v /home/tdtest/workspace/:/workspace -it -p 9082:8082 -w /workspace/insightface-master insightface:latest ./server_flask.py
-```
-mtcnn.MTCNN --> 1615 MB
-facenet mtcnn -> 1615 MB
-insightface mtcnn -> 961 MB
-```py
-cd ~/workspace/face_recognition_collection/facenet/src
-import tensorflow as tf
-import align.detect_face
-from skimage.io import imread
-
-g = tf.Graph()
-with g.as_default():
-  with g.device("cpu"):
-      sess = tf.Session()
-      with sess.as_default():
-          pnet, rnet, onet = align.detect_face.create_mtcnn(sess, None)
-minsize = 40  # minimum size of face
-threshold = [0.9, 0.6, 0.7]  # three steps's threshold
-factor = 0.709  # scale factor
-
-def face_detection_align(img):
-    return align.detect_face.detect_face(img, minsize, pnet, rnet, onet, threshold, factor)
-img = imread('../../test_img/Anthony_Hopkins_0002.jpg')
-face_detection_align(img)
-face_detection_align(img)
-face_detection_align(img)
-face_detection_align(img)
-face_detection_align(img)
-```
+  docker commit `docker ps -a | grep tensorflow | cut -d ' ' -f 1` insightface
+  docker run -e CUDA_VISIBLE_DEVICES='1' -v /home/tdtest/workspace/:/workspace -it -p 9082:8082 -w /workspace/insightface-master insightface:latest ./server_flask.py
+  ```

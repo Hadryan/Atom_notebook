@@ -1,18 +1,21 @@
 # ___2019 - 07 - 26 Model Convertion___
 ***
-- tensorRT
-- [encode/uvicorn](https://github.com/encode/uvicorn)
-- [david-cao/gRPCBenchmarks](https://github.com/david-cao/gRPCBenchmarks)
-- [使用 GPU](https://www.tensorflow.org/guide/using_gpu)
+
 - [numpy.linalg.norm](https://docs.scipy.org/doc/numpy-1.13.0/reference/generated/numpy.linalg.norm.html)
 - [Python Numpy计算各类距离](https://blog.csdn.net/liukuan73/article/details/80494779)
 - [相似度计算方法](https://www.cnblogs.com/chenxiangzhen/p/10648503.html)
+
 - [MTCNN人脸及特征点检测---代码应用详解（基于ncnn架构）](https://blog.csdn.net/fuwenyan/article/details/77573755)
 - [MTCNN解读：Joint Face Detection and Alignment using Multi-task Cascaded Convolutional Networks](https://blog.csdn.net/fuwenyan/article/details/73201680)
+- [Modify From skimage to opencv warpaffine](https://github.com/cftang0827/face_alignment/commit/ae0fac4aa1e5658aa74027ec28eab876606c505e)
+- [Image processing for text recognition](http://blog.mathocr.com/2017/06/25/image-processing-for-text-recognition.html)
+
+- [使用 GPU](https://www.tensorflow.org/guide/using_gpu)
 - [tensorflow中的batch_normalization实现](https://www.cnblogs.com/jiangxinyang/p/9394353.html)
 - [谈谈Tensorflow的Batch Normalization](https://www.jianshu.com/p/0312e04e4e83)
 - [docker/tensorflow/tensorflow](https://hub.docker.com/r/tensorflow/tensorflow/)
 
+- [weakref](https://docs.python.org/3/library/weakref.html)
 # MMDNN
 ## 安装
   - [microsoft/MMdnn](https://github.com/microsoft/MMdnn)

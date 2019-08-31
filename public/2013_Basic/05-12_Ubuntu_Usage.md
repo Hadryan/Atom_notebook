@@ -286,6 +286,25 @@
       useradd -p 'pass' test
       echo 'test:pass' | chpasswd
       ```
+  - Q: No space left on device issue in ipython
+    ```sh
+    inotify_add_watch("/home/leondgarse/.config/ibus/bus/78662965650b42b69556e5096cb9459c-unix-0") failed: "No space left on device"
+    ```
+    A: 用户定义的文件 inode 数量达到上限
+    ```sh
+    sudo sysctl fs.inotify.max_user_watches
+    # fs.inotify.max_user_watches = 8192
+    ```
+    可以调整上限值
+    ```sh
+    echo fs.inotify.max_user_watches=65536 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p
+    ```
+    ```sh
+    ENOSPC -
+    "The user limit on the total number of inotify watches was reached or the kernel failed to allocate a needed resource."
+
+    There is one inotify watch per folder, so too many folders being watched is the problem. Since the error message is talking about a user limit, this probably can be tweaked somewhere.
+    ```
 ## 环境变量
   - 修改：sudo vi /etc/environment添加，或者vi ~/.bashrc添加
     ```c
@@ -503,7 +522,7 @@
     A: 添加对应的 samba 用户，同时在 mount 时，指定 uid / gid
     ```shell
     sudo smbpasswd -a test
-    
+
     # uid / gid 为本地用户的 uid / gid
     $ sudo mount -t cifs -o uid=1000,gid=1000,file_mode=0777,dir_mode=0777,username=leondgarse,password=123456 //192.168.7.11/leondgarse /media/samba/
     ```
@@ -1168,6 +1187,48 @@
   - 一般可在结尾加上 `&` 将命令同时放入后台运行，也可用 `>filename 2>&1` 来更改缺省的重定向文件名
     ```sh
     nohup ./server_flask.py -l 0 -f app.log >> app.log 2>&1 &
+    ```
+## 静态 IP
+  - 18.04 中不再使用 `/etc/network/interfaces` 文件
+  - 18.04 中通过 `setting` 配置的 IP 地址保存在 `/etc/NetworkManager/system-connections/Wired\ connection\ 1` 文件中
+    ```sh
+    [ipv4]
+    address1=192.168.0.209/24,192.168.0.1
+    dns=192.168.0.1;
+    dns-search=
+    method=manual
+    ```
+    通过修改该文件修改 IP 地址
+  - 修改文件中的 IP 后，通过 `ip` 命令更新，并重启 `NetworkManager`
+    ```sh
+    sudo sed -i 's#^address1=192.168.*#address1=192.168.0.207/24,192.168.0.1#' Wired\ connection\ 1
+    sudo ip addr flush dev enp7s0
+    sudo service network-manager restart
+    ```
+  - `ip` 命令查看
+    ```py
+    ip addr
+    ip addr show dev enp7s0
+    ```
+  - 通过 `netplan` 修改，`/etc/netplan/01-network-manager-all.yaml` 使用 yaml 格式保存当前的网络配置
+    ```sh
+    $ sudo cat 01-network-manager-all.yaml
+    # Let NetworkManager manage all devices on this system
+    network:
+      version: 2
+      renderer: NetworkManager
+      ethernets:
+        enp7s0:
+          addresses:
+            - 192.168.0.207/24
+          gateway4: 192.168.0.1
+          nameservers:
+            addresses: [192.168.0.1]
+    ```
+    apply 生效，并通过 ip 命令查看
+    ```sh
+    sudo netplan apply
+    ip add show dev enp7s0
     ```
 ***
 

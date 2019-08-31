@@ -1006,3 +1006,244 @@
   # 写入文件
   my_user_cron.write_to_user(user=True)
   ```
+***
+
+# ThreadPoolExecutor 线程池 ProcessPoolExecutor 进程池
+  - 标准库提供了 `concurrent.futures` 模块，提供了 `ThreadPoolExecutor` 和 `ProcessPoolExecutor` 两个类，实现了对 threading 和 multiprocessing 的进一步抽象
+    ```py
+    class ThreadPoolExecutor(concurrent.futures._base.Executor)
+    __init__(self, max_workers=None, thread_name_prefix='', initializer=None, initargs=())
+
+    class ProcessPoolExecutor(concurrent.futures._base.Executor)
+    __init__(self, max_workers=None, mp_context=None, initializer=None, initargs=())
+    ```
+    - **max_workers** 指定最多同时运行的任务数
+  - 在提交任务的时候，可以使用 `submit` / `map`，主要区别在于 `map` 可以保证输出的顺序, `submit` 输出的顺序是乱的
+  - **submit 使用示例** 提交的任务立即返回，不阻塞，返回值是 `concurrent.futures._base.Future` 类型
+    - **running** 方法判定某个任务是否正在运行
+    - **done** 方法判定某个任务是否完成
+    - **cancel** 方法用于取消某个任务,该任务没有放入线程池中才能取消成功
+    - **result** 方法可以获取任务的执行结果
+    ```py
+    from concurrent.futures import ThreadPoolExecutor
+    import time
+
+    # 参数times用来模拟网络请求的时间
+    def sleepy_print(times):
+        time.sleep(times)
+        print("sleep {}s finished".format(times))
+        return times
+
+    # 通过submit函数提交执行的函数到线程池中，submit函数立即返回，不阻塞
+    executor = ThreadPoolExecutor(max_workers=2)
+    task1 = executor.submit(sleepy_print, (3))
+    task2 = executor.submit(sleepy_print, (2))
+
+    print(task1.done())
+    # False
+    print(task2.cancel())
+    # False
+    time.sleep(4)
+    # sleep 2s finished
+    # sleep 3s finished
+
+    print(task1.done())
+    # True
+    print(task1.result())
+    # 3
+    ```
+  - **as_completed** 是一个生成器，阻塞的方式等待 submit 的任务完成
+    ```py
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    executor = ThreadPoolExecutor(max_workers=2)
+    tims = [3, 2, 4]
+    all_task = [executor.submit(sleepy_print, ii) for ii in tims]
+
+    for future in as_completed(all_task):
+        data = future.result()
+        print("in main: sleep {}s success".format(data))
+
+    # sleep 2s finished
+    # in main: sleep 2s success
+    # sleep 3s finished
+    # in main: sleep 3s success
+    # sleep 4s finished
+    # in main: sleep 4s success
+    ```
+  - **map 使用示例** 将序列中的每个元素都执行同一个函数，输出顺序和序列中元素的顺序相同
+    ```py
+    map(self, fn, *iterables, timeout=None, chunksize=1)
+    ```
+    ```py
+    tims = [3, 2, 4]
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        rets = executor.map(sleepy_print, tims, timeout=1)
+
+    for ii in rets:
+        print("ii = %d" % ii)
+    # sleep 2s finished
+    # sleep 3s finished
+    # sleep 4s finished
+    # ii = 3
+    # ii = 2
+    # ii = 4
+    ```
+  - **timeout** 指定的超时时间只在调用到返回结果生成器的 `__next__` 方法时才会生效，在以上调用时并不会超时
+    ```py
+    from concurrent import futures
+
+    tims = [3, 2, 4]
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        rets = executor.map(sleepy_print, tims, timeout=1)
+
+        try:
+            for ii in rets:
+                print("ii = %d" % ii)
+        except futures._base.TimeoutError:
+            print("TIMEOUT")
+    # TIMEOUT
+    # sleep 2s finished
+    # sleep 3s finished
+    ```
+    ```py
+    from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+    from concurrent import futures
+
+    tims = [3, 2, 4]
+    with ProcessPoolExecutor(max_workers=2) as executor:
+        try:
+            for future in executor.map(sleepy_print, tims, timeout=1):
+                print(future.result(timeout=1))
+        except futures._base.TimeoutError:
+            print("This took to long, stop all...")
+            for pid, process in executor._processes.items():
+                process.terminate()
+            executor.shutdown()
+    # This took to long, stop all...
+    ```
+  - **wait** 让主线程阻塞，直到满足设定的要求
+    ```py
+    wait(fs, timeout=None, return_when='ALL_COMPLETED')
+    ```
+    ```py
+    from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED, FIRST_COMPLETED
+
+    executor = ThreadPoolExecutor(max_workers=2)
+    tims = [3, 2, 4]
+    all_task = [executor.submit(sleepy_print, (ii)) for ii in tims]
+    wait(all_task, return_when=ALL_COMPLETED)
+    print("ALL DONE!")
+    # sleep 2s finished
+    # sleep 3s finished
+    # sleep 4s finished
+    # ALL DONE!
+    ```
+***
+
+# Color print
+  | 字体色 | 背景色 | 颜色描述 |
+  | ------ | ------ | -------- |
+  | 30     | 40     | 黑色     |
+  | 31     | 41     | 红色     |
+  | 32     | 42     | 绿色     |
+  | 33     | 43     | 黃色     |
+  | 34     | 44     | 蓝色     |
+  | 35     | 45     | 紫红色   |
+  | 36     | 46     | 青蓝色   |
+  | 37     | 47     | 白色     |
+
+  | 显示方式 | 效果         |
+  | -------- | ------------ |
+  | 0        | 终端默认设置 |
+  | 1        | 高亮显示     |
+  | 2        | 变暗显示     |
+  | 3        | 斜体         |
+  | 4        | 使用下划线   |
+  | 5        | 闪烁         |
+  | 7        | 反白显示     |
+  | 8        | 不可见       |
+
+  ```py
+  "\033[0m" 默认字体正常显示
+  "\033[32;0m" 红色字体
+  "\033[0;31;46m" 红色字体，青色背景色
+  "\033[1;32;40m" 高亮，绿色字体，黑色背景色
+  ```
+  ```py
+  _ = [print('\033[%d;%dmtest\033[0m' % (aa, cc), end=' ' if '7' not in str(cc) else '\n') for aa in [0, 1, 2] for cc in range(30, 38)]
+  _ = [print('\033[%d;%dmtest\033[0m' % (aa, cc), end=' ' if '7' not in str(cc) else '\n') for aa in [0, 1, 2] for cc in range(40, 48)]
+  _ = [print('\033[%d;%dmtest\033[0m' % (aa, cc), end=' ' if '7' not in str(cc) else '\n') for aa in [0, 1, 2] for cc in range(90, 98)]
+
+  _ = [print('\033[%d;%d;%dmtest\033[0m' % (aa, bb, cc), end=' ' if '7' not in str(bb) else '\n') for aa in [0, 1, 2] for cc in range(30, 38) for bb in range(39, 48)]
+  _ = [print('\033[%d;%d;%dmtest\033[0m' % (aa, bb, cc), end=' ' if '7' not in str(bb) else '\n') for aa in [0, 1, 2] for cc in range(90, 98) for bb in range(39, 48)]
+  ```
+  ![](images/print_color.png)
+  ```py
+  front_colors = {
+      "black": "\033[30m",
+      "red": "\033[31m",
+      "green": "\033[32m",
+      "orange": "\033[33m",
+      "blue": "\033[34m",
+      "purple": "\033[35m",
+      "cyan": "\033[36m",
+      "white": "\033[37m",
+      "gray": "\033[90m",
+      "coral": "\033[91m",
+      "grass": "\033[92m",
+      "yellow": "\033[93m",
+      "orchid": "\033[94m",
+      "pink": "\033[95m",
+      "turquoise": "\033[96m",
+      "pale": "\033[97m",
+  }
+
+  back_colors = {
+      "black": "\033[40m",
+      "red": "\033[41m",
+      "green": "\033[42m",
+      "orange": "\033[43m",
+      "blue": "\033[44m",
+      "purple": "\033[45m",
+      "cyan": "\033[46m",
+      "white": "\033[47m",
+      "none": "\033[48m",
+  }
+
+  attributes = {
+      "normal": "\033[0m",
+      "bold": "\033[1m",
+      "dim": "\033[2m",
+      "italic": "\033[3m",
+      "underline": "\033[4m",
+      "blink": "\033[5m",
+      "reverse": "\033[7m",
+      "concealed": "\033[8m",
+  }
+
+  for att in ['normal', 'bold', 'dim']:
+      att_v = attributes[att]
+      for kk, vv in front_colors.items():
+          print(att_v + vv + kk + "\033[0m", end=' ')
+      print()
+
+  def print_colorize(string, fc="white", bc="none", att="normal"):
+      fc = front_colors.get(fc, front_colors["white"])
+      bc = back_colors.get(bc, back_colors["none"])
+      att = attributes.get(att, attributes["normal"])
+      str = att + fc + bc + string + "\033[0m"
+      print(str)
+
+  print_colorize('aaa', bc='red', fc='black', att='bold')
+  ```
+  ```py
+  from termcolor import colored
+  colored('Hello, World!', 'red', 'on_grey', ['bold', 'blink'])
+  # Out[46]: '\x1b[5m\x1b[1m\x1b[40m\x1b[31mHello, World!\x1b[0m'
+
+  print(colored('Hello, World!', 'red', 'on_grey', ['bold', 'blink']))
+
+  from termcolor import colored, cprint
+  cprint('Hello, World!', 'green', 'on_red', attrs=['bold'])
+  ```
