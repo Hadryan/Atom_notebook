@@ -1165,18 +1165,14 @@
   | 8        | 不可见       |
 
   ```py
-  "\033[0m" 默认字体正常显示
-  "\033[32;0m" 红色字体
-  "\033[0;31;46m" 红色字体，青色背景色
-  "\033[1;32;40m" 高亮，绿色字体，黑色背景色
-  ```
-  ```py
+  "\033[0m" # 默认字体正常显示
+  "\033[32;0m" # 红色字体
+  "\033[0;31;46m" # 红色字体，青色背景色
+  "\033[1;32;40m" # 高亮，绿色字体，黑色背景色
+
   _ = [print('\033[%d;%dmtest\033[0m' % (aa, cc), end=' ' if '7' not in str(cc) else '\n') for aa in [0, 1, 2] for cc in range(30, 38)]
   _ = [print('\033[%d;%dmtest\033[0m' % (aa, cc), end=' ' if '7' not in str(cc) else '\n') for aa in [0, 1, 2] for cc in range(40, 48)]
   _ = [print('\033[%d;%dmtest\033[0m' % (aa, cc), end=' ' if '7' not in str(cc) else '\n') for aa in [0, 1, 2] for cc in range(90, 98)]
-
-  _ = [print('\033[%d;%d;%dmtest\033[0m' % (aa, bb, cc), end=' ' if '7' not in str(bb) else '\n') for aa in [0, 1, 2] for cc in range(30, 38) for bb in range(39, 48)]
-  _ = [print('\033[%d;%d;%dmtest\033[0m' % (aa, bb, cc), end=' ' if '7' not in str(bb) else '\n') for aa in [0, 1, 2] for cc in range(90, 98) for bb in range(39, 48)]
   ```
   ![](images/print_color.png)
   ```py
@@ -1228,14 +1224,14 @@
           print(att_v + vv + kk + "\033[0m", end=' ')
       print()
 
-  def print_colorize(string, fc="white", bc="none", att="normal"):
+  def print_colorize(string, fc="white", bc="none", att=["normal"]):
       fc = front_colors.get(fc, front_colors["white"])
       bc = back_colors.get(bc, back_colors["none"])
-      att = attributes.get(att, attributes["normal"])
+      att = "".join([attributes.get(ii, attributes["normal"]) for ii in att])
       str = att + fc + bc + string + "\033[0m"
       print(str)
 
-  print_colorize('aaa', bc='red', fc='black', att='bold')
+  print_colorize('aaa', bc='red', fc='black', att=['bold', 'italic'])
   ```
   ```py
   from termcolor import colored

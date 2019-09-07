@@ -1807,6 +1807,8 @@
   ```
 ***
 
+# skimage segmentation
+
 ```py
 from skimage import io
 image = io.imread('./1.png')

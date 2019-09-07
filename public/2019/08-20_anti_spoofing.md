@@ -9,153 +9,89 @@
 - [Code for 3rd Place Solution in Face Anti-spoofing Attack Detection Challenge](https://github.com/SoftwareGift/FeatherNets_Face-Anti-spoofing-Attack-Detection-Challenge-CVPR2019)
 - [Code for 2nd Place Solution in Face Anti-spoofing Attack Detection Challenge](https://github.com/SeuTao/CVPR19-Face-Anti-spoofing)
 - [Aurora Guard 预测深度图 + 光验证码](https://zhuanlan.zhihu.com/p/61100492)
-
+- [基于双目摄像头的传统图像处理方法实现活体检测](https://blog.csdn.net/u011808673/article/details/83029198)
+- [AdaptivePooling与Max/AvgPooling相互转换](https://blog.csdn.net/xiaosongshine/article/details/89453037)
 mplayer -tv driver=v4l2:width=352:height=288:device=/dev/video0 tv://
 mplayer -tv device=/dev/video0 tv://
 GAP - Global Average Pooling
 
+
+```py
+from keras.preprocessing.image import ImageDataGenerator
+# construct the training image generator for data augmentation
+aug = ImageDataGenerator(rotation_range=20, zoom_range=0.15,
+    width_shift_range=0.2, height_shift_range=0.2, shear_range=0.15,
+    horizontal_flip=True, fill_mode="nearest")
+```
+```py
+text_threshold = filters.threshold_local(text,block_size=51, offset=10)
+image_show(text > text_threshold);
+```
 # 活体检测方法
-  - **纹理分析** Texture analysis，包括计算面部区域上的局部二进制模式 **LBP** 并使用 **SVM** 将面部分类为真脸或假脸
-  - **频率分析** Frequency analysis，例如检查面部的 **傅里叶域**
-  - **可变聚焦分析** ariable focusing analysis，例如检查两个连续帧之间的像素值的变化
-  - **基于启发式的算法** Heuristic-based algorithms，包括眼球运动 / 嘴唇运动 / 眨眼检测
-  - **光流算法** Optical Flow algorithms，即检查从 3D 对象和 2D 平面生成的光流的差异和属性
-  - **3D脸部形状**，类似于 Apple 的 iPhone 脸部识别系统所使用的脸部形状，使脸部识别系统能够区分真人脸部和其他人的打印输出的照片图像
+  - **静态方法** 不考虑图像之间的时序关联关系
+    - 可以利用纹理信息，如傅里叶频谱分析，利用人脸照片在频域中的高频分量比真人脸要少来区分
+    - 利用图像多尺度和多区域的 LBP 特征进行二元 SVM 分类来区分真伪
+    - **纹理分析** Texture analysis，包括计算面部区域上的局部二进制模式 **LBP** 并使用 **SVM** 将面部分类为真脸或假脸
+    - **频率分析** Frequency analysis，例如检查面部的 **傅里叶域**
+    - **3D脸部形状**，类似于 Apple 的 iPhone 脸部识别系统所使用的脸部形状，使脸部识别系统能够区分真人脸部和其他人的打印输出的照片图像
+  - **动态方法**
+    - 利用人脸的动态信息来帮助区分，例如眨眼睛的动作、嘴部的动作或者人脸多个部件的时序运动信息
+    - 或者使用背景和前景的光流信息来区分
+    - **可变聚焦分析** ariable focusing analysis，例如检查两个连续帧之间的像素值的变化
+    - **基于启发式的算法** Heuristic-based algorithms，包括眼球运动 / 嘴唇运动 / 眨眼检测
+    - **光流算法** Optical Flow algorithms，即检查从 3D 对象和 2D 平面生成的光流的差异和属性
+  - **局部特征检测方法**
+    - 斑点Blob检测，LoG 检测，DoG，DoH 检测，SIFT 算法，SUFT 算法
+    - 边缘检测： 梯度边缘检测算子，拉普拉斯算子，LoG 检测 ，Canny边缘检测算子，Roberts，Sobel，Prewitt
+    - 角点检测： Kitchen-Rosenfeld，Harris 角点，多尺度 Harris 角点，KLT，SUSAN 检测算子，Shi-Tomasi
+    - 将基于主分量分析和 Fisher 线性鉴别分析所获得的特征抽取方法，统称为线性投影分析
+  - **神经网络**  
+    - 2014 年 Yang et al 使用 AlexNet 用作特征提取器，最后加上 SVM 做分类器，在 CASIA 和 IDIAP Replay-Attack 两个数据集上的 HTER 均小于 5%
+    - 2017 年 Lucena et al 使用迁移学习的思想将 CNN 应用在人脸反欺诈上，首先选择 VGG-16 预训练模型作为基础结构，然后在人脸欺诈数据集上进行微调网络权重，除了移除最后的全连接层和将另两个全连接层的尺寸修改为 256 和 1 将其转换为一个二分类器外，FASNet 和 VGG-16 完全一致，FASNet 在 3DMAD 和 REPLAY-ATTACK 数据集上分别能达到 0.0% 和 1.2% HTER，几乎能达到最好的水平，FASNet 的思路简单，可以很容易的扩展至其他网络结构或结合其他动态特征进行检测等
+    - 2016 年发表的 Multi-cues intergration NN方法，在 3DMAD 和 REPLAY-ATTACK 数据集上的 HTER 为 0.0% 和 0.0%，只用了神经网络，还没用到 CNN 和 LSTM 等结构，Mutli-cues 主要包含三个方面的活体特征：shearlet 图像质量特征（SBIQF），脸部运动光流特征以及场景运动光流特征，然后使用神经网络做二分类问题
+
 ***
 
 # LBP
+## LBP 算子
   - **LBP 局部二进制模式** local binary pattern，是一种用来描述图像 **局部纹理特征** 的算子，原始的 LBP 于 1994 年提出，它反映内容是每个像素与周围像素的关系，后被不断的改进和优化，分别提出了 **LBP 旋转不变模式** / **LBP 均匀模式** 等
-二、旋转不变的LBP模式<LBPROT>
-
-原始的LBP不具有旋转不变性，这样我们就提出了旋转不变的LBP模式。旋转不变的LBP计算公式如下：
-
-三：均匀LBP模式
-
-旋转LBP模式同样存在缺陷，大量的实验证明LBP模式的36种情况在一幅图像中分布出现的频率差异较大，得到的效果并不是很好。因此人们提出了均匀LBP模式即uniform LBP。
-
-均匀模式就是一个二进制序列从0到1或是从1到0的变过不超过2次（这个二进制序列首尾相连）。比如：10100000的变化次数为3次所以不是一个uniform pattern。所有的8位二进制数中共有58(变化次数为0的有2种，变化次数为1的有0种，变化次数为2的有56种)个uniform pattern.为什么要提出这么个uniform LBP呢，因为研究者发现他们计算出来的大部分值都在这58种之中，可达到90%以上，所以他们把值分为59类，58个uniform pattern为一类，其它的所有值为第59类。59=(2+0+56)+1,这样直方图从原来的256维变成59维。起到了降维的作用。
-
-局部特征检测方法
-斑点Blob检测，LoG检测 ， DoG，DoH检测，SIFT算法，SUFT算法
-边缘检测： 梯度边缘检测算子，拉普拉斯算子，LoG检测 ，Canny边缘检测算子，Roberts,Sobel,Prewitt,
-角点检测： Kitchen-Rosenfeld，Harris角点，多尺度Harris角点，KLT,SUSAN检测算子，Shi-Tomasi
-将基于主分量分析和Fisher线性鉴别分析所获得的特征抽取方法，统称为线性投影分析。
-
-
-静态方法，即不考虑图像之间的时序关联关系。首先，可以利用纹理信息，如傅里叶频谱分析[8]，利用人脸照片在频域中的高频分量比真人脸要少来区分。还有的利用图像多尺度和多区域的LBP特征进行二元SVM分类来区分真伪。而动态方法，便可以利用人脸的动态信息来帮助区分，例如眨眼睛的动作、嘴部的动作或者人脸多个部件的时序运动信息，或者使用背景和前景的光流信息来区分
-
-2014年，Yang et al. [10]使用AlexNet用作特征提取器，最后加上SVM做分类器。这是强大的CNN首次被应用在人脸反欺诈中。他们在CASIA和IDIAP Replay-Attack两个数据集上的HTER均小于5%。2017年，Lucena et al.[11]使用迁移学习的思想将CNN应用在人脸反欺诈上，如下为论文中提到的FASNet[12]网络架构：
-
-首先，他们选择VGG-16预训练模型作为基础结构，然后在人脸欺诈数据集上进行微调网络权重。除了移除最后的全连接层和将另两个全连接层的尺寸修改为256和1将其转换为一个二分类器外，FASNet和VGG-16完全一致。FASNet在3DMAD和REPLAY-ATTACK数据集上分别能达到0.0%和1.2%HTER，几乎能达到最好的水平。FASNet的思路简单，可以很容易的扩展至其他网络结构或结合其他动态特征进行检测等。
-
-让FASNet落败的胜者，Multi-cues intergration NN方法[14]，还是在2016年发表的。它在3DMAD和REPLAY-ATTACK数据集上的HTER为0.0%和0.0%，只用了神经网络，还没用到CNN和LSTM等结构。由此可见，结合多种互补的方法，确实是个不错的思路。Mutli-cues主要包含三个方面的活体特征：shearlet图像质量特征（SBIQF），脸部运动光流特征以及场景运动光流特征，然后使用神经网络做二分类问题，模型如下图所示：
-
-
-## 一种基于近红外与可见光双目摄像头的活体人脸检测方法与流程
-  NIR Near Infrared
-  GNIR 近红外摄像头下拍摄的真实人脸图片
-  NNIR 对应 GNIR 的近红外伪造人脸图片
-  VNIR 可见光伪造人脸图片
-  GVIS 可见光摄像头下拍摄的真实人脸图片
-  NVIS 对应 GVIS 的近红外伪造人脸图片
-
-  (1)活体人脸分类模型的训练步骤：
-  采集训练样本，包括近红外摄像头下拍摄的真实人脸图片GNIR，对应GNIR的近红外伪造人脸图片NNIR、可见光伪造人脸图片VNIR；可见光摄像头下拍摄的真实人脸图片GVIS、对应GVIS的近红外伪造人脸图片NVIS；
-  样本清洗：计算训练样本的人脸的侧脸角度，剔除侧脸角度大于阈值的训练样本；
-  对清洗后的训练样本进行图像预处理：计算训练样本的人脸平面旋转角度，对图片做旋转变换，使眼睛保持在图片中的水平位置；再截取只包含人脸区域的人脸图片，并进行尺寸归一化处理；
-  训练近红外摄像头下区分真实人脸和可见光伪造人脸的第一活体人脸分类模型：
-  对预处理后的训练样本进行第一正负样本划分：将真实人脸图像GNIR作为第一正样本；伪造人脸图片NNIR和VNIR作为第一负样本；
-
-  提取第一正负样本的纹理特征向量：
-  提取第一正负样本的8位和16位二值编码模式下的Uniform LBP特征，并分别对两种编码模式下的Uniform LBP特征进行直方图统计，得到第一正负样本的两类初始纹理特征向量；
-  分别按井字形将第一正负样本均分为9个图像子块，并提取各图像子块的8位二值编码模式下的Uniform LBP特征并进行直方图统计，得到图像子块的纹理特征向量；
-  拼接各正负样本的两类初始纹理特征向量和图像子块的纹理特征向量，得到样本的纹理特征向量；其中拼接方式不限，可先拼接8位二值编码模式下的初始纹理特征向量和各图像子块的纹理特征向量，再拼接16位二值编码模式下的初始纹理特征向量，当然也可以是其他方式拼接，只要满足拼接后的纹理特征向量能用于SVM(支持向量机)即可。
-  基于第一正负样本的纹理特征向量，进行SVM分类模型训练，得到能够区别真实人脸和可见光伪造人脸图像的第一活体人脸分类模型；
-
-  训练可见光摄像头下区分真实人脸和近红外伪造人脸的第二活体人脸分类模型：
-  对预处理后的训练样本进行第二正负样本划分：将真实人脸图像GVIS作为第二正样本；将伪造人脸图像NVIS作为第二负样本；
-  提取第二正负样本的颜色特征向量：将第二正负样本图片转换到Lab颜色空间，并对Lab颜色空间的a通道和b通道进行直方图统计，得到统计结果Sa、Sb，并将Sa和Sb拼接成一个向量，作为样本的颜色特征向量；
-  基于第二正负样本的颜色特征向量，进行SVM分类模型训练，得到能够区别真实人脸和近红外伪造人脸图像的第二活体人脸分类模型；
-
-  (2)活体人脸检测步骤：
-  分别采集待检测对象在近红外摄像头和可见光摄像头下的一段满足检测时长的图像视频，对应近红外摄像头的记为第一图像视频，对应可见光摄像头的记为第二图像视频；
-  判断第一和第二图像视频是否同时存在人脸，若否，则判定待检测对象为非活体人脸；若是，则分别从第一和第二图像视频中提取一帧匹配的人脸帧图像，得到第一、二人脸帧图像；其中匹配的人脸帧图像为：两个图像视频中帧时间相同且人脸侧脸角度在预设范围内(以确保所提取的图像尽量为正脸的人脸图像)的一帧图像；
-
-  基于第一、二人脸帧图像进行活体人脸检测：
-  采用与训练样本相同的图像预处理方式，对第一、二人脸帧图像进行图像预处理后；再采用提取训练样本的纹理特征向量、颜色特征向量的特征提取方式，提取第一、二人脸帧图像的纹理特征向量和颜色特征向量；
-  基于第一活体人脸分类模型和第一人脸帧的纹理特征向量，获取待检测对象的第一分类结果；基于第二活体人脸分类模型和第一人脸帧的纹颜色征向量，获取待检测对象的第二分类结果；
-  若第一、二分类结果均为活体人脸，则当前待检测对象为活体人脸；否则为非活体人脸。
-  综上所述，由于采用了上述技术方案，本发明的有益效果是：本发明利用近红外摄像头下、视频和大部分纸张不能呈现图像的特性有效的防止了视频中伪造人脸的攻击，利用近红外摄像头和可见光摄像头下真实人脸与照片人脸纹理差异和颜色差异，训练的分类模型可以有效地区分人脸是来自真实人脸还是照片中的伪造人脸，且检测率高，从而有效的防止了视频、照片常见手段中的伪造人脸的攻击。本发明不仅在正确率上相比传统算法做出了很大的提升，保证了安全性，而且不需要用户配合机器做出相应的动作或表情，提升了用户的体验感。
-
-  具体实施方式
-
-  为使本发明的目的、技术方案和优点更加清楚，下面结合实施方式，对本发明作进一步地详细描述。
-
-  在本发明中使用到可见光摄像头、近红外光摄像头，经发现，大部分的纸质材料、全部照片和全部的视频及投影所呈现的图像，在近红外光摄像头下不能正常显现，只有少数的纸张可以在近红外摄像头下呈现出正常的画面。因此使用近红外摄像头可以有效的防止来自视频、投影和大部分纸张的伪造人脸的攻击。并且在近红外摄像头下和可见光摄像头下的人脸呈现明显的差异，由于近红外摄像头拍摄的照片的光源主要来自于摄像头周围的近红外灯，因此呈现出脸部中间亮、脸颊暗、眼睛瞳孔颜色呈灰白色、并且没有颜色信息等特点。因此本发明利用人脸的纹理信息差异，准确地区分近红外摄像头下的真实人脸和可见光伪造人脸照片，利用人脸的颜色信息准确地区分可见光摄像头下的真实人脸和近红外伪造照片，融合近红外摄像头下的纹理分析和可见光摄像头下的颜色分析，两种伪造人脸照片可以检测出来，因而可以抵御照片伪造人脸的攻击、再结合近红外摄像头下无法录制到视频呈现的画面的特点，可以抵御视频伪造人脸的攻击，最终综合分析之后，可以判断出双目摄像头前的是活体还是非活体。
-
-  本发明的具体实现步骤如下：
-  (1)活体人脸分类模型的训练步骤：
-  步骤1、采集训练样本集。
-  采集近红外摄像头和可见光摄像头前的真实人脸和对应的伪造人脸，伪造人脸来自于几种可以近红外摄像头下呈现画面的纸张上打印的可见光人脸照片和近红外人脸照片。
-
-  即采集的初始训练样本集包括：
-  在近红外摄像头下拍摄的真实人脸图片(GNIR)、对应GNIR的近红外伪造人脸图片(NNIR)、可见光伪造人脸图片(VNIR)；
-  在可见光摄像头下拍摄的真实人脸图片(GVIS)、对应GVIS的近红外伪造人脸图片(NVIS)。
-
-  样本清洗：对采集到的图片检测人脸，根据人脸特征点的定位，计算人脸的侧脸角度，剔除初始训练样本集中，侧脸角度大于阈值的侧脸照片，得到后续步骤使用的训练样本集。
-
-  步骤2、对训练样本集中的各训练样本进行图像预处理。
-  步骤2-1：计算训练样本的人脸平面旋转角度，对图片做旋转变换，使眼睛保持在图片中的水平位置。
-  步骤2-2：然后截取只包含人脸区域的人脸图片，并进行尺寸归一化处理，例如标准化为65×65大小。
-
-  步骤3、训练近红外摄像头下区分真实人脸和可见光伪造人脸的活体人脸分类模型。
-  步骤3-1：对预处理后的训练样本进行第一正负样本划分：
-  将近红外摄像头采集的经过预处理后的真实人脸(GNIR)作为第一正样本；
-  将伪造人脸，包括近红外伪造人脸图片(NNIR)、和可见光伪造人脸图片(VNIR)作为第一负样本。
-  将近红外伪造人脸图片(NNIR)加入第一负样本的原因是，虽然近红外伪造人脸呈现出和真实人脸有很多相似性的纹理信息，但是由于图片会损失一些纹理信息，虽然不能完全抵御但是可以使训练的模型可以一定程度的抵御近红外伪造人脸图片(NNIR)。
-  步骤3-2：对第一正负样本作8位和16位二值编码模式下的Uniform LBP(旋转不变LBP(局部二值模式))处理。8位二值编码模式下的Uniform LBP处理后一共得到59种模式，对59种模式进行直方图统计，可以得到一个59维的向量。16位二值编码模式下的Uniform LBP处理后一共有243种模式，进行直方图统计后可以得到一个243维的向量。
-  步骤3-3：分别按井字形将第一正负样本均分为9个图像子块，这样划分可以经过Uniform LBP处理后得到眼睛、额头、脸颊、嘴唇等更多局部的特征。对每个子块同样提取8位二值编码模式下的Uniform LBP特征，则可以得到9个59维的向量。
-  步骤3-4：拼接10个59维的向量以及一个243维的向量，得到各训练样本的纹理特征向量。
-  步骤3-5：将第一正负样本提取出来的纹理特征向量，采用SVM(支持向量机)训练分类模型得到能够区别真实人脸和和可见光伪造人脸图片的第一活体人脸分类模型。
-
-  步骤4、训练可见光摄像头下区分真实人脸和近红外伪造人脸的活体人脸分类模型。
-  步骤4-1；对预处理后的训练样本进行第二正负样本划分：
-  将经过预处理化后的可见光摄像头采集到的真实人脸图片(GVIS)，作为第二正样本；
-  将可见光摄像头采集到近红外伪造人脸图片(NVIS)，作为第二负样本。
-  步骤4-2：将第二正负样本图片转换到Lab颜色空间(通常正负样本图片的原颜色空间为RGB颜色空间)，并对Lab颜色空间的a通道和b通道进行直方图统计，得到统计结果Sa、Sb。
-  步骤4-3：然后将统计结果Sa、Sb拼接成一个向量，作为颜色特征向量。
-  步骤4-4：将第二正负样本提取出来的颜色特征向量，采用SVM训练分类模型。得到能够区别真实人脸和和近红外伪造人脸图片的第二活体人脸分类模型。
-
-  (2)活体人脸检测步骤：
-  步骤1：分别采集待检测对象在近红外摄像头和可见光摄像头下的一段满足检测时长(例如10秒)的图像视频，对应近红外摄像头的记为第一图像视频，对应可见光摄像头的记为第二图像视频。
-  步骤2；检测两个图像视频是否同时存在人脸。如果两者都检测到人脸，则转向步骤3，若只在可见光摄像头下检测到人脸，在近红外摄像头下检测不到人脸，则可以推断出人脸来自于视频、投影等其他伪造人脸，转向6。若只在近红外摄像头下检测到人脸，在可见光摄像头检测不到人脸，则可以推断出人脸来自于近红外伪造人脸照片或者其他伪造情况，转向6。
-  步骤3：分别从第一和第二图像视频中提取一帧匹配的人脸帧图像，得到第一、二人脸帧图像；其中匹配的人脸帧图像为：两个图像视频中帧时间相同且人脸侧脸角度在预设范围内的一帧图像。
-  步骤4：采用与训练样本相同的图像预处理方式，对第一、二人脸帧图像进行图像预处理后；再采用提取训练样本的纹理特征向量、颜色特征向量的特征提取方式，提取第一、二人脸帧图像的纹理特征向量和颜色特征向量。
-  步骤5：将图像预处理后的第一人脸帧图像(近红外摄像头人脸图像)在第一活体人脸分类模型上用SVM预测分类结果，将图像预处理后第二人脸帧图像(可见光摄像头人脸图像)在第二活体人脸分类模型上用SVM预测分类结果，当两种活体人脸分类模型给出的结果均为活体人脸时，则转向7。若一种活体人脸分类模型输出结果不为活体人脸，则转向6。
-  步骤6：判断为非活体，输出结果。
-  步骤7：判断为活体，输出结果。
-
-  本发明通过近红外和可见光双目摄像头设计的活体检测方法，利用近红外摄像头下、视频和大部分纸张不能呈现图像的特性有效的防止了视频中伪造人脸的攻击，利用近红外摄像头和可见光摄像头下真实人脸与照片人脸纹理差异和颜色差异，训练的分类模型可以有效地区分人脸是来自真实人脸还是照片中的伪造人脸。经测试，本发明的活体检测的正确率可以达到99.9％，有效的防止了视频、照片常见手段中的伪造人脸的攻击。本发明不仅在正确率上相比传统算法做出了很大的提升，保证了安全性，而且不需要用户配合机器做出相应的动作或表情，提升了用户的体验感。
-
-  以上所述，仅为本发明的具体实施方式，本说明书中所公开的任一特征，除非特别叙述，均可被其他等效或具有类似目的的替代特征加以替换；所公开的所有特征、或所有方法或过程中的步骤，除了互相排斥的特征和/或步骤以外，均可以任何方式组合。
-
-
-## 红外
-这个是demo中用到的双目摄像头,一个是红外的,一个是正常的rgb摄像头
-两个usb接口,在电脑上呈现两路摄像头通道
-程序检测RGB输出图像,当检测到有人脸时,用RGB人脸的位置到红外画面的位置去检测人脸
-如果没有检测到,说明当前目标为非活体
-当在红外画面检测到人脸时,说明当前目标为活体目标
-再继续使用RGB图像提取特征值
-下面为demo效果图
-
-  近红外人脸活体检测算法主要是基于光流法而实现，无需指令配合，检测成功率较高。根据光流法，利用图像序列中的像素强度数据的时域变化和相关性来确定各自像素位置的“运动”，从图像序列中得到各个像素点的运行信息，采用高斯差分滤波器、LBP特征和支持向量机进行数据统计分析。同时，光流场对物体运动比较敏感，利用光流场可以统一检测眼球移动和眨眼。这种活体检测方式可以在用户无配合的情况下实现盲测。
-
-近红外NIR
-由于NIR的光谱波段与可见光VIS不同，故真实人脸及非活体载体对于近红外波段的吸收和反射强度也不同，即也可通过近红外相机出来的图像来活体检测。从出来的图像来说，近红外图像对屏幕攻击的区分度较大，对高清彩色纸张打印的区分度较小。
-
-从特征工程角度来说，方法无非也是提取NIR图中的光照纹理特征[15]或者远程人脸心率特征[16]来进行。下图可见，上面两行是真实人脸图中人脸区域与背景区域的直方图分布，明显与下面两行的非活体图的分布不一致；而通过与文章[5]中一样的rPPG提取方法，在文章[]中说明其在NIR图像中出来的特征更加鲁棒~
-## LBP
+  - **原始 LBP 算子**
+    - 在 `3 * 3` 的窗口内，以窗口中心像素为阈值，将相邻的 `8` 个像素的灰度值与其进行比较
+    - 若周围像素值大于中心像素值，则该像素点的位置被标记为 1，否则为 0
+    - `3 * 3` 邻域内的 `8` 个点经比较可产生 `8` 位二进制数，通常转换为十进制数即 LBP 码，共 256 种
+    - 得到该窗口中心像素点的 LBP 值，并用这个值来反映该区域的纹理信息
+    - LBP 算子是灰度不变的，但却不是旋转不变的。图像的旋转就会得到不同的 LBP 值
+  - **圆形 LBP 算子**
+    - 基本的 LBP 算子的最大缺陷在于它只覆盖了一个固定半径范围内的小区域，这显然不能满足不同尺寸和频率纹理的需要
+    - 为了适应不同尺度的纹理特征，并达到灰度和旋转不变性的要求，Ojala 等对 LBP 算子进行了改进，将 3×3 邻域扩展到任意邻域，并用圆形邻域代替了正方形邻域
+    - 改进后的 LBP 算子允许在半径为 R 的圆形邻域内有任意多个像素点，从而得到了诸如 **半径为 R 的圆形区域内含有 P 个采样点的 LBP 算子**
+  - **LBP 旋转不变模式**
+    - Maenpaa 等人又将 LBP 算子进行了扩展，提出了具有旋转不变性的 LBP 算子
+    - 即不断旋转圆形邻域得到一系列初始定义的 LBP 值，取其最小值作为该邻域的 LBP 值
+  - **LBP 等价模式**
+    - 一个LBP算子可以产生不同的二进制模式，对于 **半径为 R 的圆形区域内含有 P 个采样点的 LBP 算子** 将会产生 `P^2` 种模式
+    - 如此多的二值模式无论对于纹理的提取还是对于纹理的识别、分类及信息的存取都是不利的
+    - 将 LBP 算子用于纹理分类或人脸识别时，常采用 **LBP 模式的统计直方图** 来表达图像的信息
+    - 为了解决二进制模式过多的问题，提高统计性，Ojala 提出了采用一种 **等价模式 Uniform Pattern** 来对 LBP 算子的模式种类进行降维
+    - **等价模式** 在实际图像中，绝大多数 LBP 模式最多只包含两次从 1 到 0 或从 0 到 1 的跳变，当某个 LBP 所对应的循环二进制数从 0 到 1 或从 1 到 0 最多有两次跳变时，该 LBP 所对应的二进制就称为一个 **等价模式类**
+    - 00000000（0次跳变），00000111（一次跳变），10001111（两次跳变）都是等价模式类，除等价模式类以外的模式都归为另一类，称为 **混合模式类**
+    - 二进制 **等价模式的种类** 由原来的 `P ^ 2` 种减少为 `P * ( P - 1 ) + 2` 种，对于 3×3 邻域内 8 个采样点，一共 `58 + 1` 种模式，这使得特征向量的维数更少，并且可以减少高频噪声带来的影响
+## 可见光近红外双目摄像头活体检测步骤
+  - **NIR** 近红外 Near Infrared
+  - 由于 NIR 的光谱波段与可见光 VIS 不同，故真实人脸及非活体载体对于近红外波段的吸收和反射强度也不同，近红外图像对屏幕攻击的区分度较大，对高清彩色纸张打印的区分度较小
+  - 首先在可见光图像上检测人脸，当检测到有人脸时，用 RGB 人脸的位置到红外画面的位置去检测人脸，如果没有检测到，说明是非活体目标
+  - **纹理特征向量 SVM 分类器**
+    - 将 **近红外真实人脸** 作为正样本，对应的 **近红外伪造人脸** 与 **可见光伪造人脸** 作为负样本
+    - 分别提取 **8 位** 和 **16 位** 二值编码模式下的 **Uniform LBP 特征**，并分别进行直方图统计，得到两类 **初始纹理特征向量**
+    - 分别将图像分成 **9** 个图像子块，并提取各图像子块的 **8 位** 二值编码模式下的 **Uniform LBP 特征**， 并进行直方图统计，得到 **图像子块的纹理特征向量**
+    - 拼接各个纹理特征向量，作为训练数据，使用 **SVM 分类器** 进行训练
+    - 预测时，使用 **近红外摄像头人脸图像** 处理后的特征进行分类
+  - **颜色特征向量 SVM 分类器**
+    - 将 **可见光真实人脸** 作为正样本，对应的 **近红外伪造人脸** 作为负样本
+    - 分别将样本图片转换到 **Lab 颜色空间**，直方图统计 Lab 颜色空间的 **a 通道** 和 **b 通道**，得到统计结果 **Sa** 与 **Sb**
+    - 将 Sa 和 Sb 拼接成一个向量，作为样本的 **颜色特征向量**，使用 **SVM 分类器** 进行训练
+    - 预测时，使用 **可见光摄像头人脸图像** 处理后的特征进行分类
+## NUAA 数据集加载
   ```py
   os.chdir("/home/leondgarse/workspace/samba/insightface-master")
   from face_model import FaceModel
@@ -164,14 +100,12 @@ GAP - Global Average Pooling
 
   os.chdir("/home/leondgarse/workspace/datasets/NUAA")
   import skimage
-  from skimage.io import imread, imsave
   from shutil import copy
-  from sklearn.svm import SVC
   import os
   import numpy as np
-  import skimage.feature
-  from sklearn import metrics
 
+  image_size = (112, 112)
+  image_size = (224, 224)
   def extract_face_location(ff):
       img = skimage.io.imread(ff)
       bb, pp = fm.get_face_location(img)
@@ -181,22 +115,22 @@ GAP - Global Average Pooling
       elif bb.shape[0] > 1:
           print(">>>> NOT a single face in this picture! ff = %s, shape = %s<<<<" % (ff, bb.shape))
 
-      nn = fm.face_align_landmarks(img, pp, image_size=[112,112])
-      return nn[0] if nn.shape[0] != 0 else np.zeros([112, 112, 3], dtype=uint8)
+      nn = fm.face_align_landmarks(img, pp, image_size=image_size)
+      return nn[0] if nn.shape[0] != 0 else np.zeros([image_size[0], image_size[1], 3], dtype=uint8)
 
 
-  def image_collection_by_file(file_name, file_path, limit=None, to_array=True, save_local=True, save_base_path="./Cropped"):
+  def image_collection_by_file(file_name, file_path, limit=None, to_array=True, save_local=True, save_base_path="./Cropped", load_func=extract_face_location_2):
       with open(file_name, 'r') as ff:
           aa = ff.readlines()
       if limit:
           aa = aa[:limit]
       image_list = [os.path.join(file_path, ii.strip().replace('\\', '/')) for ii in aa]
-      image_collection = skimage.io.ImageCollection(image_list, load_func=extract_face_location)
+      image_collection = skimage.io.ImageCollection(image_list, load_func=load_func)
       file_names = np.array(image_collection.files)
 
       if to_array:
           image_collection = image_collection.concatenate()
-          pick = np.any(image_collection != np.zeros([112, 112, 3], dtype=uint8), axis=(1, 2, 3))
+          pick = np.any(image_collection != np.zeros([image_size[0], image_size[1], 3], dtype=uint8), axis=(1, 2, 3))
           image_collection = image_collection[pick]
           file_names = file_names[pick]
 
@@ -238,103 +172,106 @@ GAP - Global Average Pooling
   # (3486, 112, 112, 3) (3486,) (9119, 112, 112, 3) (9119,)
   ```
   ```py
-  def plot_rgb_and_hsv(first_row, second_row, func=skimage.color.rgb2hsv):
-      cc = np.min([first_row.shape[0], second_row.shape[0]])
-      fig, axes = plt.subplots(4, cc)
-      for id, ii in enumerate(first_row):
-          pp = func(ii)
-          axes[0, id].imshow(ii)
-          axes[0, id].set_axis_off()
-          axes[1, id].imshow(pp)
-          axes[1, id].set_axis_off()
-      for id, ii in enumerate(second_row):
-          pp = func(ii)
-          axes[2, id].imshow(ii)
-          axes[2, id].set_axis_off()
-          axes[3, id].imshow(pp)
-          axes[3, id].set_axis_off()
-      fig.tight_layout()
+  import os
+  import numpy as np
+
+  tt = np.load(os.environ['HOME'] + '/workspace/datasets/NUAA/train_test_dataset.npz')
+  train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
   ```
+## skimage 提取 LBP 特征
+  - **var LBP 特征**
+    ```py
+    import skimage
+    import skimage.feature
+    from skimage.data import coffee
+
+    img = coffee()
+
+    for cc in [0, 1, 2]:
+        img[:, :, cc] = skimage.feature.local_binary_pattern(img[:, :, cc], P=8, R=1.0, method='var')
+
+    plt.imshow(img)
+    ```
+    ![](images/lbp_var.png)
+  - **uniform LBP 特征**
+    ```py
+    def img_2_hist_lbp_multi_channel(img, neighbors=8, method='uniform'):
+        nbins = neighbors + 2 if method == 'uniform' else neighbors * (neighbors - 1) + 3
+        img_lbp = [skimage.feature.local_binary_pattern(ii, neighbors, 1.0, method=method) for ii in img.transpose(2, 0, 1)]
+        img_lbp_hist = np.hstack([skimage.exposure.histogram(ii, nbins=nbins)[0] for ii in img_lbp])
+
+        return img_lbp, img_lbp_hist
+
+    ''' 8-bit uniform LBP '''
+    img = coffee()
+    aa, bb = img_2_hist_lbp_multi_channel(img, 8, "uniform")
+    print(np.unique(aa), bb.shape)
+    # [0. 1. 2. 3. 4. 5. 6. 7. 8. 9.] (30,)
+
+    ''' 16-bit uniform LBP '''
+    aa, bb = img_2_hist_lbp_multi_channel(img, 16, "uniform")
+    print(np.unique(aa), bb.shape)
+    # [ 0.  1.  2.  3.  4.  5.  6.  7.  8.  9. 10. 11. 12. 13. 14. 15. 16. 17.] (54,)
+    ```
+  - **nri_uniform LBP 特征** LBP 等价模式
+    ```py
+    ''' 8-bit nri_uniform LBP '''
+    img = coffee()
+    aa, bb = img_2_hist_lbp_multi_channel(img, 8, "nri_uniform")
+    print(np.unique(aa).shape, bb.shape)
+    # (59,) (177,)
+
+    ''' 16-bit nri_uniform LBP '''
+    aa, bb = img_2_hist_lbp_multi_channel(img, 16, "nri_uniform")
+    print(np.unique(aa).shape, bb.shape)
+    # (243,) (729,)
+    ```
+## 图像分割
   ```py
-  import skimage
+  def split_image(image, n_hor=3, n_vert=3, exclude_row=[], exclude_col=[]):
+      rr, cc = image.shape[:2]
+      for irr in range(n_hor):
+          if irr in exclude_row:
+              continue
+          rr_start = int(rr * irr / n_hor)
+          rr_end = int(rr * (irr + 1) / n_hor)
+
+          for icc in range(n_vert):
+              if icc in exclude_col:
+                  continue
+              cc_start = int(cc * icc / n_vert)
+              cc_end = int(cc * (icc + 1) / n_vert)
+              yield image[rr_start: rr_end, cc_start: cc_end]
+
+  def plot_image_parts(image, n_hor=3, n_vert=3, exclude_row=[], exclude_col=[]):
+      aa = split_image(image, n_hor, n_vert, exclude_row, exclude_col)
+      rows = n_hor - len(exclude_row)
+      cols = n_vert - len(exclude_col)
+      for id, ii in enumerate(aa):
+          plt.subplot(rows, cols, id + 1)
+          plt.imshow(ii)
+          plt.axis('off')
+      plt.tight_layout()
+
   from skimage.data import coffee
-  import skimage.feature
-
-  img = coffee()
-
-  for cc in [0, 1, 2]:
-      img[:, :, cc] = skimage.feature.local_binary_pattern(img[:, :, cc], P=8, R=1.0, method='var')
-
-  plt.imshow(img)
+  plot_image_parts(coffee(), 5, 5, [0, 4], [1, 3])
   ```
-  ```py
-  aa = train_x[0]
-  bb = np.array([skimage.feature.local_binary_pattern(ii, 8, 1.0, method='uniform') for ii in aa.transpose(2, 0, 1)])
-  cc = [skimage.exposure.histogram(ii, nbins=9)[0] for ii in bb]
-  dd = np.array([skimage.feature.local_binary_pattern(ii, 16, 1.0, method='uniform') for ii in aa.transpose(2, 0, 1)])
-  ee = [skimage.exposure.histogram(ii, nbins=17)[0] for ii in dd]
-  ```
-  ```py
-  from keras.preprocessing.image import ImageDataGenerator
-  # construct the training image generator for data augmentation
-  aug = ImageDataGenerator(rotation_range=20, zoom_range=0.15,
-      width_shift_range=0.2, height_shift_range=0.2, shear_range=0.15,
-      horizontal_flip=True, fill_mode="nearest")
-  ```
-## 灰度共生矩阵(GLCM)
-  1. 算法简介
-  灰度共生矩阵法(GLCM， Gray-level co-occurrence matrix)，就是通过计算灰度图像得到它的共生矩阵，然后透过计算该共生矩阵得到矩阵的部分特征值，来分别代表图像的某些纹理特征（纹理的定义仍是难点）。灰度共生矩阵能反映图像灰度关于方向、相邻间隔、变化幅度等综合信息，它是分析图像的局部模式和它们排列规则的基础。
+  ![](images/image_split.png)
+## bob pad
+  - [bob.pad.face](https://gitlab.idiap.ch/bob/bob.pad.face)
+  - **bob.pad.face/bob/pad/face/extractor/LBPHistogram.py**
+    ```py
+    import skimage
+    import skimage.feature
 
-  对于灰度共生矩阵的理解，需要明确几个概念：方向，偏移量和灰度共生矩阵的阶数。
-  • 方向：一般计算过程会分别选在几个不同的方向来进行，常规的是水平方向0°，垂直90°，以及45°和135°；
-  • 步距d：中心像元（在下面的例程中进行说明）；
-  • 灰度共生矩阵的阶数：与灰度图像灰度值的阶数相同，即当灰度图像灰度值阶数为N时，灰度共生矩阵为N × N的矩阵；
+    def comp_block_histogram(data, neighbors=8):
+        # calculating the lbp image
+        nbins = neighbors * (neighbors - 1) + 3
+        lbpimage = skimage.feature.local_binary_pattern(data, neighbors, 1.0, method='nri_uniform').astype(np.int8)
+        hist = np.histogram(lbpimage, nbins)[0]
+        return hist / hist.sum()
 
-  GLCM将拍摄的图像（作为矩阵），定义角度（[“0”，“45”，“90”，“135”]__角度在我这影响不大） 和整数距离d（[1, 2, 8, 16]__‘1’最优）。GLCM的轴由图像中存在的灰度级定义。扫描图像的每个像素并将其存储为“参考像素”。然后将参考像素与距离d的像素进行比较，该距离为角度θ（其中“0”度是右边的像素，“90”是上面的像素）远离参考像素，称为相邻像素。每次找到参考值和邻居值对时，GLCM的相应行和列递增1。
-
-  ```py
-  greycomatrix(image, distances, angles, levels=None, symmetric=False, normed=False)
-      Calculate the grey-level co-occurrence matrix.
-
-      A grey level co-occurrence matrix is a histogram of co-occurring
-      greyscale values at a given offset over an image.
-  ```
-  图像特征值_峰度与偏度
-  Kurtosis(峰度）： 表征概率密度分布曲线在平均值处峰值高低的特征数，是对Sample构成的分布的峰值是否突兀或是平坦的描述。直观看来，峰度反映了峰部的尖度。样本的峰度是和正态分布相比较而言的统计量，计算时间序列x的峰度，峰度用于度量x偏离某分布的情况，正态分布的峰度为3。如果峰度大于3，峰的形状比较尖，比正态分布峰要陡峭。反之亦然; 在统计学中，峰度衡量实数随机变量概率分布的峰态，峰度高就意味着方差增大是由低频度的大于或小于平均值的极端差值引起的。
-  Skewness(偏度)： 是对Sample构成的分布的对称性状况的描述。计算时间序列x的偏度，偏度用于衡量x的对称性。若偏度为负，则x均值左侧的离散度比右侧强；若偏度为正，则x均值左侧的离散度比右侧弱。对于正态分布(或严格对称分布)偏度等于O。
-  YY:（这两个值比较熟悉，以前有个图计算的项目用Spark做，SparkSQL里就有该函数）
-
-  Python的2种参考（计算数据均值、标准差、偏度、峰度）：
-  ```py
-  import numpy as np
-  R = np.array([1， 2， 3， 4， 5， 6]) #初始化一组数据
-  R_mean = np.mean(R) #计算均值
-  R_var = np.var(R)  #计算方差
-  R_sc = np.mean((R - R_mean) ** 3)  #计算偏斜度
-  R_ku = np.mean((R - R_mean) ** 4) / pow(R_var， 2) #计算峰度
-  print([R_mean， R_var， R_sc， R_ku])
-
-
-  import numpy as np
-  from scipy import stats
-  x = np.random.randn(10000)
-  mu = np.mean(x， axis=0)
-  sigma = np.std(x， axis=0)
-  skew = stats.skew(x)
-  kurtosis = stats.kurtosis(x)
-  ```
-  使用GLCM特征值+SVM对纹理图片分类
-  通过提取灰度直方图的均值、标准差、峰度等统计特性和灰度共生矩阵的能量、相关性、对比度、熵值等如上所属纹理特性，作为 SVM 训练特征，得到 SVM 分类器，即可用于纹理图像的处理。
-  8个类别，图片质量稍低，但也得到了0.8左右的准确率，说明了统计特征的有效性。
-## bob.pad
-  ```py
-  def comp_block_histogram(data, neighbors=8):
-      # calculating the lbp image
-      lbpimage = skimage.feature.local_binary_pattern(data, neighbors, 1.0, method='nri_uniform').astype(np.int8)
-      hist = skimage.exposure.histogram(lbpimage, normalize=True)[0]
-      return hist
-
-  def image_2_block_LBP_hist(image, n_vert=3, n_hor=3):
+    def image_2_block_LBP_hist(image, n_vert=3, n_hor=3):
         data = skimage.color.rgb2gray(image)
 
         # Make sure the data can be split into equal blocks:
@@ -348,132 +285,153 @@ GAP - Global Average Pooling
         hist = hist / len(blocks)  # histogram normalization
 
         return hist
-  ```
-  ```py
-  from sklearn.model_selection import GridSearchCV
-  param_grid = {'C': [2**P for P in range(-3, 14, 2)],
-                'gamma': [2**P for P in range(-15, 0, 2)], }
-  clf = GridSearchCV(SVC(kernel='rbf', class_weight='balanced'), param_grid, n_jobs=-1)
+    ```
+  - **bob.pad.face/bob/pad/face/config/lbp_svm.py**
+    ```py
+    from sklearn.model_selection import GridSearchCV
+    from sklearn.svm import SVC
+    param_grid = {'C': [2**P for P in range(-3, 14, 2)],
+    'gamma': [2**P for P in range(-15, 0, 2)], }
+    clf = GridSearchCV(SVC(kernel='rbf', class_weight='balanced'), param_grid, n_jobs=-1)
+    ```
+    ```py
+    train_x_hist = np.array([image_2_block_LBP_hist(ii) for ii in train_x])
+    test_x_hist = np.array([image_2_block_LBP_hist(ii) for ii in test_x])
+    print(train_x_hist.shape, test_x_hist.shape)
+    # (3486, 531) (9119,531)
 
-  train_x_hist = np.array([image_block_LBP_hist(ii) for ii in train_x])
-  clf.fit(train_x_hist, train_y)
-  clf.best_estimator_
-  # Out[108]:
-  # SVC(C=2048, cache_size=200, class_weight='balanced', coef0=0.0,
-  #     decision_function_shape='ovr', degree=3, gamma=0.5, kernel='rbf',
-  #     max_iter=-1, probability=False, random_state=None, shrinking=True,
-  #     tol=0.001, verbose=False)
-
-  test_x_hist = np.array([image_2_block_LBP_hist(ii) for ii in test_x])
-  print((clf.predict(test_x_hist) == test_y).sum() / test_y.shape[0])
-  # 0.7403224037723435
-  print((clf.predict(train_x_hist) == train_y).sum() / train_y.shape[0])
-  # 0.9971313826735514
-  ```
-## bob.pad hsv
-  ```py
-def split_image(image, n_hor=3, n_vert=3, exclude_row=None):
-    rr, cc = image.shape[:2]
-    for irr in range(n_hor):
-        if irr == exclude_row:
-            continue
-        rr_start = int(rr * irr / n_hor)
-        rr_end = int(rr * (irr + 1) / n_hor)
-
-        for icc in range(n_vert):
-            cc_start = int(cc * icc / n_vert)
-            cc_end = int(cc * (icc + 1) / n_vert)
-            yield image[rr_start: rr_end, cc_start: cc_end]
-
-  def plot_image_parts(image, n_hor=3, n_vert=3, exclude_row=None):
-      aa = split_image(image, n_hor, n_vert, exclude_row=exclude_row)
-      rows, cols = (n_hor - 1, n_vert) if exclude_row else (n_hor, n_vert)
-      for id, ii in enumerate(aa):
-          plt.subplot(rows, cols, id + 1)
-          plt.imshow(ii)
-          plt.axis('off')
-      plt.tight_layout()
-
-def stack_block_lbp_histogram(data, neighbors=8, method='uniform'):
-    # calculating the lbp image
-    hists = []
-    bins = (neighbors * neighbors - neighbors + 3) if method == "nri_uniform" else (neighbors + 2)
-    for data_channel in data.transpose(2, 0, 1):
-        lbpimage = skimage.feature.local_binary_pattern(data_channel, neighbors, 1.0, method=method).astype(np.int8)
-        hist = np.histogram(lbpimage, bins=bins)[0]
-        hists.append(hist / hist.sum())
-
-    return np.hstack(hists)
-
-def image_2_block_LBP_hist(data, n_vert=3, n_hor=3, exclude_row=None, mode="YCbCr", neighbors=8, lbp_method='nri_uniform'):
-      if mode.lower() == "hsv":
-          data = skimage.color.rgb2hsv(data)
-      elif mode.lower() == "ycbcr":
-          data = skimage.color.rgb2ycbcr(data)
-
-      # Make sure the data can be split into equal blocks:
-      # row_max = int(data.shape[0] / n_vert) * n_vert
-      # col_max = int(data.shape[1] / n_hor) * n_hor
-      # data = data[:row_max, :col_max]
-      # blocks = [sub_block for iid, block in enumerate(np.vsplit(data, n_hor)) if iid != 2 for sub_block in np.hsplit(block, n_vert)]
-      blocks = split_image(data, n_hor, n_vert, exclude_row=exclude_row)
-      hists = [stack_block_lbp_histogram(block, neighbors=neighbors, method=lbp_method) for block in blocks]
-      hists_size = len(hists)
-      hist = np.hstack(hists)
-      hist = hist / hists_size  # histogram normalization
-
-      return hist
-  ```
-  ```py
-  from sklearn.model_selection import GridSearchCV
-  from sklearn import metrics
-
-  param_grid = {'C': [2**P for P in range(-3, 14, 2)],
-                'gamma': [2**P for P in range(-15, 0, 2)], }
-  param_grid = {'C': [2**P for P in range(-3, 3, 1)],
-                'gamma': [2**P for P in range(0, 10, 1)], }
-  param_grid = {'C': [2**P for P in range(-5, -1, 1)],
-                'gamma': [2**P for P in range(-3, 3, 2)], }
-  clf = GridSearchCV(SVC(kernel='rbf', class_weight='balanced'), param_grid, n_jobs=-1, cv=3)
-
-  train_x_hist = np.array([image_2_block_LBP_hist(ii) for ii in train_x])
-  clf = clf.fit(train_x_hist, train_y)
-  clf.best_estimator_
-  # SVC(C=0.5, cache_size=200, class_weight='balanced', coef0=0.0,
-  #     decision_function_shape='ovr', degree=3, gamma=128, kernel='rbf',
-  #     max_iter=-1, probability=False, random_state=None, shrinking=True,
-  #     tol=0.001, verbose=False)
+    clf = clf.fit(train_x_hist, train_y)
+    clf.best_estimator_
+    # Out[108]:
+    # SVC(C=2048, cache_size=200, class_weight='balanced', coef0=0.0,
+    #     decision_function_shape='ovr', degree=3, gamma=0.5, kernel='rbf',
+    #     max_iter=-1, probability=False, random_state=None, shrinking=True,
+    #     tol=0.001, verbose=False)
 
 
-  test_x_hist = np.array([image_2_block_LBP_hist(ii) for ii in test_x])
-  pred = clf.predict(test_x_hist)
+    print((clf.predict(test_x_hist) == test_y).sum() / test_y.shape[0])
+    # 0.7403224037723435
+    print((clf.predict(train_x_hist) == train_y).sum() / train_y.shape[0])
+    # 0.9971313826735514
+    ```
+## HSV 与 YCbCr 颜色空间下的 LBP
+  - **HSV 与 RGB 图像**
+    ```py
+    def plot_rgb_and_hsv(first_row, second_row, func=skimage.color.rgb2hsv):
+        cc = np.min([len(first_row), len(second_row)])
+        fig, axes = plt.subplots(4, cc)
+        for id, ii in enumerate(first_row):
+            pp = func(ii)
+            axes[0, id].imshow(ii)
+            axes[0, id].set_axis_off()
+            axes[1, id].imshow(pp)
+            axes[1, id].set_axis_off()
+        for id, ii in enumerate(second_row):
+            pp = func(ii)
+            axes[2, id].imshow(ii)
+            axes[2, id].set_axis_off()
+            axes[3, id].imshow(pp)
+            axes[3, id].set_axis_off()
+        fig.tight_layout()
 
-  def print_metrics(pred, logic):
-      accuracy = (pred == logic).sum() / logic.shape[0]
-      precision = np.logical_and(pred, logic).sum() / pred.sum()
-      recall = np.logical_and(pred, logic).sum() / logic.sum()
-      print("accuracy = %f, precision = %f, recall = %f" % (accuracy, precision, recall))
-      print("Classification Report:")
-      print(metrics.classification_report(logic, pred))
-      print("Confusion Matrix:")
-      print(metrics.confusion_matrix(logic, pred))
+    plot_rgb_and_hsv(train_x[:10], train_x[1743:1753])
+    ```
+  - **提取 LBP 特征**
+    ```py
+    def split_image(image, n_hor=3, n_vert=3, exclude_row=[], exclude_col=[]):
+        rr, cc = image.shape[:2]
+        for irr in range(n_hor):
+            if irr in exclude_row:
+                continue
+            rr_start = int(rr * irr / n_hor)
+            rr_end = int(rr * (irr + 1) / n_hor)
 
-  print_metrics(pred, test_y)
-  # accuracy = 0.831780, precision = 0.694753, recall = 0.969345
-  # Classification Report:
-  #               precision    recall  f1-score   support
-  #
-  #            0       0.98      0.75      0.85      5759
-  #            1       0.69      0.97      0.81      3360
-  #
-  #     accuracy                           0.83      9119
-  #    macro avg       0.84      0.86      0.83      9119
-  # weighted avg       0.87      0.83      0.83      9119
-  #
-  # Confusion Matrix:
-  # [[4328 1431]
-  #  [ 103 3257]]
-  ```
+            for icc in range(n_vert):
+                if icc in exclude_col:
+                    continue
+                cc_start = int(cc * icc / n_vert)
+                cc_end = int(cc * (icc + 1) / n_vert)
+                yield image[rr_start: rr_end, cc_start: cc_end]
+
+    def stack_block_lbp_histogram(data, neighbors=8, method='nri_uniform'):
+        # calculating the lbp image
+        hists = []
+        bins = (neighbors * neighbors - neighbors + 3) if method == "nri_uniform" else (neighbors + 2)
+        for data_channel in data.transpose(2, 0, 1):
+            lbpimage = skimage.feature.local_binary_pattern(data_channel, neighbors, 1.0, method=method).astype(np.int8)
+            hist = np.histogram(lbpimage, bins=bins)[0]
+            hists.append(hist / hist.sum())
+
+        return np.hstack(hists)
+
+    def image_2_block_LBP_hist(data, n_vert=3, n_hor=3, exclude_row=[], mode="YCbCr", neighbors=8, lbp_method='nri_uniform'):
+        if mode.lower() == "hsv":
+            data = skimage.color.rgb2hsv(data)
+        elif mode.lower() == "ycbcr":
+            data = skimage.color.rgb2ycbcr(data)
+
+        blocks = split_image(data, n_hor, n_vert, exclude_row=exclude_row)
+        hists = [stack_block_lbp_histogram(block, neighbors=neighbors, method=lbp_method) for block in blocks]
+        hists_stack = np.hstack(hists)
+        hist_norm = hists_stack / len(hists)  # histogram normalization
+
+        return hist_norm
+
+    aa = image_2_block_LBP_hist(coffee())
+    print(aa.shape) # (1593,) --> 3 * 9 * 59
+    ```
+  - **SVM 分类器**
+    ```py
+    from sklearn.model_selection import GridSearchCV
+    from sklearn import metrics
+
+    param_grid = {'C': [2**P for P in range(-3, 14, 2)],
+                  'gamma': [2**P for P in range(-15, 0, 2)], }
+    param_grid = {'C': [2**P for P in range(-3, 3, 1)],
+                  'gamma': [2**P for P in range(0, 10, 1)], }
+    param_grid = {'C': [2**P for P in range(-5, -1, 1)],
+                  'gamma': [2**P for P in range(-3, 3, 2)], }
+    clf = GridSearchCV(SVC(kernel='rbf', class_weight='balanced'), param_grid, n_jobs=-1, cv=3)
+
+    train_x_hist = np.array([image_2_block_LBP_hist(ii) for ii in train_x])
+    clf = clf.fit(train_x_hist, train_y)
+    clf.best_estimator_
+    # SVC(C=0.5, cache_size=200, class_weight='balanced', coef0=0.0,
+    #     decision_function_shape='ovr', degree=3, gamma=128, kernel='rbf',
+    #     max_iter=-1, probability=False, random_state=None, shrinking=True,
+    #     tol=0.001, verbose=False)
+
+
+    test_x_hist = np.array([image_2_block_LBP_hist(ii) for ii in test_x])
+    pred = clf.predict(test_x_hist)
+
+    def print_metrics(pred, logic):
+        accuracy = (pred == logic).sum() / logic.shape[0]
+        precision = np.logical_and(pred, logic).sum() / pred.sum()
+        recall = np.logical_and(pred, logic).sum() / logic.sum()
+        print("accuracy = %f, precision = %f, recall = %f" % (accuracy, precision, recall))
+        print("Classification Report:")
+        print(metrics.classification_report(logic, pred))
+        print("Confusion Matrix:")
+        print(metrics.confusion_matrix(logic, pred))
+
+    print_metrics(pred, test_y)
+    # accuracy = 0.831780, precision = 0.694753, recall = 0.969345
+    # Classification Report:
+    #               precision    recall  f1-score   support
+    #
+    #            0       0.98      0.75      0.85      5759
+    #            1       0.69      0.97      0.81      3360
+    #
+    #     accuracy                           0.83      9119
+    #    macro avg       0.84      0.86      0.83      9119
+    # weighted avg       0.87      0.83      0.83      9119
+    #
+    # Confusion Matrix:
+    # [[4328 1431]
+    #  [ 103 3257]]
+    ```
+## 特征组合与模型选择
   ```py
   train_x_hist = np.array([image_2_block_LBP_hist(ii) for ii in train_x])
   train_x_hist_16 = np.array([image_2_block_LBP_hist(ii, neighbors=16) for ii in train_x])
@@ -488,6 +446,7 @@ def image_2_block_LBP_hist(data, n_vert=3, n_hor=3, exclude_row=None, mode="YCbC
   #     decision_function_shape='ovr', degree=3, gamma=16, kernel='rbf',
   #     max_iter=-1, probability=False, random_state=None, shrinking=True,
   #     tol=0.001, verbose=False)
+
   test_x_hist = np.array([image_2_block_LBP_hist(ii) for ii in test_x])
   test_x_hist_16 = np.array([image_2_block_LBP_hist(ii, neighbors=16) for ii in test_x])
   test_x_hist_single_8 = np.array([image_2_block_LBP_hist(ii, 1, 1) for ii in test_x])
@@ -596,55 +555,6 @@ def image_2_block_LBP_hist(data, n_vert=3, n_hor=3, exclude_row=None, mode="YCbC
 
           pred = clf.predict(testing)
           print_metrics(pred, test_y)
-
-  ```
-bob.pad.face/bob/pad/face/config/algorithm/video_svm_pad_algorithm.py
-bob.pad.face/bob/pad/face/config/lbp_svm.py
-bob.pad.face/bob/pad/face/config/qm_lr.py
-bob.pad.face/bob/pad/face/extractor/LBPHistogram.py
-bob.pad.face/bob/pad/face/extractor/ImageQualityMeasure.py
-bob.pad.face/bob/pad/face/test/test.py
-## Face_Liveness_Detection - DoG
-  Face_Liveness_Detection/liveness.cpp
-  ```py
-  import skimage.feature
-  import numpy as np
-
-  ff = [skimage.feature.blob_dog(ii, min_sigma=0.5, max_sigma=50) for ii in train_x]
-  gg = [ii.shape[0] for ii in ff]
-  print(np.unique(gg))
-  # [0 1 2 3 4]
-
-  ff_test = [skimage.feature.blob_dog(ii, min_sigma=0.5, max_sigma=50) for ii in test_x]
-  gg_test = [ii.shape[0] for ii in ff_test]
-
-  def pad_or_trunc_array_constant(aa, max_row=4, max_col=4, constant_values=0):
-      if aa.shape[0] > max_row or aa.shape[1] > max_col:
-          aa = aa[:max_row, :max_col]
-      if aa.shape != (max_row, max_col):
-          pad_row = max_row - aa.shape[0]
-          pad_col = max_col - aa.shape[1]
-          aa = np.pad(aa, pad_width=((0, pad_row), (0, pad_col)), mode='constant', constant_values=constant_values)
-
-      return aa
-
-  tt = [pad_or_trunc_array_constant(ii).flatten() for ii in ff]
-  tt_test = [pad_or_trunc_array_constant(ii).flatten() for ii in ff_test]
-
-  dd = np.vstack(tt)
-  dd_test = np.vstack(tt_test)
-
-  from sklearn.svm import SVC
-  clf = SVC()
-  clf = clf.fit(dd, train_y)
-  pred = clf.predict(dd_test)
-  print_metrics(pred, test_y)
-
-  from sklearn.linear_model import LogisticRegression
-  model = LogisticRegression()
-  model = model.fit(dd, train_y)
-  pred = model.predict(dd_test)
-  print_metrics(pred, test_y)
   ```
 ***
 
@@ -1302,287 +1212,537 @@ bob.pad.face/bob/pad/face/test/test.py
    [   0 3360]]
   ```
 ## Testing
-```py
-C = 8.000000, gamma = 32.000000
-accuracy = 0.913697, precision = 0.815551, recall = 0.989583
-Classification Report:
-              precision    recall  f1-score   support
+  ```py
+  C = 8.000000, gamma = 32.000000
+  accuracy = 0.913697, precision = 0.815551, recall = 0.989583
+  Classification Report:
+                precision    recall  f1-score   support
 
-           0       0.99      0.87      0.93      5759
-           1       0.82      0.99      0.89      3360
+             0       0.99      0.87      0.93      5759
+             1       0.82      0.99      0.89      3360
 
-    accuracy                           0.91      9119
-   macro avg       0.90      0.93      0.91      9119
-weighted avg       0.93      0.91      0.91      9119
+      accuracy                           0.91      9119
+     macro avg       0.90      0.93      0.91      9119
+  weighted avg       0.93      0.91      0.91      9119
 
-Confusion Matrix:
-[[5007  752]
- [  35 3325]]
+  Confusion Matrix:
+  [[5007  752]
+   [  35 3325]]
 
- C = 16.000000, gamma = 32.000000
- accuracy = 0.913477, precision = 0.815151, recall = 0.989583
- Classification Report:
-               precision    recall  f1-score   support
+   C = 16.000000, gamma = 32.000000
+   accuracy = 0.913477, precision = 0.815151, recall = 0.989583
+   Classification Report:
+                 precision    recall  f1-score   support
 
-            0       0.99      0.87      0.93      5759
-            1       0.82      0.99      0.89      3360
+              0       0.99      0.87      0.93      5759
+              1       0.82      0.99      0.89      3360
 
-     accuracy                           0.91      9119
-    macro avg       0.90      0.93      0.91      9119
- weighted avg       0.93      0.91      0.91      9119
+       accuracy                           0.91      9119
+      macro avg       0.90      0.93      0.91      9119
+   weighted avg       0.93      0.91      0.91      9119
 
- Confusion Matrix:
- [[5005  754]
-  [  35 3325]]
+   Confusion Matrix:
+   [[5005  754]
+    [  35 3325]]
 
- C = 128.000000, gamma = 32.000000
- accuracy = 0.913477, precision = 0.815151, recall = 0.989583
- Classification Report:
-               precision    recall  f1-score   support
+   C = 128.000000, gamma = 32.000000
+   accuracy = 0.913477, precision = 0.815151, recall = 0.989583
+   Classification Report:
+                 precision    recall  f1-score   support
 
-            0       0.99      0.87      0.93      5759
-            1       0.82      0.99      0.89      3360
+              0       0.99      0.87      0.93      5759
+              1       0.82      0.99      0.89      3360
 
-     accuracy                           0.91      9119
-    macro avg       0.90      0.93      0.91      9119
- weighted avg       0.93      0.91      0.91      9119
+       accuracy                           0.91      9119
+      macro avg       0.90      0.93      0.91      9119
+   weighted avg       0.93      0.91      0.91      9119
 
- Confusion Matrix:
- [[5005  754]
-  [  35 3325]]
+   Confusion Matrix:
+   [[5005  754]
+    [  35 3325]]
 
-C = 512.000000, gamma = 32.000000
-accuracy = 0.913477, precision = 0.815151, recall = 0.989583
-Classification Report:
-              precision    recall  f1-score   support
+  C = 512.000000, gamma = 32.000000
+  accuracy = 0.913477, precision = 0.815151, recall = 0.989583
+  Classification Report:
+                precision    recall  f1-score   support
 
-           0       0.99      0.87      0.93      5759
-           1       0.82      0.99      0.89      3360
+             0       0.99      0.87      0.93      5759
+             1       0.82      0.99      0.89      3360
 
-    accuracy                           0.91      9119
-   macro avg       0.90      0.93      0.91      9119
-weighted avg       0.93      0.91      0.91      9119
+      accuracy                           0.91      9119
+     macro avg       0.90      0.93      0.91      9119
+  weighted avg       0.93      0.91      0.91      9119
 
-Confusion Matrix:
-[[5005  754]
- [  35 3325]]
+  Confusion Matrix:
+  [[5005  754]
+   [  35 3325]]
 
-C = 8.000000, gamma = 32.000000
-accuracy = 0.913697, precision = 0.815551, recall = 0.989583
-Classification Report:
-              precision    recall  f1-score   support
+  C = 8.000000, gamma = 32.000000
+  accuracy = 0.913697, precision = 0.815551, recall = 0.989583
+  Classification Report:
+                precision    recall  f1-score   support
 
-           0       0.99      0.87      0.93      5759
-           1       0.82      0.99      0.89      3360
+             0       0.99      0.87      0.93      5759
+             1       0.82      0.99      0.89      3360
 
-    accuracy                           0.91      9119
-   macro avg       0.90      0.93      0.91      9119
-weighted avg       0.93      0.91      0.91      9119
+      accuracy                           0.91      9119
+     macro avg       0.90      0.93      0.91      9119
+  weighted avg       0.93      0.91      0.91      9119
 
-Confusion Matrix:
-[[5007  752]
- [  35 3325]]
-```
+  Confusion Matrix:
+  [[5007  752]
+   [  35 3325]]
+  ```
 ***
-```py
-tf.enable_eager_execution()
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
-from tensorflow import keras
-
-config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5, allow_growth=True))
-sess = tf.Session(config=config)
-keras.backend.set_session(sess)
-
-aa = tf.keras.applications.xception.Xception(include_top=False, weights='imagenet')
-aa.trainable = False
-from skimage.io import imread, imsave
-bb = imread('../test_images/1.jpg')
-cc = bb.reshape([1, 976, 1920, 3]).astype(np.float32)
-dd = aa(cc).numpy()
-print(dd.shape)
-# (1, 31, 60, 2048)
-```
-```py
-class Myxception(BasicModule):
-    def __init__(self):
-        super(Myxception, self).__init__()
-        from models.xception import xception
-        model = net=xception(pretrained = True)
-        self.resnet_lay=nn.Sequential(*list(model.children())[:-1])
-        self.conv1_lay = nn.Conv2d(2048, 512, kernel_size = (1,1),stride=(1,1))
-        self.relu1_lay = nn.ReLU(inplace = True)
-        self.drop_lay = nn.Dropout2d(0.5)
-        self.global_average = nn.AdaptiveAvgPool2d((1,1))
-        self.fc_Linear_lay2 = nn.Linear(512,2)
+# Keras
+## awesome face antispoofing
+  - [JinghuiZhou/awesome_face_antispoofing](https://github.com/JinghuiZhou/awesome_face_antispoofing)
+  - **awesome_face_antispoofing Myxception**
+    ```py
+    class Myxception(BasicModule):
+        def __init__(self):
+            super(Myxception, self).__init__()
+            from models.xception import xception
+            model = net=xception(pretrained = True)
+            self.resnet_lay=nn.Sequential(*list(model.children())[:-1])
+            self.conv1_lay = nn.Conv2d(2048, 512, kernel_size = (1,1),stride=(1,1))
+            self.relu1_lay = nn.ReLU(inplace = True)
+            self.drop_lay = nn.Dropout2d(0.5)
+            self.global_average = nn.AdaptiveAvgPool2d((1,1))
+            self.fc_Linear_lay2 = nn.Linear(512,2)
 
 
-    def forward(self, x):
-        x= self.resnet_lay(x)
-        x = self.conv1_lay(x)
-        x = self.relu1_lay(x)
-        x = self.drop_lay(x)
-        x= self.global_average(x)
-        x = x.view(x.size(0),-1)
-        x = self.fc_Linear_lay2 (x)
+        def forward(self, x):
+            x= self.resnet_lay(x)
+            x = self.conv1_lay(x)
+            x = self.relu1_lay(x)
+            x = self.drop_lay(x)
+            x= self.global_average(x)
+            x = x.view(x.size(0),-1)
+            x = self.fc_Linear_lay2 (x)
 
-        return x
-```
-```py
-from tensorflow import keras
-from tensorflow.keras import layers
-model = keras.Sequential([
-    layers.Conv2D(512, 1, strides=1, activation='relu'),
-    layers.Dropout(0.5),
-    layers.AveragePooling2D(pool_size=1),
-    layers.Flatten(),
-    layers.Dense(2)
-])
+            return x
+    ```
+    ```py
+    from loss import FocalLoss
+    criterion = FocalLoss(2)
+    optimizer = torch.optim.SGD(model.parameters() ,
+                lr =opt.lr ,
+                momentum = 0.9,
+                weight_decay= 1e-5)
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer ,
+            step_size = opt.lr_stepsize , gamma = 0.5)
+    ```
+    ```py
+    ''' Resnet50 CrossEntropyLoss + AdamOptimizer '''
+    Train MyresNet50 On Anti-spoofing: 100%|| 219/219 [01:39<00:00,  2.21batch/s]
+    Train Loss: 0.01150982 Acc: 0.9977
+    Val MyresNet50 On Anti-spoofing: 100%|| 1141/1141 [03:20<00:00,  5.68batch/s]
+    Val Loss: 3.05790262 Acc: 0.5990
+    Best val Epoch: 2,Best val TPR: 0.909151
 
-def load_train_test_data(raw_path="./", limit=None):
-    cur_dir = os.getcwd()
-    os.chdir(raw_path.replace('~', os.environ['HOME']))
-    if not os.path.exists("./train_test_dataset.npz"):
-        imposter_train, imposter_train_f = image_collection_by_file("imposter_train_raw.txt", "ImposterRaw", limit=limit, save_base_path="./Cropped/imposter_train")
-        client_train, client_train_f = image_collection_by_file("client_train_raw.txt", "ClientRaw", limit=limit, save_base_path="./Cropped/client_train")
-        imposter_test, imposter_test_f = image_collection_by_file("imposter_test_raw.txt", "ImposterRaw", limit=limit, save_base_path="./Cropped/imposter_test")
-        client_test, client_test_f = image_collection_by_file("client_test_raw.txt", "ClientRaw", limit=limit, save_base_path="./Cropped/client_test")
+    ''' Resnet50 CrossEntropyLoss + SGD '''
+    Train MyresNet50 On Anti-spoofing: 100%|| 219/219 [00:43<00:00,  5.07batch/s]
+    Train Loss: 0.00066142 Acc: 0.9997
+    Val MyresNet50 On Anti-spoofing: 100%|| 1141/1141 [01:17<00:00, 14.63batch/s]
+    Val Loss: 0.21663609 Acc: 0.8887
+    Best val Epoch: 2,Best val TPR: 0.998379
 
-        train_x = np.concatenate([imposter_train, client_train])
-        train_y = np.array([0] * imposter_train.shape[0] + [1] * client_train.shape[0])
-        test_x = np.concatenate([imposter_test, client_test])
-        test_y = np.array([0] * imposter_test.shape[0] + [1] * client_test.shape[0])
+    ''' Resnet50 FocalLoss + AdamOptimizer '''
+    Train MyresNet50 On Anti-spoofing: 100%|| 219/219 [00:39<00:00,  5.49batch/s]
+    Train Loss: 0.00420479 Acc: 0.9954
+    Val MyresNet50 On Anti-spoofing: 100%|| 1141/1141 [01:04<00:00, 17.65batch/s]
+    Val Loss: 0.67913505 Acc: 0.5637
+    Best val Epoch: 4,Best val TPR: 0.856101
 
-        np.savez("train_test_dataset", train_x=train_x, train_y=train_y, test_x=test_x, test_y=test_y)
-    else:
-        tt = np.load("train_test_dataset.npz")
-        train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
+    ''' Resnet50 FocalLoss + SGD '''
+    Train MyresNet50 On Anti-spoofing: 100%|| 219/219 [00:30<00:00,  7.08batch/s]
+    Train Loss: 0.00006967 Acc: 1.0000
+    Val MyresNet50 On Anti-spoofing: 100%|| 1141/1141 [00:58<00:00, 19.54batch/s]
+    Val Loss: 0.04344309 Acc: 0.9406
+    Best val Epoch: 2,Best val TPR: 0.997743
 
-    os.chdir(cur_dir)
-    return train_x, train_y, test_x, test_y
-train_x, train_y, test_x, test_y = load_train_test_data('~/workspace/datasets/NUAA')
+    ''' Resnet50 CrossEntropyLoss + Adadelta '''
+    Train MyresNet50 On Anti-spoofing: 100%|| 219/219 [00:31<00:00,  6.96batch/s]
+    Train Loss: 0.00217301 Acc: 1.0000
+    Val MyresNet50 On Anti-spoofing: 100%|| 1141/1141 [00:55<00:00, 20.50batch/s]
+    Val Loss: 0.01960563 Acc: 0.9724
+    Best val Epoch: 4,Best val TPR: 0.999306
+    ```
+    ```py
+    resnet50(pretrained=False, progress=True, **kwargs)
+    ResNet-50 model from
+    `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
 
-def split_image(image, n_hor=3, n_vert=3, exclude_row=None):
-    rr, cc = image.shape[:2]
-    for irr in range(n_hor):
-        if irr == exclude_row:
-            continue
-        rr_start = int(rr * irr / n_hor)
-        rr_end = int(rr * (irr + 1) / n_hor)
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    ```
+    ```py
+    class FtrlOptimizer(tensorflow.python.training.optimizer.Optimizer)
+     |  FtrlOptimizer(learning_rate, learning_rate_power=-0.5, initial_accumulator_value=0.1, l1_regularization_strength=0.0, l2_regularization_strength=0.0, use_locking=False, name='Ftrl', accum_name=None, linear_name=None, l2_shrinkage_regularization_strength=0.0)
+    ```
+  - **keras Xception**
+    ```py
+    tf.enable_eager_execution()
 
-        for icc in range(n_vert):
-            cc_start = int(cc * icc / n_vert)
-            cc_end = int(cc * (icc + 1) / n_vert)
-            yield image[rr_start: rr_end, cc_start: cc_end]
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-def stack_block_lbp_histogram(data, neighbors=8, method='uniform'):
-    # calculating the lbp image
-    hists = []
-    bins = (neighbors * neighbors - neighbors + 3) if method == "nri_uniform" else (neighbors + 2)
-    for data_channel in data.transpose(2, 0, 1):
-        lbpimage = skimage.feature.local_binary_pattern(data_channel, neighbors, 1.0, method=method).astype(np.int8)
-        hist = np.histogram(lbpimage, bins=bins)[0]
-        hists.append(hist / hist.sum())
+    from tensorflow import keras
 
-    return hists
+    config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5, allow_growth=True))
+    sess = tf.Session(config=config)
+    keras.backend.set_session(sess)
 
-def image_2_block_LBP_hist(data, n_vert=5, n_hor=5, exclude_row=2, mode="YCbCr", neighbors=8, lbp_method='nri_uniform'):
-    if mode.lower() == "hsv":
-        data = skimage.color.rgb2hsv(data)
-    elif mode.lower() == "ycbcr":
-        data = skimage.color.rgb2ycbcr(data)
+    aa = tf.keras.applications.xception.Xception(include_top=False, weights='imagenet')
+    aa.trainable = False
+    from skimage.io import imread, imsave
+    bb = imread('../test_images/1.jpg')
+    cc = bb.reshape([1, 976, 1920, 3]).astype(np.float32)
+    dd = aa(cc).numpy()
+    print(dd.shape)
+    # (1, 31, 60, 2048)
+    ```
+    ```py
+    model = keras.Sequential()
+    model.add(aa)
 
-    # Make sure the data can be split into equal blocks:
-    # row_max = int(data.shape[0] / n_vert) * n_vert
-    # col_max = int(data.shape[1] / n_hor) * n_hor
-    # data = data[:row_max, :col_max]
-    # blocks = [sub_block for iid, block in enumerate(np.vsplit(data, n_hor)) if iid != 2 for sub_block in np.hsplit(block, n_vert)]
-    blocks = split_image(data, n_hor, n_vert, exclude_row=exclude_row)
-    hists = [stack_block_lbp_histogram(block, neighbors=neighbors, method=lbp_method) for block in blocks]
-    hists_size = len(hists)
-    hist = np.array(hists)
-    hist = hist / hists_size  # histogram normalization
+    import tensorflow as tf
+    tf.enable_eager_execution()
 
-    return hist
+    from tensorflow import keras
+    config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))                                                                                                                                             
+    sess = tf.Session(config=config)
+    keras.backend.set_session(sess)
+    aa = tf.keras.applications.xception.Xception(include_top=False, weights='imagenet')
+    aa.trainable = False
 
-import skimage
-import skimage.feature
-train_x_hist = np.array([image_2_block_LBP_hist(ii).transpose(0, 2, 1) for ii in train_x])
-test_x_hist = np.array([image_2_block_LBP_hist(ii).transpose(0, 2, 1) for ii in test_x])
-train_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in train_y])
-test_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in test_y])
+    import numpy as np
+    import os
+    tt = np.load(os.environ['HOME'] + '/workspace/datasets/NUAA/train_test_dataset.npz')
+    train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
 
-np.savez("train_test_cnn_ycbcr_5_nri_uniform",
-          train_x_hist=train_x_hist,
-          test_x_hist=test_x_hist,
-          train_y_oh=train_y_oh,
-          test_y_oh=test_y_oh,
-)
-tt = np.load("train_test_cnn_ycbcr_5_nri_uniform.npz")
-train_x_hist, test_x_hist, train_y_oh, test_y_oh = tt["train_x_hist"], tt["test_x_hist"], tt["train_y_oh"], tt["test_y_oh"]
+    from skimage import img_as_float32
+    tt = np.array([img_as_float32(ii) for ii in train_x])
+    tt = np.array([img_as_float32(ii) for ii in test_x])
 
-model(train_x_hist[:10]).numpy()
+    cc = []
+    for ii in range(0, tt.shape[0], 50):
+        print(ii, ii + 50)
+        cc.append(aa(tt[ii: ii + 50]).numpy())
 
-callbacks = [keras.callbacks.TensorBoard(log_dir='./logs')]
-model.fit(train_x_hist, train_y_oh, batch_size=32, epochs=50, callbacks=callbacks, validation_data=(test_x_hist, test_y_oh))
+    dd = np.vstack(cc)
+    ee = np.array([ii.flatten() for ii in dd])
+    ```
+    ```py
+    help(layers.GlobalAveragePooling2D)
 
-config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5, allow_growth=True))
-sess = tf.Session(config=config)
-keras.backend.set_session(sess)
+    import tensorflow as tf
+    from tensorflow import keras
+    from tensorflow.python.keras import layers
+    img_shape = (112, 112, 3)
+    inputs = layers.Input(shape=img_shape)
 
-model = keras.Sequential([
-    layers.Conv2D(512, 1, strides=1, activation='relu'),
-    layers.Dropout(0.5),
-    layers.AveragePooling2D(pool_size=1),
-    layers.Flatten(),
-    layers.Dense(2, activation=tf.nn.softmax)
-])
+    xception = tf.keras.applications.xception.Xception(include_top=False, weights='imagenet')
+    xception.trainable = True
+    xx = xception(inputs)
 
-# loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=outputs))
-# loss = tf.losses.mean_squared_error(tf.argmax(labels, axis=-1), prediction)
-BATCH_SIZE = 16
-DECAY_STEPS = train_x_hist.shape[0] / BATCH_SIZE
-DECAY_RATE = 0.99
-LEARNING_RATE_BASE = 0.001
-global_step = tf.train.get_global_step()
-learning_rate = tf.train.exponential_decay(LEARNING_RATE_BASE, global_step, decay_steps=DECAY_STEPS, decay_rate=DECAY_RATE)
+    resnet50 = tf.keras.applications.resnet50.ResNet50(include_top=False, weights='imagenet')
+    resnet50.trainable = True
+    xx = resnet50(inputs)
 
-global_step = tf.Variable(0, trainable=False)
-starter_learning_rate = 0.001
-learning_rate = tf.compat.v1.train.exponential_decay(starter_learning_rate, global_step, DECAY_STEPS, DECAY_RATE, staircase=True)
-# Passing global_step to minimize() will increment it at each step.
-learning_step = (
-    tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
-    .minimize(...my loss..., global_step=global_step)
-)
+    conv1 = layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001))(xx)
+    drop1 = layers.Dropout(0.5)(conv1)
+    pool1 = layers.AveragePooling2D(pool_size=512, strides=512, padding='same')(drop1)
+    pool1 = layers.GlobalAveragePooling2D()(drop1)
+    flatten1 = layers.Flatten()(pool1)
+    output = layers.Dense(2, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001))(flatten1)
+    model = tf.keras.models.Model(inputs=[inputs], outputs=[output])
+    model.summary()
 
-model.compile(optimizer=tf.train.AdamOptimizer(0.001), loss='categorical_crossentropy', metrics=['accuracy'])
-# model.compile(optimizer=tf.train.MomentumOptimizer(0.001, momentum=0.9), loss='categorical_crossentropy', metrics=['accuracy'])
+    loss = focal_loss()
+    model.compile(optimizer=tf.train.AdamOptimizer(0.01), loss=tf.nn.softmax_cross_entropy_with_logits_v2, metrics=['accuracy'])
+    model.compile(optimizer=tf.train.MomentumOptimizer(0.001, momentum=0.9), loss=loss, metrics=['accuracy'])
+    model.compile(optimizer=tf.train.RMSPropOptimizer(0.01, momentum=0.9), loss='categorical_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer=tf.train.AdadeltaOptimizer(0.01), loss=keras.losses.categorical_crossentropy, metrics=['accuracy'])
 
-def scheduler(epoch):
-    return 0.001 if epoch < 10 else 0.001 * tf.math.exp(0.1 * (10 - epoch))
+    import os
+    import numpy as np
+    tt = np.load(os.environ['HOME'] + '/workspace/datasets/NUAA/train_test_dataset.npz')
+    train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
+    train_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in train_y])
+    test_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in test_y])
 
-callbacks = [keras.callbacks.TensorBoard(log_dir='./logs'), tf.keras.callbacks.LearningRateScheduler(scheduler)]
-model.fit(train_x_hist, train_y_oh, batch_size=32, epochs=50, callbacks=callbacks, validation_data=(test_x_hist, test_y_oh))
+    callbacks = [keras.callbacks.TensorBoard(log_dir='./logs'), keras.callbacks.ModelCheckpoint("./keras_checkpoints", save_best_only=True)]
+    model.fit(train_x, train_y_oh, batch_size=16, epochs=50, callbacks=callbacks, validation_data=(test_x, test_y_oh))
+    model.fit(train_x, train_y_oh, batch_size=32, epochs=50, callbacks=callbacks, validation_data=(test_x, test_y_oh))
+    ```
+## Keras 使用 LBP 特征训练 CNN 模型
+  - **训练数据**
+    ```py
+    import skimage
+    import skimage.feature
+    import numpy as np
+    tt = np.load(os.environ['HOME'] + '/workspace/datasets/NUAA/train_test_dataset.npz')
+    train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
 
-reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.001)
-|  model.fit(X_train, Y_train, callbacks=[reduce_lr])
-callbacks = [keras.callbacks.TensorBoard(log_dir='./logs'), reduce_lr]
+    def split_image(image, n_hor=3, n_vert=3, exclude_row=None):
+        rr, cc = image.shape[:2]
+        for irr in range(n_hor):
+            if irr == exclude_row:
+                continue
+            rr_start = int(rr * irr / n_hor)
+            rr_end = int(rr * (irr + 1) / n_hor)
 
-learning_rate = tf.Variable(0.001)
-tf_opt = tf.train.AdadeltaOptimizer(learning_rate)
-opt = keras.optimizers.TFOptimizer(tf_opt)
-opt.lr = learning_rate
+            for icc in range(n_vert):
+                cc_start = int(cc * icc / n_vert)
+                cc_end = int(cc * (icc + 1) / n_vert)
+                yield image[rr_start: rr_end, cc_start: cc_end]
+
+    def stack_block_lbp_histogram(data, neighbors=8, method='uniform'):
+        # calculating the lbp image
+        hists = []
+        bins = (neighbors * neighbors - neighbors + 3) if method == "nri_uniform" else (neighbors + 2)
+        for data_channel in data.transpose(2, 0, 1):
+            lbpimage = skimage.feature.local_binary_pattern(data_channel, neighbors, 1.0, method=method).astype(np.int8)
+            hist = np.histogram(lbpimage, bins=bins)[0]
+            hists.append(hist / hist.sum())
+
+        return hists
+
+    def image_2_block_LBP_hist(data, n_vert=5, n_hor=5, exclude_row=2, mode="YCbCr", neighbors=8, lbp_method='nri_uniform'):
+        if mode.lower() == "hsv":
+            data = skimage.color.rgb2hsv(data)
+          elif mode.lower() == "ycbcr":
+            data = skimage.color.rgb2ycbcr(data)
+
+        blocks = split_image(data, n_hor, n_vert, exclude_row=exclude_row)
+        hists = [stack_block_lbp_histogram(block, neighbors=neighbors, method=lbp_method) for block in blocks]
+        hists_size = len(hists)
+        hist = np.array(hists)
+        hist = hist / hists_size  # histogram normalization
+
+        return hist
+
+    train_x_hist = np.array([image_2_block_LBP_hist(ii).transpose(0, 2, 1) for ii in train_x])
+    test_x_hist = np.array([image_2_block_LBP_hist(ii).transpose(0, 2, 1) for ii in test_x])
+    train_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in train_y])
+    test_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in test_y])
+
+    np.savez("train_test_cnn_ycbcr_5_nri_uniform",
+              train_x_hist=train_x_hist,
+              test_x_hist=test_x_hist,
+              train_y_oh=train_y_oh,
+              test_y_oh=test_y_oh,
+    )
+    tt = np.load("train_test_cnn_ycbcr_5_nri_uniform.npz")
+    train_x_hist, test_x_hist, train_y_oh, test_y_oh = tt["train_x_hist"], tt["test_x_hist"], tt["train_y_oh"], tt["test_y_oh"]
+    ```
+  - **Keras CNN 分类器**
+    ```py
+    from tensorflow import keras
+    config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5, allow_growth=True))
+    sess = tf.Session(config=config)
+    keras.backend.set_session(sess)
+
+    from tensorflow.keras import layers
+    model = keras.Sequential([
+        layers.Conv2D(512, 1, strides=1, activation='relu'),
+        layers.Dropout(0.5),
+        layers.AveragePooling2D(pool_size=1),
+        layers.Flatten(),
+        layers.Dense(2, activation=tf.nn.softmax)
+    ])
+
+    model(train_x_hist[:10]).numpy()
+
+    ''' 模型训练 '''
+    model.compile(optimizer=tf.train.AdamOptimizer(0.001), loss='categorical_crossentropy', metrics=['accuracy'])
+    # model.compile(optimizer=tf.train.MomentumOptimizer(0.001, momentum=0.9), loss='categorical_crossentropy', metrics=['accuracy'])
+
+    callbacks = [keras.callbacks.TensorBoard(log_dir='./logs')]
+    model.fit(train_x_hist, train_y_oh, batch_size=32, epochs=50, callbacks=callbacks, validation_data=(test_x_hist, test_y_oh))
+
+    ''' 模型测试 '''
+    aa = np.load('../test_PAD.npy')
+    tests = np.array([image_2_block_LBP_hist(ii).transpose(0, 2, 1) for ii in aa])
+    pp = model.predict(tests)
+    (aa.shape[0] - np.argmax(pp, 1).sum()) / aa.shape[0]
+
+    ''' 模型保存 '''
+    tf.saved_model.simple_save(keras.backend.get_session(), './', inputs={'input_image': model.inputs[0]}, outputs={t.name:t for t in model.outputs})
+    ```
+  - **Keras 滑动平均学习率**
+    ```py
+    ''' tf exponential_decay '''
+    BATCH_SIZE = 16
+    DECAY_STEPS = train_x_hist.shape[0] / BATCH_SIZE
+    DECAY_RATE = 0.99
+    LEARNING_RATE_BASE = 0.001
+    global_step = tf.train.get_global_step()
+    learning_rate = tf.train.exponential_decay(LEARNING_RATE_BASE, global_step, decay_steps=DECAY_STEPS, decay_rate=DECAY_RATE)
+
+    global_step = tf.Variable(0, trainable=False)
+    starter_learning_rate = 0.001
+    learning_rate = tf.compat.v1.train.exponential_decay(starter_learning_rate, global_step, DECAY_STEPS, DECAY_RATE, staircase=True)
+    # Passing global_step to minimize() will increment it at each step.
+    learning_step = (
+        tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
+        .minimize(...my loss..., global_step=global_step)
+    )
+
+    ''' callbacks scheduler '''
+    def scheduler(epoch):
+        return 0.001 if epoch < 10 else 0.001 * tf.math.exp(0.1 * (10 - epoch))
+
+    callbacks = [keras.callbacks.TensorBoard(log_dir='./logs'), tf.keras.callbacks.LearningRateScheduler(scheduler)]
+    model.fit(train_x_hist, train_y_oh, batch_size=32, epochs=50, callbacks=callbacks, validation_data=(test_x_hist, test_y_oh))
+
+    ''' callbacks ReduceLROnPlateau '''
+    reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.001)
+    |  model.fit(X_train, Y_train, callbacks=[reduce_lr])
+    callbacks = [keras.callbacks.TensorBoard(log_dir='./logs'), reduce_lr]
+
+    ''' Keras optimizers '''
+    learning_rate = tf.Variable(0.001)
+    tf_opt = tf.train.AdadeltaOptimizer(learning_rate)
+    opt = keras.optimizers.TFOptimizer(tf_opt)
+    opt.lr = learning_rate
+    ```
+***
+
+# 其他特征
+## Face_Liveness_Detection - DoG
+  Face_Liveness_Detection/liveness.cpp
+  ```py
+  import skimage.feature
+  import numpy as np
+
+  ff = [skimage.feature.blob_dog(ii, min_sigma=0.5, max_sigma=50) for ii in train_x]
+  gg = [ii.shape[0] for ii in ff]
+  print(np.unique(gg))
+  # [0 1 2 3 4]
+
+  ff_test = [skimage.feature.blob_dog(ii, min_sigma=0.5, max_sigma=50) for ii in test_x]
+  gg_test = [ii.shape[0] for ii in ff_test]
+
+  def pad_or_trunc_array_constant(aa, max_row=4, max_col=4, constant_values=0):
+      if aa.shape[0] > max_row or aa.shape[1] > max_col:
+          aa = aa[:max_row, :max_col]
+      if aa.shape != (max_row, max_col):
+          pad_row = max_row - aa.shape[0]
+          pad_col = max_col - aa.shape[1]
+          aa = np.pad(aa, pad_width=((0, pad_row), (0, pad_col)), mode='constant', constant_values=constant_values)
+
+      return aa
+
+  tt = [pad_or_trunc_array_constant(ii).flatten() for ii in ff]
+  tt_test = [pad_or_trunc_array_constant(ii).flatten() for ii in ff_test]
+
+  dd = np.vstack(tt)
+  dd_test = np.vstack(tt_test)
+
+  from sklearn.svm import SVC
+  clf = SVC()
+  clf = clf.fit(dd, train_y)
+  pred = clf.predict(dd_test)
+  print_metrics(pred, test_y)
+
+  from sklearn.linear_model import LogisticRegression
+  model = LogisticRegression()
+  model = model.fit(dd, train_y)
+  pred = model.predict(dd_test)
+  print_metrics(pred, test_y)
+  ```
+## 灰度共生矩阵(GLCM)
+  1. 算法简介
+  灰度共生矩阵法(GLCM， Gray-level co-occurrence matrix)，就是通过计算灰度图像得到它的共生矩阵，然后透过计算该共生矩阵得到矩阵的部分特征值，来分别代表图像的某些纹理特征（纹理的定义仍是难点）。灰度共生矩阵能反映图像灰度关于方向、相邻间隔、变化幅度等综合信息，它是分析图像的局部模式和它们排列规则的基础。
+
+  对于灰度共生矩阵的理解，需要明确几个概念：方向，偏移量和灰度共生矩阵的阶数。
+  • 方向：一般计算过程会分别选在几个不同的方向来进行，常规的是水平方向0°，垂直90°，以及45°和135°；
+  • 步距d：中心像元（在下面的例程中进行说明）；
+  • 灰度共生矩阵的阶数：与灰度图像灰度值的阶数相同，即当灰度图像灰度值阶数为N时，灰度共生矩阵为N × N的矩阵；
+
+  GLCM将拍摄的图像（作为矩阵），定义角度（[“0”，“45”，“90”，“135”]__角度在我这影响不大） 和整数距离d（[1, 2, 8, 16]__‘1’最优）。GLCM的轴由图像中存在的灰度级定义。扫描图像的每个像素并将其存储为“参考像素”。然后将参考像素与距离d的像素进行比较，该距离为角度θ（其中“0”度是右边的像素，“90”是上面的像素）远离参考像素，称为相邻像素。每次找到参考值和邻居值对时，GLCM的相应行和列递增1。
+
+  ```py
+  greycomatrix(image, distances, angles, levels=None, symmetric=False, normed=False)
+      Calculate the grey-level co-occurrence matrix.
+
+      A grey level co-occurrence matrix is a histogram of co-occurring
+      greyscale values at a given offset over an image.
+  ```
+  图像特征值_峰度与偏度
+  Kurtosis(峰度）： 表征概率密度分布曲线在平均值处峰值高低的特征数，是对Sample构成的分布的峰值是否突兀或是平坦的描述。直观看来，峰度反映了峰部的尖度。样本的峰度是和正态分布相比较而言的统计量，计算时间序列x的峰度，峰度用于度量x偏离某分布的情况，正态分布的峰度为3。如果峰度大于3，峰的形状比较尖，比正态分布峰要陡峭。反之亦然; 在统计学中，峰度衡量实数随机变量概率分布的峰态，峰度高就意味着方差增大是由低频度的大于或小于平均值的极端差值引起的。
+  Skewness(偏度)： 是对Sample构成的分布的对称性状况的描述。计算时间序列x的偏度，偏度用于衡量x的对称性。若偏度为负，则x均值左侧的离散度比右侧强；若偏度为正，则x均值左侧的离散度比右侧弱。对于正态分布(或严格对称分布)偏度等于O。
+  YY:（这两个值比较熟悉，以前有个图计算的项目用Spark做，SparkSQL里就有该函数）
+
+  Python的2种参考（计算数据均值、标准差、偏度、峰度）：
+  ```py
+  import numpy as np
+  R = np.array([1， 2， 3， 4， 5， 6]) #初始化一组数据
+  R_mean = np.mean(R) #计算均值
+  R_var = np.var(R)  #计算方差
+  R_sc = np.mean((R - R_mean) ** 3)  #计算偏斜度
+  R_ku = np.mean((R - R_mean) ** 4) / pow(R_var， 2) #计算峰度
+  print([R_mean， R_var， R_sc， R_ku])
 
 
-aa = np.load('../test_PAD.npy')
-tests = np.array([image_2_block_LBP_hist(ii).transpose(0, 2, 1) for ii in aa])
-pp = model.predict(tests)
-(aa.shape[0] - np.argmax(pp, 1).sum()) / aa.shape[0]
+  import numpy as np
+  from scipy import stats
+  x = np.random.randn(10000)
+  mu = np.mean(x， axis=0)
+  sigma = np.std(x， axis=0)
+  skew = stats.skew(x)
+  kurtosis = stats.kurtosis(x)
+  ```
+  使用GLCM特征值+SVM对纹理图片分类
+  通过提取灰度直方图的均值、标准差、峰度等统计特性和灰度共生矩阵的能量、相关性、对比度、熵值等如上所属纹理特性，作为 SVM 训练特征，得到 SVM 分类器，即可用于纹理图像的处理。
+  8个类别，图片质量稍低，但也得到了0.8左右的准确率，说明了统计特征的有效性。
+## Gaussian
+  ```py
+  tt = np.load("~/workspace/datasets/NUAA/train_test_dataset.npz")
+  train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
 
-tf.saved_model.simple_save(keras.backend.get_session(), './', inputs={'input_image': model.inputs[0]}, outputs={t.name:t for t in model.outputs})
-```
+  from skimage import filters, img_as_float
+  from skimage.color import rgb2grey
+
+  aa = train_x[0]
+  plt.imshow(np.hstack([img_as_float(aa), filters.gaussian(aa, sigma=1), img_as_float(aa)-filters.gaussian(aa, sigma=1)]))
+  aa = train_x[1743]
+  plt.imshow(np.hstack([img_as_float(aa), filters.gaussian(aa, sigma=1), img_as_float(aa)-filters.gaussian(aa, sigma=1)]))
+
+  def gaussian_noise_single(img, sigma=1):
+      img = rgb2grey(img)
+      gaussian_noise = img - filters.gaussian(img, sigma=sigma, multichannel=False)
+      # return gaussian_noise.flatten()
+      return gaussian_noise
+
+  train_x_gau_img = np.array([gaussian_noise_single(ii) for ii in train_x])
+  test_x_gau_img = np.array([gaussian_noise_single(ii) for ii in test_x])
+
+  train_x_gau = np.array([1 - ii.flatten() for ii in train_x_gau_img])
+  test_x_gau = np.array([1 - ii.flatten() for ii in test_x_gau_img])
+
+  def plot_multi(num_start=0, step=10, split_num=1743, source=train_x_gau_img):
+      aa = np.hstack(source[num_start: num_start + step])
+      bb = np.hstack(source[split_num + num_start: split_num + num_start + step])
+      plt.imshow(np.vstack([aa, bb]))
+  ```
+  ```py
+  plt.imshow(np.hstack([train_x_gau_img[0], train_x_gau_img[1743]]))
+
+  plt.imshow(np.hstack([filters.sobel(rgb2grey(train_x[0])), filters.sobel(rgb2grey(train_x[1743]))]))
+
+
+  plt.imshow(np.hstack([filters.gabor(rgb2grey(train_x[0]), 0.6)[0], filters.gabor(rgb2grey(train_x[1743]), 0.6)[0]]))
+  plt.imshow(np.hstack([filters.gabor(rgb2grey(train_x[0]), 0.6)[1], filters.gabor(rgb2grey(train_x[1743]), 0.6)[1]]))
+  plt.imshow(np.hstack([filters.gabor(rgb2grey(train_x[500]), 0.6)[1], filters.gabor(rgb2grey(train_x[1743 + 500]), 0.6)[1]]))
+
+  plt.imshow(np.hstack([filters.sobel_h(rgb2grey(train_x[0])), filters.sobel_h(rgb2grey(train_x[1743]))]))
+  plt.imshow(np.hstack([filters.sobel_v(rgb2grey(train_x[0])), filters.sobel_v(rgb2grey(train_x[1743]))]))
+  ```
+***
 
 人脸识别模型：
     人脸识别 insightface 根据项目需求部署，调试等；
