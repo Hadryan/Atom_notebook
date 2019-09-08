@@ -142,27 +142,26 @@ plt.tight_layout()
 ***
 
 # DICOM 数据集
-	```py
-	idd = glob2.glob('./*/*.dcm')
+  ```py
+  idd = glob2.glob('./*/*.dcm')
 
-	for ii in idd:
-	    if not os.path.exists(ii + '.png'):
-	        ipp = pydicom.dcmread(ii).pixel_array
-	        if ipp.shape[0] == 512 or ipp.shape[0] == 256:
-	            plt.imsave(ii + '.png', ipp, cmap=pylab.cm.bone)
-	        else:
-	            for id, ijj in enumerate(ipp):
-	                plt.imsave('{}_{}.png'.format(ii, id), ijj, cmap='gray')
+  for ii in idd:
+      if not os.path.exists(ii + '.png'):
+          ipp = pydicom.dcmread(ii).pixel_array
+          if ipp.shape[0] == 512 or ipp.shape[0] == 256:
+              plt.imsave(ii + '.png', ipp, cmap=pylab.cm.bone)
+          else:
+              for id, ijj in enumerate(ipp):
+                  plt.imsave('{}_{}.png'.format(ii, id), ijj, cmap='gray')
+  ```
+  ```py
+  idd = glob2.glob('./*')
 
-	```
-	```py
-	idd = glob2.glob('./*')
-
-	for ii in idd:
-	    if not os.path.exists(ii + '.png'):
-	        ipp = pydicom.dcmread(ii).pixel_array
-	        plt.imsave(ii + '.png', ipp, cmap=pylab.cm.bone)
-	```
+  for ii in idd:
+      if not os.path.exists(ii + '.png'):
+          ipp = pydicom.dcmread(ii).pixel_array
+          plt.imsave(ii + '.png', ipp, cmap=pylab.cm.bone)
+  ```
 ***
 
 # skimage segmentation
@@ -195,103 +194,103 @@ plt.tight_layout()
 	Instead of taking a color image as input, watershed requires a grayscale gradient image, where bright pixels denote a boundary between regions. The algorithm views the image as a landscape, with bright pixels forming high peaks. This landscape is then flooded from the given markers, until separate flood basins meet at the peaks. Each distinct basin then forms a different image segment. 4
 
 	As with SLIC, there is an additional compactness argument that makes it harder for markers to flood faraway pixels. This makes the watershed regions more regularly shaped. 5
-	```py
-	from skimage.color import rgb2gray
-	from skimage.filters import sobel
-	from skimage.segmentation import felzenszwalb, slic, quickshift, watershed
-	from skimage.segmentation import mark_boundaries
-	from skimage.util import img_as_float
-	from skimage.io import imread
+  ```py
+  from skimage.color import rgb2gray
+  from skimage.filters import sobel
+  from skimage.segmentation import felzenszwalb, slic, quickshift, watershed
+  from skimage.segmentation import mark_boundaries
+  from skimage.util import img_as_float
+  from skimage.io import imread
 
-	img = img_as_float(imread('./IM256.png'))[:, :, :3]
-	segments_fz = felzenszwalb(img, scale=100, sigma=0.5, min_size=50)
-	segments_slic = slic(img, n_segments=250, compactness=10, sigma=1)
-	segments_quick = quickshift(img, kernel_size=3, max_dist=6, ratio=0.5)
-	gradient = sobel(rgb2gray(img))
-	segments_watershed = watershed(gradient, markers=250, compactness=0.001)
+  img = img_as_float(imread('./000067.dcm.png'))[:, :, :3]
+  segments_fz = felzenszwalb(img, scale=100, sigma=0.5, min_size=50)
+  segments_slic = slic(img, n_segments=250, compactness=10, sigma=1)
+  segments_quick = quickshift(img, kernel_size=3, max_dist=6, ratio=0.5)
+  gradient = sobel(rgb2gray(img))
+  segments_watershed = watershed(gradient, markers=250, compactness=0.001)
 
-	print(f"Felzenszwalb number of segments: {len(np.unique(segments_fz))}")
-	print(f"SLIC number of segments: {len(np.unique(segments_slic))}")
-	print(f"Quickshift number of segments: {len(np.unique(segments_quick))}")
+  print(f"Felzenszwalb number of segments: {len(np.unique(segments_fz))}")
+  print(f"SLIC number of segments: {len(np.unique(segments_slic))}")
+  print(f"Quickshift number of segments: {len(np.unique(segments_quick))}")
 
-	fig, ax = plt.subplots(2, 2, figsize=(10, 10), sharex=True, sharey=True)
+  fig, ax = plt.subplots(2, 2, figsize=(10, 10), sharex=True, sharey=True)
 
-	ax[0, 0].imshow(mark_boundaries(img, segments_fz))
-	ax[0, 0].set_title("Felzenszwalbs's method")
-	ax[0, 1].imshow(mark_boundaries(img, segments_slic))
-	ax[0, 1].set_title('SLIC')
-	ax[1, 0].imshow(mark_boundaries(img, segments_quick))
-	ax[1, 0].set_title('Quickshift')
-	ax[1, 1].imshow(mark_boundaries(img, segments_watershed))
-	ax[1, 1].set_title('Compact watershed')
+  ax[0, 0].imshow(mark_boundaries(img, segments_fz))
+  ax[0, 0].set_title("Felzenszwalbs's method")
+  ax[0, 1].imshow(mark_boundaries(img, segments_slic))
+  ax[0, 1].set_title('SLIC')
+  ax[1, 0].imshow(mark_boundaries(img, segments_quick))
+  ax[1, 0].set_title('Quickshift')
+  ax[1, 1].imshow(mark_boundaries(img, segments_watershed))
+  ax[1, 1].set_title('Compact watershed')
 
-	for a in ax.ravel():
-	    a.set_axis_off()
+  for a in ax.ravel():
+      a.set_axis_off()
 
-	plt.tight_layout()
-	plt.show()
-	```
-	![](images/skimage_seg_fsqw.png)
+  plt.tight_layout()
+  plt.show()
+  ```
+  ![](images/skimage_seg_fsqw.png)
 ## Join segmentations
 	When segmenting an image, you may want to combine multiple alternative segmentations. The skimage.segmentation.join_segmentations() function computes the join of two segmentations, in which a pixel is placed in the same segment if and only if it is in the same segment in both segmentations.
-	```py
-	import numpy as np
-	import matplotlib.pyplot as plt
+  ```py
+  import numpy as np
+  import matplotlib.pyplot as plt
 
-	from skimage.filters import sobel
-	from skimage.measure import label
-	from skimage.segmentation import slic, join_segmentations
-	from skimage.morphology import watershed
-	from skimage.color import label2rgb, rgb2gray
-	from skimage.io import imread
+  from skimage.filters import sobel
+  from skimage.measure import label
+  from skimage.segmentation import slic, join_segmentations
+  from skimage.morphology import watershed
+  from skimage.color import label2rgb, rgb2gray
+  from skimage.io import imread
 
-	img = (rgb2gray(imread('./IM256.png')) * 255).astype(np.uint8)
+  img = (rgb2gray(imread('./000067.dcm.png')) * 255).astype(np.uint8)
 
-	# Make segmentation using edge-detection and watershed.
-	edges = sobel(img)
+  # Make segmentation using edge-detection and watershed.
+  edges = sobel(img)
 
-	# Identify some background and foreground pixels from the intensity values.
-	# These pixels are used as seeds for watershed.
-	markers = np.zeros_like(img)
-	foreground, background = 1, 2
-	markers[img < 20] = background
-	markers[img > 30] = foreground
+  # Identify some background and foreground pixels from the intensity values.
+  # These pixels are used as seeds for watershed.
+  markers = np.zeros_like(img)
+  foreground, background = 1, 2
+  markers[img < 20] = background
+  markers[img > 30] = foreground
 
-	ws = watershed(edges, markers)
-	seg1 = label(ws == foreground)
+  ws = watershed(edges, markers)
+  seg1 = label(ws == foreground)
 
-	# Make segmentation using SLIC superpixels.
-	seg2 = slic(img, n_segments=117, max_iter=160, sigma=1, compactness=0.75,
-	            multichannel=False)
+  # Make segmentation using SLIC superpixels.
+  seg2 = slic(img, n_segments=117, max_iter=160, sigma=1, compactness=0.75,
+              multichannel=False)
 
-	# Combine the two.
-	segj = join_segmentations(seg1, seg2)
+  # Combine the two.
+  segj = join_segmentations(seg1, seg2)
 
-	# Show the segmentations.
-	fig, axes = plt.subplots(ncols=2, nrows=2, figsize=(9, 5),
-	                         sharex=True, sharey=True)
-	ax = axes.ravel()
-	ax[0].imshow(coins, cmap='gray')
-	ax[0].set_title('Image')
+  # Show the segmentations.
+  fig, axes = plt.subplots(ncols=2, nrows=2, figsize=(9, 5),
+                           sharex=True, sharey=True)
+  ax = axes.ravel()
+  ax[0].imshow(img, cmap='gray')
+  ax[0].set_title('Image')
 
-	color1 = label2rgb(seg1, image=img, bg_label=0)
-	ax[1].imshow(color1)
-	ax[1].set_title('Sobel+Watershed')
+  color1 = label2rgb(seg1, image=img, bg_label=0)
+  ax[1].imshow(color1)
+  ax[1].set_title('Sobel+Watershed')
 
-	color2 = label2rgb(seg2, image=img, image_alpha=0.5)
-	ax[2].imshow(color2)
-	ax[2].set_title('SLIC superpixels')
+  color2 = label2rgb(seg2, image=img, image_alpha=0.5)
+  ax[2].imshow(color2)
+  ax[2].set_title('SLIC superpixels')
 
-	color3 = label2rgb(segj, image=img, image_alpha=0.5)
-	ax[3].imshow(color3)
-	ax[3].set_title('Join')
+  color3 = label2rgb(segj, image=img, image_alpha=0.5)
+  ax[3].imshow(color3)
+  ax[3].set_title('Join')
 
-	for a in ax:
-	    a.axis('off')
-	fig.tight_layout()
-	plt.show()
-	```
-	![](images/skimage_seg_join.png)
+  for a in ax:
+      a.axis('off')
+  fig.tight_layout()
+  plt.show()
+  ```
+  ![](images/skimage_seg_join.png)
 ## Morphological Snakes
 	Morphological Snakes 1 are a family of methods for image segmentation. Their behavior is similar to that of active contours (for example, Geodesic Active Contours 2 or Active Contours without Edges 3). However, Morphological Snakes use morphological operators (such as dilation or erosion) over a binary array instead of solving PDEs over a floating point array, which is the standard approach for active contours. This makes Morphological Snakes faster and numerically more stable than their traditional counterpart.
 
@@ -300,93 +299,93 @@ plt.tight_layout()
 	MorphGAC is suitable for images with visible contours, even when these contours might be noisy, cluttered, or partially unclear. It requires, however, that the image is preprocessed to highlight the contours. This can be done using the function inverse_gaussian_gradient, although the user might want to define their own version. The quality of the MorphGAC segmentation depends greatly on this preprocessing step.
 
 	On the contrary, MorphACWE works well when the pixel values of the inside and the outside regions of the object to segment have different averages. Unlike MorphGAC, MorphACWE does not require that the contours of the object are well defined, and it works over the original image without any preceding processing. This makes MorphACWE easier to use and tune than MorphGAC.
-	```py
-	import numpy as np
-	import matplotlib.pyplot as plt
-	from skimage import data, img_as_float
-	from skimage.io import imread
-	from skimage.segmentation import (morphological_chan_vese,
-	                                  morphological_geodesic_active_contour,
-	                                  inverse_gaussian_gradient,
-	                                  checkerboard_level_set)
+  ```py
+  import numpy as np
+  import matplotlib.pyplot as plt
+  from skimage import data, img_as_float
+  from skimage.io import imread
+  from skimage.segmentation import (morphological_chan_vese,
+                                    morphological_geodesic_active_contour,
+                                    inverse_gaussian_gradient,
+                                    checkerboard_level_set)
 
 
-	def store_evolution_in(lst):
-	    """Returns a callback function to store the evolution of the level sets in
-	    the given list.
-	    """
+  def store_evolution_in(lst):
+      """Returns a callback function to store the evolution of the level sets in
+      the given list.
+      """
 
-	    def _store(x):
-	        lst.append(np.copy(x))
+      def _store(x):
+          lst.append(np.copy(x))
 
-	    return _store
-
-
-	# Morphological ACWE\
-	image = rgb2gray(imread('./IM256.png'))
-
-	# Initial level set
-	init_ls = checkerboard_level_set(image.shape, 6)
-	# List with intermediate results for plotting the evolution
-	evolution = []
-	callback = store_evolution_in(evolution)
-	ls = morphological_chan_vese(image, 35, init_level_set=init_ls, smoothing=3,
-	                             iter_callback=callback)
-
-	fig, axes = plt.subplots(2, 2, figsize=(8, 8))
-	ax = axes.flatten()
-
-	ax[0].imshow(image, cmap="gray")
-	ax[0].set_axis_off()
-	ax[0].contour(ls, [0.5], colors='r')
-	ax[0].set_title("Morphological ACWE segmentation", fontsize=12)
-
-	ax[1].imshow(ls, cmap="gray")
-	ax[1].set_axis_off()
-	contour = ax[1].contour(evolution[2], [0.5], colors='g')
-	contour.collections[0].set_label("Iteration 2")
-	contour = ax[1].contour(evolution[7], [0.5], colors='y')
-	contour.collections[0].set_label("Iteration 7")
-	contour = ax[1].contour(evolution[-1], [0.5], colors='r')
-	contour.collections[0].set_label("Iteration 35")
-	ax[1].legend(loc="upper right")
-	title = "Morphological ACWE evolution"
-	ax[1].set_title(title, fontsize=12)
+      return _store
 
 
-	# Morphological GAC
-	gimage = inverse_gaussian_gradient(image)
+  # Morphological ACWE\
+  image = rgb2gray(imread('./000067.dcm.png'))
 
-	# Initial level set
-	init_ls = np.zeros(image.shape, dtype=np.int8)
-	init_ls[10:-10, 10:-10] = 1
-	# List with intermediate results for plotting the evolution
-	evolution = []
-	callback = store_evolution_in(evolution)
-	ls = morphological_geodesic_active_contour(gimage, 230, init_ls,
-	                                           smoothing=1, balloon=-1,
-	                                           threshold=0.69,
-	                                           iter_callback=callback)
+  # Initial level set
+  init_ls = checkerboard_level_set(image.shape, 6)
+  # List with intermediate results for plotting the evolution
+  evolution = []
+  callback = store_evolution_in(evolution)
+  ls = morphological_chan_vese(image, 35, init_level_set=init_ls, smoothing=3,
+                               iter_callback=callback)
 
-	ax[2].imshow(image, cmap="gray")
-	ax[2].set_axis_off()
-	ax[2].contour(ls, [0.5], colors='r')
-	ax[2].set_title("Morphological GAC segmentation", fontsize=12)
+  fig, axes = plt.subplots(2, 2, figsize=(8, 8))
+  ax = axes.flatten()
 
-	ax[3].imshow(ls, cmap="gray")
-	ax[3].set_axis_off()
-	contour = ax[3].contour(evolution[0], [0.5], colors='g')
-	contour.collections[0].set_label("Iteration 0")
-	contour = ax[3].contour(evolution[100], [0.5], colors='y')
-	contour.collections[0].set_label("Iteration 100")
-	contour = ax[3].contour(evolution[-1], [0.5], colors='r')
-	contour.collections[0].set_label("Iteration 230")
-	ax[3].legend(loc="upper right")
-	title = "Morphological GAC evolution"
-	ax[3].set_title(title, fontsize=12)
+  ax[0].imshow(image, cmap="gray")
+  ax[0].set_axis_off()
+  ax[0].contour(ls, [0.5], colors='r')
+  ax[0].set_title("Morphological ACWE segmentation", fontsize=12)
 
-	fig.tight_layout()
-	plt.show()
-	```
-	![](images/skiamge_seg_morphological_snakes.png)
+  ax[1].imshow(ls, cmap="gray")
+  ax[1].set_axis_off()
+  contour = ax[1].contour(evolution[2], [0.5], colors='g')
+  contour.collections[0].set_label("Iteration 2")
+  contour = ax[1].contour(evolution[7], [0.5], colors='y')
+  contour.collections[0].set_label("Iteration 7")
+  contour = ax[1].contour(evolution[-1], [0.5], colors='r')
+  contour.collections[0].set_label("Iteration 35")
+  ax[1].legend(loc="upper right")
+  title = "Morphological ACWE evolution"
+  ax[1].set_title(title, fontsize=12)
+
+
+  # Morphological GAC
+  gimage = inverse_gaussian_gradient(image)
+
+  # Initial level set
+  init_ls = np.zeros(image.shape, dtype=np.int8)
+  init_ls[10:-10, 10:-10] = 1
+  # List with intermediate results for plotting the evolution
+  evolution = []
+  callback = store_evolution_in(evolution)
+  ls = morphological_geodesic_active_contour(gimage, 230, init_ls,
+                                             smoothing=1, balloon=-1,
+                                             threshold=0.69,
+                                             iter_callback=callback)
+
+  ax[2].imshow(image, cmap="gray")
+  ax[2].set_axis_off()
+  ax[2].contour(ls, [0.5], colors='r')
+  ax[2].set_title("Morphological GAC segmentation", fontsize=12)
+
+  ax[3].imshow(ls, cmap="gray")
+  ax[3].set_axis_off()
+  contour = ax[3].contour(evolution[0], [0.5], colors='g')
+  contour.collections[0].set_label("Iteration 0")
+  contour = ax[3].contour(evolution[100], [0.5], colors='y')
+  contour.collections[0].set_label("Iteration 100")
+  contour = ax[3].contour(evolution[-1], [0.5], colors='r')
+  contour.collections[0].set_label("Iteration 230")
+  ax[3].legend(loc="upper right")
+  title = "Morphological GAC evolution"
+  ax[3].set_title(title, fontsize=12)
+
+  fig.tight_layout()
+  plt.show()
+  ```
+  ![](images/skiamge_seg_morphological_snakes.png)
 ***
