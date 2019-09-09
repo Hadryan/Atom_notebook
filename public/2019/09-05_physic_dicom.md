@@ -125,6 +125,48 @@
     label = km.fit_predict(imgs[-1].reshape(-1, 3)).reshape([787, 1263])
     plt.imshow(np.hstack([rgb2gray(imgs[-1]), label]))
     ```
+## 图像匹配
+	```py
+	import numpy as np
+	import matplotlib.pyplot as plt
+	from skimage import data
+	from skimage.feature import match_template
+
+	def match_gray(image_array, token_temp_array):
+			result = match_template(image, token_temp)
+			ij = np.unravel_index(np.argmax(result), result.shape)
+			x, y = ij[::-1]
+			return x, y, result
+
+	def plot_and_match(image_name, token_temp_name):
+			image = rgb2gray(imread(image_name))
+			token_temp = rgb2gray(imread(token_temp_name))
+			x, y, result = match_gray(image, token_temp)
+
+			fig, axes = plt.subplots(1, 3, figsize=(8, 3))
+			axes[0].imshow(token_temp, cmap='gray')
+			axes[0].set_axis_off()
+			axes[0].set_title('template')
+
+			axes[1].imshow(image, cmap='gray')
+			axes[1].set_axis_off()
+			axes[1].set_title('image')
+
+			ht, wt = token_temp.shape[:2]
+			rect = plt.Rectangle((x, y), wt, ht, edgecolor='r', facecolor='none')
+			axes[1].add_patch(rect)
+
+			axes[2].imshow(result)
+			axes[2].set_axis_off()
+			axes[2].set_title('`match_template`\nresult')
+			# highlight matched region
+			axes[2].autoscale(False)
+			axes[2].plot(x, y, 'o', markeredgecolor='r', markerfacecolor='none', markersize=10)
+
+			plt.show()
+
+	plot_and_match('./dicom_png/IM258.png', './Selection_025.png')
+	```
 ## CaPTK
   - [Github CBICA/CaPTk](https://github.com/CBICA/CaPTk)
   - [Cancer Imaging Phenomics Toolkit (CaPTk)](https://cbica.github.io/CaPTk/Getting_Started.html)
@@ -135,6 +177,7 @@
 ***
 
 # sunny_demmo
+	The denoised result image obtained from Gaussian filter has blurred edges. However, the result from pixelwise adaptive wiener filtering technique show that sharp edges are preserved
   ```py
   # MATLAB
   H = fspecial('Gaussian', [r, c], sigma);
@@ -411,3 +454,29 @@
   ```
   ![](images/skiamge_seg_morphological_snakes.png)
 ***
+
+# sitk segmentation
+```py
+img = imread('cthead1.png')
+img = sitk.GetImageFromArray(rgb2gray(img))
+feature_img = sitk.GradientMagnitude(img)
+plt.imshow(sitk.GetArrayFromImage(feature_img), cmap='gray')
+
+ws_img = sitk.MorphologicalWatershed(feature_img, level=0, markWatershedLine=True, fullyConnected=False)
+plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(ws_img)))
+
+min_img = sitk.RegionalMinima(feature_img, backgroundValue=0, foregroundValue=1.0, fullyConnected=False, flatIsMinima=True)
+marker_img = sitk.ConnectedComponent(min_img)
+plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(marker_img)))
+
+ws = sitk.MorphologicalWatershedFromMarkers(feature_img, marker_img, markWatershedLine=True, fullyConnected=False)
+plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(ws)))
+
+pt = [60,60]
+idx = img.TransformPhysicalPointToIndex(pt)
+marker_img *= 0
+marker_img[0,0] = 1
+marker_img[idx] = 2
+ws = sitk.MorphologicalWatershedFromMarkers(feature_img, marker_img, markWatershedLine=True, fullyConnected=False)
+plt.imshow(sitk.GetArrayFromImage(sitk.LabelOverlay(img, ws, opacity=.2)))
+```
