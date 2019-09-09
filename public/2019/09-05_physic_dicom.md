@@ -1,115 +1,137 @@
-- [图割-最大流最小切割的最直白解读](https://www.jianshu.com/p/beca253fdc9f)
-- [skimage Module: segmentation](https://scikit-image.org/docs/dev/api/skimage.segmentation.html#module-skimage.segmentation)
-- [W3cubDocs scikit_image](https://docs.w3cub.com/scikit_image/api/skimage.segmentation/#skimage.segmentation.chan_vese)
-- [Segmentation of objects](https://scikit-image.org/docs/stable/auto_examples/index.html#segmentation-of-objects)
-- [pydicom](https://github.com/pydicom/pydicom)
-- [SimpleITK Notebooks](http://insightsoftwareconsortium.github.io/SimpleITK-Notebooks/)
-```py
-adjust_sigmoid(image, cutoff=0.5, gain=10, inv=False)
+# ___2019 - 09 - 05 Dicom Segmentation___
+***
+
+# 链接
+	- [图割-最大流最小切割的最直白解读](https://www.jianshu.com/p/beca253fdc9f)
+	- [skimage Module: segmentation](https://scikit-image.org/docs/dev/api/skimage.segmentation.html#module-skimage.segmentation)
+	- [W3cubDocs scikit_image](https://docs.w3cub.com/scikit_image/api/skimage.segmentation/#skimage.segmentation.chan_vese)
+	- [Segmentation of objects](https://scikit-image.org/docs/stable/auto_examples/index.html#segmentation-of-objects)
+	- [pydicom](https://github.com/pydicom/pydicom)
+	- [SimpleITK Notebooks](http://insightsoftwareconsortium.github.io/SimpleITK-Notebooks/)
+***
+
+# Dicom
+## 图像读取
+	- **pydicom**
+		```py
+		import matplotlib.pyplot as plt
+		import pydicom
+
+		aa = pydicom.read_file('./IM287')
+		img = aa.pixel_array
+		plt.imshow(img, cmap='gray')
+		plt.show()
+		```
+		```py
+		import pydicom
+
+		aa = pydicom.read_file('./IM287')
+		bb = pydicom.read_file('./IM288')
+		tt = bb.ImagePositionPatient[2] - aa.ImagePositionPatient[2]
+		aa.SliceThickness = tt
+		bb.SliceThickness = tt
+		image = np.stack([aa.pixel_array, bb.pixel_array])
+		```
+## 图像颜色调整
+	- **Sigmoid 调整**
+		```py
+		adjust_sigmoid(image, cutoff=0.5, gain=10, inv=False)
+		```
+	- **CLAHE (Contrast Limited Adaptive Histogram Equalization) 优化图像**
+		```py
+		def limitedEqualize(img_array, limit = 4.0):
+				img_array_list = []
+				for img in img_array:
+						clahe = cv2.createCLAHE(clipLimit = limit, tileGridSize = (8,8))
+						img_array_list.append(clahe.apply(img))
+				img_array_limited_equalized = np.array(img_array_list)
+				return img_array_limited_equalized
+	  ```
+## 计算差值
+	```py
+	import glob2
+	from skimage import exposure
+
+	imm = glob2.glob('./*.png')
+	imgs = np.array([imread(ii) for ii in imm])
+	iee = np.array([exposure.adjust_sigmoid(ii) for ii in imgs])
+
+	plt.imshow(np.vstack([np.hstack(iee[5:]) - np.hstack(iee[:5])]))
+	plt.tight_layout()
+
+	plt.imshow(np.vstack([np.hstack(imgs[5:]) - np.hstack(imgs[:5])]))
+	plt.tight_layout()
+
+	itt = glob2.glob('./*.tif')
+	imt = np.array([gray2rgb(resize(imread(ii), (787, 1263))) * 255 for ii in itt]).astype(uint)
+	plt.imshow(np.vstack([np.hstack(iee[:5]), np.hstack(iee[5:]), np.hstack(imt)]))
+	plt.tight_layout()
+
+	plt.imshow(np.vstack([np.hstack(iee[:5]), np.hstack(iee[5:]), np.hstack(imt), np.vstack([np.hstack(imgs[5:]) - np.hstack(imgs[:5])])]))
+	plt.tight_layout()
+	```
+## 图像分割
+	- **形态学计算**
+		```py
+		from skimage.color import rgb2gray                                                                                                                                                                        
+		from skimage.morphology import opening, binary_dilation                                                                                                                                                   
+		from skimage.morphology.selem import square
+
+		def pick_highlight(img, opening_square=50, dilation_square=100, dilation_thresh=0.05):
+		    aa = rgb2gray(img)
+		    bb = opening(aa, square(50))
+		    cc = binary_dilation(bb > 0.05, square(100))
+		    return aa * cc
+
+		def pick_highlight(img, opening_square=50, dilation_square=180):
+		    aa = rgb2gray(img)
+		    bb = opening(aa, square(opening_square))
+		    cc = binary_dilation(bb == bb.max(), square(dilation_square))
+		    return aa * cc
+
+		ipp = np.hstack([pick_highlight(ii) for ii in iee[5:]])
+		```
+	- **LOG 角点检测**
+		```py
+		def pick_by_blobs(img, cutoff=0.5, gain=120, min_sigma=100, max_sigma=150, num_sigma=10, threshold=.1):
+		    itt = exposure.adjust_sigmoid(img, cutoff=cutoff, gain=gain)
+		    image_gray = rgb2gray(itt)
+		    blobs_log = blob_log(image_gray, min_sigma=min_sigma, max_sigma=max_sigma, num_sigma=num_sigma, threshold=threshold)
+		    # Compute radii in the 3rd column.
+		    blobs_log[:, 2] = blobs_log[:, 2] * sqrt(2)
+		    return blobs_log
+
+		def show_imgs_and_blobs(imgs, blobs):
+		    rows = np.min([len(imgs), len(blobs)])
+		    fig, axes = plt.subplots(1, rows, figsize=(3 * rows, 3), sharex=True, sharey=True)
+		    ax = axes.ravel()
+
+		    for id, (ii, bbs) in enumerate(zip(imgs, blobs)):
+		        ax[id].imshow(ii, interpolation='nearest')
+		        for bb in bbs:
+		            y, x, r = bb
+		            c = plt.Circle((x, y), r, color="y", linewidth=2, fill=False)
+		            ax[id].add_patch(c)
+		        ax[id].set_axis_off()
+
+		blobs = [pick_by_blobs(ii) for ii in imgs[5:]]
+		show_imgs_and_blobs(imgs, blobs)
+		plt.tight_layout()
+		```
+	- **kmenas 聚类**
+		```py
+		from sklearn.cluster import KMeans
+		km = KMeans(n_clusters=3)
+		label = km.fit_predict(imgs[-1].reshape(-1, 3)).reshape([787, 1263])
+		plt.imshow(np.hstack([rgb2gray(imgs[-1]), label]))
+		```
+## CaPTK
+	- [Github CBICA/CaPTk](https://github.com/CBICA/CaPTk)
+	- [Cancer Imaging Phenomics Toolkit (CaPTk)](https://cbica.github.io/CaPTk/Getting_Started.html)
+	- [CBICA Image Processing Portal](https://ipp.cbica.upenn.edu/)
+	```sh
 	/cbica/home/IPP/wrappers-bin/libra --inputdir /cbica/home/IPP/IPP-users/626088490417991686/Experiments/512271977657680325/mammograms/ --outputdir /cbica/home/IPP/IPP-users/626088490417991686/Experiments/512271977657680325/Results/ --saveintermed 0
-```
-import matplotlib.pyplot as plt
-import pydicom
-aa = pydicom.read_file('./IM287')
-img = aa.pixel_array
-plt.imshow(img, cmap='gray')
-plt.show()
-```py
-import glob2
-from skimage import exposure
-
-imm = glob2.glob('./*.png')
-imgs = np.array([imread(ii) for ii in imm])
-iee = np.array([exposure.adjust_sigmoid(ii) for ii in imgs])
-
-plt.imshow(np.vstack([np.hstack(iee[5:]) - np.hstack(iee[:5])]))
-plt.tight_layout()
-
-plt.imshow(np.vstack([np.hstack(imgs[5:]) - np.hstack(imgs[:5])]))
-plt.tight_layout()
-
-itt = glob2.glob('./*.tif')
-imt = np.array([gray2rgb(resize(imread(ii), (787, 1263))) * 255 for ii in itt]).astype(uint)
-plt.imshow(np.vstack([np.hstack(iee[:5]), np.hstack(iee[5:]), np.hstack(imt)]))
-plt.tight_layout()
-
-plt.imshow(np.vstack([np.hstack(iee[:5]), np.hstack(iee[5:]), np.hstack(imt), np.vstack([np.hstack(imgs[5:]) - np.hstack(imgs[:5])])]))
-plt.tight_layout()
-```
-```py
-import pydicom
-import os
-import matplotlib.pyplot as plt
-from glob import glob
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-import scipy.ndimageplt.imshow(label)
-from skimage import morphology
-from skimage import measure
-from skimage.transform import resize
-from sklearn.cluster import KMeans
-from plotly import __version__
-from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
-from plotly.tools import FigureFactory as FF
-from plotly.graph_objs import *
-
-aa = pydicom.read_file('./IM287')
-bb = pydicom.read_file('./IM288')
-tt = bb.ImagePositionPatient[2] - aa.ImagePositionPatient[2]
-aa.SliceThickness = tt
-bb.SliceThickness = tt
-image = np.stack([aa.pixel_array, bb.pixel_array])
-```
-```py
-from skimage.color import rgb2gray                                                                                                                                                                        
-from skimage.morphology import opening, binary_dilation                                                                                                                                                   
-from skimage.morphology.selem import square
-
-def pick_highlight(img, opening_square=50, dilation_square=100, dilation_thresh=0.05):
-    aa = rgb2gray(img)
-    bb = opening(aa, square(50))
-    cc = binary_dilation(bb > 0.05, square(100))
-    return aa * cc
-
-def pick_highlight(img, opening_square=50, dilation_square=180):
-    aa = rgb2gray(img)
-    bb = opening(aa, square(opening_square))
-    cc = binary_dilation(bb == bb.max(), square(dilation_square))
-    return aa * cc
-
-ipp = np.hstack([pick_highlight(ii) for ii in iee[5:]])
-```
-```py
-from sklearn.cluster import KMeans
-km = KMeans(n_clusters=3)
-label = km.fit_predict(imgs[-1].reshape(-1, 3)).reshape([787, 1263])
-plt.imshow(np.hstack([rgb2gray(imgs[-1]), label]))
-```
-```py
-def pick_by_blobs(img, cutoff=0.5, gain=120, min_sigma=100, max_sigma=150, num_sigma=10, threshold=.1):
-    itt = exposure.adjust_sigmoid(img, cutoff=cutoff, gain=gain)
-    image_gray = rgb2gray(itt)
-    blobs_log = blob_log(image_gray, min_sigma=min_sigma, max_sigma=max_sigma, num_sigma=num_sigma, threshold=threshold)
-    # Compute radii in the 3rd column.
-    blobs_log[:, 2] = blobs_log[:, 2] * sqrt(2)
-    return blobs_log
-
-def show_imgs_and_blobs(imgs, blobs):
-    rows = np.min([len(imgs), len(blobs)])
-    fig, axes = plt.subplots(1, rows, figsize=(3 * rows, 3), sharex=True, sharey=True)
-    ax = axes.ravel()
-
-    for id, (ii, bbs) in enumerate(zip(imgs, blobs)):
-        ax[id].imshow(ii, interpolation='nearest')
-        for bb in bbs:
-            y, x, r = bb
-            c = plt.Circle((x, y), r, color="y", linewidth=2, fill=False)
-            ax[id].add_patch(c)
-        ax[id].set_axis_off()
-
-blobs = [pick_by_blobs(ii) for ii in imgs[5:]]
-show_imgs_and_blobs(imgs, blobs)
-plt.tight_layout()
-```
+	```
 ***
 
 # sunny_demmo
