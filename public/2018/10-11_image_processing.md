@@ -1686,7 +1686,8 @@
     ![](images/skimage_filters_rank.jpg)
 ***
 
-# 处理视频文件
+# 视频文件
+## 视频读取
   - 视频文件通常不支持随机位置读取，不能并行化处理，因此应尽量避免直接处理视频文件
   - **ffmpeg** 将视频的每一帧数据转化为图片
     ```py
@@ -1789,6 +1790,83 @@
     cv2.destroyAllWindows()
     vs.stop()
     ```
+## 视频保存
+```py
+import cv2
+def video_capture_local(dest, video_src=0):
+    cap = cv2.VideoCapture(video_src)
+
+    dest_format = dest.split('.')[-1].lower()
+    format_dict = {"avi": "XVID"}
+    format = format_dict.get(dest_format, "XVID")
+    fourcc = cv2.VideoWriter_fourcc(*format)
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    size = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+    out = cv2.VideoWriter(dest, fourcc, fps, size)
+
+    WRITE_START = False
+    while(cap.isOpened()):
+        ret, frame = cap.read()
+        if ret == True:
+            frame = cv2.flip(frame, 0)
+            if WRITE_START:
+                out.write(frame)
+            cv2.imshow('frame', frame)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('s'):
+                WRITE_START = True
+            elif key == ord('e'):
+                WRITE_START = False
+            elif key == ord('q'):
+                break
+        else:
+            break
+
+    cap.release()
+    out.release()
+    cv2.destroyAllWindows()
+```
+```py
+"rtsp://admin:admin111@192.168.0.65:554/cam/realmonitor?channel=1&subtype=1"
+import cv2
+import sys
+
+sys.path.append("../")
+from face_model import FaceModel
+fm = FaceModel(None)
+
+def video_capture_local_mtcnn(fm, dest_path, dest_name_pre, video_src=0, skip_frame=5):
+    cap = cv2.VideoCapture(video_src)
+    pic_id = 0
+    cur_frame = 0
+    while(cap.isOpened()):
+        ret, frame = cap.read()
+        if ret == True:
+            frame = cv2.flip(frame, 0)
+
+            if cur_frame == 0:
+                frame_rgb = frame[:, :, ::-1]
+                bbs, pps = fm.get_face_location(frame_rgb)
+                if len(bbs) != 0:
+                    nns = fm.face_align_landmarks(frame_rgb, pps)
+                    for nn in nns:
+                        fname = os.path.join(dest_path, dest_name_pre + "_{}.png".format(pic_id))
+                        print("fname = %s" % fname)
+                        plt.imsave(fname, nn)
+                        pic_id += 1
+
+            cv2.imshow('frame', frame)
+            cur_frame = (cur_frame + 1) % skip_frame
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                break
+        else:
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+```
 ***
 
 # CV2 显示中文

@@ -177,7 +177,8 @@
 ***
 
 # sunny_demmo
-	The denoised result image obtained from Gaussian filter has blurred edges. However, the result from pixelwise adaptive wiener filtering technique show that sharp edges are preserved
+	- The denoised result image obtained from Gaussian filter has blurred edges. However, the result from pixelwise adaptive **wiener** filtering technique show that sharp edges are preserved
+	- We clustered an image into 10 different colors **(k = 10)** which is sufficient to observe the level of detail of landmarks and their color distribution.
   ```py
   # MATLAB
   H = fspecial('Gaussian', [r, c], sigma);
@@ -227,6 +228,19 @@
           ipp = pydicom.dcmread(ii).pixel_array
           plt.imsave(ii + '.png', ipp, cmap=pylab.cm.bone)
   ```
+	```py
+	idd = glob2.glob('*/*/*/*.dcm')
+
+	for ii in idd:
+			print(ii)
+			if not os.path.basename(os.path.dirname(ii)).startswith('999-'):
+					dest_name = os.path.join('PNG', ii) + ".png"
+					if not os.path.exists(os.path.dirname(dest_name)):
+							os.makedirs(os.path.dirname(dest_name), exist_ok=True)
+					if not os.path.exists(dest_name):
+							ipp = pydicom.dcmread(ii).pixel_array
+							plt.imsave(dest_name, ipp, cmap="gray")
+	```
 ***
 
 # skimage segmentation
@@ -456,27 +470,27 @@
 ***
 
 # sitk segmentation
-```py
-img = imread('cthead1.png')
-img = sitk.GetImageFromArray(rgb2gray(img))
-feature_img = sitk.GradientMagnitude(img)
-plt.imshow(sitk.GetArrayFromImage(feature_img), cmap='gray')
+	```py
+	img = imread('cthead1.png')
+	img = sitk.GetImageFromArray(rgb2gray(img))
+	feature_img = sitk.GradientMagnitude(img)
+	plt.imshow(sitk.GetArrayFromImage(feature_img), cmap='gray')
 
-ws_img = sitk.MorphologicalWatershed(feature_img, level=0, markWatershedLine=True, fullyConnected=False)
-plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(ws_img)))
+	ws_img = sitk.MorphologicalWatershed(feature_img, level=0, markWatershedLine=True, fullyConnected=False)
+	plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(ws_img)))
 
-min_img = sitk.RegionalMinima(feature_img, backgroundValue=0, foregroundValue=1.0, fullyConnected=False, flatIsMinima=True)
-marker_img = sitk.ConnectedComponent(min_img)
-plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(marker_img)))
+	min_img = sitk.RegionalMinima(feature_img, backgroundValue=0, foregroundValue=1.0, fullyConnected=False, flatIsMinima=True)
+	marker_img = sitk.ConnectedComponent(min_img)
+	plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(marker_img)))
 
-ws = sitk.MorphologicalWatershedFromMarkers(feature_img, marker_img, markWatershedLine=True, fullyConnected=False)
-plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(ws)))
+	ws = sitk.MorphologicalWatershedFromMarkers(feature_img, marker_img, markWatershedLine=True, fullyConnected=False)
+	plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(ws)))
 
-pt = [60,60]
-idx = img.TransformPhysicalPointToIndex(pt)
-marker_img *= 0
-marker_img[0,0] = 1
-marker_img[idx] = 2
-ws = sitk.MorphologicalWatershedFromMarkers(feature_img, marker_img, markWatershedLine=True, fullyConnected=False)
-plt.imshow(sitk.GetArrayFromImage(sitk.LabelOverlay(img, ws, opacity=.2)))
-```
+	pt = [60,60]
+	idx = img.TransformPhysicalPointToIndex(pt)
+	marker_img *= 0
+	marker_img[0,0] = 1
+	marker_img[idx] = 2
+	ws = sitk.MorphologicalWatershedFromMarkers(feature_img, marker_img, markWatershedLine=True, fullyConnected=False)
+	plt.imshow(sitk.GetArrayFromImage(sitk.LabelOverlay(img, ws, opacity=.2)))
+	```
