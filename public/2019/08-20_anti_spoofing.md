@@ -179,6 +179,15 @@ image_show(text > text_threshold);
   train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
   ```
 ## skimage 提取 LBP 特征
+  - **skimage.feature.local_binary_pattern**
+    ```py
+    from skimage.feature import local_binary_pattern
+    local_binary_pattern(image, P, R, method='default')
+    ```
+    - **image** 灰度图
+    - **P** 相邻的 P 个点
+    - **R** 半径
+    - **method** {'default', 'ror', 'uniform', 'var'}
   - **var LBP 特征**
     ```py
     import skimage
@@ -1439,6 +1448,11 @@ image_show(text > text_threshold);
 
     import tensorflow as tf
     from tensorflow import keras
+    # config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5, allow_growth=True))
+    config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
+    sess = tf.Session(config=config)
+    keras.backend.set_session(sess)
+
     from tensorflow.python.keras import layers
     img_shape = (112, 112, 3)
     inputs = layers.Input(shape=img_shape)
@@ -1456,7 +1470,7 @@ image_show(text > text_threshold);
     pool1 = layers.AveragePooling2D(pool_size=512, strides=512, padding='same')(drop1)
     pool1 = layers.GlobalAveragePooling2D()(drop1)
     flatten1 = layers.Flatten()(pool1)
-    output = layers.Dense(2, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001))(flatten1)
+    output = layers.Dense(4, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001))(flatten1)
     model = tf.keras.models.Model(inputs=[inputs], outputs=[output])
     model.summary()
 
@@ -1473,7 +1487,11 @@ image_show(text > text_threshold);
     train_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in train_y])
     test_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in test_y])
 
-    callbacks = [keras.callbacks.TensorBoard(log_dir='./logs'), keras.callbacks.ModelCheckpoint("./keras_checkpoints", save_best_only=True)]
+    callbacks = [
+            keras.callbacks.TensorBoard(log_dir='./logs'),
+            keras.callbacks.ModelCheckpoint("./keras_checkpoints", save_best_only=True),
+            keras.callbacks.EarlyStopping(monitor='val_loss', patience=20)
+    ]
     model.fit(train_x, train_y_oh, batch_size=16, epochs=50, callbacks=callbacks, validation_data=(test_x, test_y_oh))
     model.fit(train_x, train_y_oh, batch_size=32, epochs=50, callbacks=callbacks, validation_data=(test_x, test_y_oh))
     ```
@@ -1744,28 +1762,31 @@ image_show(text > text_threshold);
   ```
 ***
 
-人脸识别模型：
-    人脸识别 insightface 根据项目需求部署，调试等；
-    Insightface 的人脸检测模型 MTCNN 不适合多线程调用，通过 MMDNN / ONNX 等将模型转化为其他框架模型，测试 mxnet / caffe / pytorch / tensorflow 等框架下的模型效率；
-    Tensorflow 框架下的 MTCNN 调优，增加 GPU 下的多线程计算，提高计算效率，单次识别可以在 30ms 以内；
-    Insightface 的人脸识别模型转化为 Tensorflow 框架，测试当前运行环境下的执行效率，与高并发下的效率等；
-    人脸比对算法优化，使用 dot 计算人脸 Embedded feature 距离，单次识别效率可以在 <10ms；
-    模型训练的 Fine tune 调研，通过实际应用场景中的人脸数据，可以提高模型识别精度；
-    测试使用 TensorRT 优化当前模型，测试执行效率。
-人脸识别服务器部署：
-    服务器调试，使用 flask + waitress + gunicorn + nginx 重构当前服务器代码，服务器提供人脸注册 / 人脸识别 / 人脸数据删除的基本功能；
-    通过 Flask 封装模型架构，对外提供 HTTP 调用接口；
-    通过 waitress 对 Flask 的封装，提高服务器的稳定性；
-    通过 Gunicorn 的封装，提供多进程与多线程的调用，提高高并发的支持，并对比 sync / gevent 等多种服务器消息的处理方式，优化参数；
-    通过 nginx 封装接口，提供反向代理，请求分发等，提高服务器的稳定性与高并发支持；
-    在多进程的运行环境下，关于多进程通信的问题，测试使用信号 / 网络调用 / sql 等多种方式，最终选择 nginx 分发 + 网络调用的方式，重构服务器代码；
-    测试各种配置下的高并发下的运行效率，如进程数/ 线程数 / GPU 占用量等，选择最适合当前环境的方式；
-    Docker 封装整个模型 + 服务器。    
-活体检测算法：
-    添加活体检测 anti spoofing 算法，调研当前活体检测的实现方式，各个开源项目的具体实现方式，并测试效果，以及最新 arxiv 论文的研究方向，在针对当前应用环境下选择合适的算法；
-    红外镜头与普通光照下的图片对比，检测人脸部分，排除一部分非活体攻击；
-    对于静默图片的活体检测，获取开源数据集 NUAA，进一步采用多级 LBP 图片纹理特征的方式检测非活体；
-    测试使用 RGB / HSV / YCbCr 等颜色通道下算法效果，每种颜色通道下使用 8位 uniform LBP / 16位 uniform LBP / 8 位 nri-uniform LBP / DoG 角点检测 / 灰度共生矩阵等多种特征与特征组合，检测算法实现效果；
-    训练 SVM 分类器，参数调试在测试训练集上达到比较好的结果，并应用于实际场景下测试效果；
-    训练 CNN 神经网络模型作为分类器，组合多种模型结构与参数，测试实际场景下的效果；
-    训练使用 Alexnet / xception 模型提取特征，组合 CNN / DNN / SVM 作为分类器，测试实际场景下的效果；
+# 数据集处理
+```py
+read_pngs = lambda pp: np.array([imread(ii)[:, :, :3] for ii in glob2.glob('{}/*/*.png'.format(pp))])
+train_real_x = read_pngs('./REAL')
+train_fake_1_x = read_pngs('./FAKE_1')
+train_fake_2_x = read_pngs('./FAKE_2')
+train_fake_3_x = read_pngs('./FAKE_3')
+print(train_real_x.shape, train_fake_1_x.shape, train_fake_2_x.shape, train_fake_3_x.shape)
+# (1463, 112, 112, 3) (829, 112, 112, 3) (1795, 112, 112, 3) (1463, 112, 112, 3)
+
+train_y = np.array([0] * train_real_x.shape[0] + [1] * train_fake_1_x.shape[0] + [2] * train_fake_2_x.shape[0] + [3] * train_fake_3_x.shape[0])
+train_x = np.vstack([train_real_x, train_fake_1_x, train_fake_2_x, train_fake_3_x])
+print(train_x.shape, train_y.shape)
+# (5550, 112, 112, 3) (5550,)
+
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(train_x, train_y, test_size=0.25, random_state=42)
+print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
+# (4162, 112, 112, 3) (1388, 112, 112, 3) (4162,) (1388,)
+
+np.savez('train_test', train_x=X_train, train_y=y_train, test_x=X_test, test_y=y_test)
+
+tt = np.load("/media/uftp/images/PAD/train_test.npz")
+train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
+to_dummy = lambda a: np.array([ np.where(np.unique(a)==t, 1, 0) for t in a ])
+train_y_oh = to_dummy(train_y)
+test_y_oh = to_dummy(test_y)
+```

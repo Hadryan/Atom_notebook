@@ -3,11 +3,16 @@
 
 # 链接
   - [图割-最大流最小切割的最直白解读](https://www.jianshu.com/p/beca253fdc9f)
+  - [使用Python的scikit-image模块进行图像分割](http://www.zijin.net/news/tech/333026.html)
   - [skimage Module: segmentation](https://scikit-image.org/docs/dev/api/skimage.segmentation.html#module-skimage.segmentation)
-  - [W3cubDocs scikit_image](https://docs.w3cub.com/scikit_image/api/skimage.segmentation/#skimage.segmentation.chan_vese)
+  - [skimage Module: restoration](https://scikit-image.org/docs/dev/api/skimage.restoration.html#module-skimage.restoration)
+  - [skimage General examples](https://scikit-image.org/docs/stable/auto_examples/index.html)
   - [Segmentation of objects](https://scikit-image.org/docs/stable/auto_examples/index.html#segmentation-of-objects)
+  - [W3cubDocs scikit_image](https://docs.w3cub.com/scikit_image/api/skimage.segmentation/#skimage.segmentation.chan_vese)
   - [pydicom](https://github.com/pydicom/pydicom)
   - [SimpleITK Notebooks](http://insightsoftwareconsortium.github.io/SimpleITK-Notebooks/)
+  - [Yonv1943/Unsupervised-Segmentation](https://github.com/Yonv1943/Unsupervised-Segmentation/tree/master)
+  - [Automatic and fast segmentation of breast region-of-interest (ROI) and density in MRIs](https://www.sciencedirect.com/science/article/pii/S2405844018327178)
 ***
 
 # Dicom
@@ -75,7 +80,7 @@
     ```py
     from skimage.color import rgb2gray
     from skimage.morphology import opening, binary_dilation
-		from skimage.morphology.selem import square
+    from skimage.morphology.selem import square
 
     def pick_highlight(img, opening_square=50, dilation_square=100, dilation_thresh=0.05):
         aa = rgb2gray(img)
@@ -125,48 +130,172 @@
     label = km.fit_predict(imgs[-1].reshape(-1, 3)).reshape([787, 1263])
     plt.imshow(np.hstack([rgb2gray(imgs[-1]), label]))
     ```
+  - **morphology GAC**
+    ```py
+    image = rgb2gray(imread('dicom_png/IM256.png'))
+    gimage = inverse_gaussian_gradient(opening(image, square(3)))
+    init_ls = np.zeros(image.shape, dtype=np.int8)
+    init_ls[10:-250, 10:-10] = 1
+
+    plt.imshow(image, cmap='gray')
+    plt.contour(morphological_geodesic_active_contour(gimage, 50, init_ls, smoothing=1, balloon=-1,threshold=0.69), [0.5], colors='r')
+    ```
+    ```py
+    image = (rgb2gray(imread('dicom_png/IM256.png')) * 255).astype(np.uint8)
+    image_enhance = equalize_adapthist(opening(image, square(3)))
+    image_enhance = enhance_contrast(opening(image, square(3)), disk(3))
+    image_enhance = equalize_adapthist(enhance_contrast(erosion(image, square(3)), disk(3)))
+    gimage = inverse_gaussian_gradient(image_enhance)
+    init_ls = np.zeros(image.shape, dtype=np.int8)
+    init_ls[10:-272, 10:-10] = 1
+
+    plt.imshow(image, cmap='gray')
+    plt.contour(morphological_geodesic_active_contour(gimage, 50, init_ls, smoothing=4, balloon=-1,threshold=0.69), [0.5], colors='y')
+    ```
+    ```py
+    image = rgb2gray(imread('dicom_png/IM287.png'))
+    gimage = inverse_gaussian_gradient(opening(image, square(3)))
+    init_ls = np.zeros(image.shape, dtype=np.int8)
+    init_ls[10:-270, 10:-10] = 1
+
+    plt.imshow(image, cmap='gray')
+    plt.contour(morphological_geodesic_active_contour(gimage, 50, init_ls, smoothing=1, balloon=-1,threshold=0.69), [0.5], colors='r')
+    ```
+  - **find low edge in middle pixels**
+    ```py
+    aa = image_enhance[:, 246:266].sum(1)
+    (aa[::-1] > 2).argmax()
+    ```
+  - **function define**
+    ```py
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from skimage.color import rgb2gray
+    from skimage.exposure import equalize_adapthist
+    from skimage.segmentation import morphological_geodesic_active_contour, inverse_gaussian_gradient
+    from skimage.morphology import erosion
+    from skimage.morphology.selem import disk, square
+    from skimage.filters.rank import enhance_contrast
+
+    def breast_seg(image_array):
+        # Read image as uint8, value scope in [1, 256]
+        image = (rgb2gray(image_array) * 255).astype(np.uint8)
+        # Enhance image by erosion, enhance contrast and equalize hist
+        image_enhance = equalize_adapthist(enhance_contrast(erosion(image, square(3)), disk(3)))
+        # Inverse Gaussian gradient for morphology snakes
+        gimage = inverse_gaussian_gradient(image_enhance)
+
+        # Detect the position of breast edge in middle area
+        middle_pix = image.shape[1] // 2
+        low_edge_y = (image_enhance[:, middle_pix-10:middle_pix+10].sum(1)[::-1] > 2).argmax()
+        print("low_edge_y = %d" % low_edge_y)
+
+        # Initial mask for morphology snakes of the thorax area
+        init_ls = np.zeros(image.shape, dtype=np.int8)
+        init_ls[10:-low_edge_y, 10:-10] = 1
+        # The first part is the thorax area
+        body_cc = morphological_geodesic_active_contour(gimage, 50, init_ls, smoothing=8, balloon=-1, threshold=0.69)
+
+        # Initial mask for morphology snakes of the breast area
+        init_ls = np.zeros(image.shape, dtype=np.int8)
+        keep_body_border = (image.shape[1] - low_edge_y) // 5 * 4
+        init_ls[keep_body_border:-10, 10:-10] = 1
+        init_ls *= (1 - body_cc)
+        # Breast area
+        breast_cc = morphological_geodesic_active_contour(gimage, 300, init_ls, smoothing=8, balloon=-1, threshold=0.9)
+
+        # Move the breast border 5 pixels up to exclude the border line
+        # up_border = breast_cc[:-low_edge_y-10, :]
+        # low_border = binary_erosion(breast_cc[-low_edge_y:, :], square(5))
+        # return np.vstack([up_border, low_border])
+        return np.vstack([breast_cc[:-low_edge_y-5, :], breast_cc[-low_edge_y:, :], np.zeros([5, 512])])
+
+    def plot_breast_seg_multi(images, rows, cols):
+        fig, axes = plt.subplots(rows, cols, figsize=(3 * cols, 3 * rows))
+        axes_f = axes.flatten()
+        for imm, ax in zip(images, axes_f):
+            img = imread(imm)
+            cc = breast_seg(img)
+            ax.imshow(img, cmap='gray')
+            ax.contour(cc, [0.5], colors='r')
+            ax.set_axis_off()
+        fig.tight_layout()
+
+    import glob2    
+    aa = glob2.glob('./*.png')
+    plot_breast_seg_multi(aa, 4, 6)
+
+    ccs = np.array([breast_seg(imread(ii)) for ii in aa])
+    images = np.array([imread(ii) for ii in aa])
+    np.savez('breast_border', breast_borders=ccs, images=images)
+    ```
+    ```py
+    from skimage.morphology import binary_dilation
+    from skimage.exposure import adjust_sigmoid
+
+    def extract_mask_by_breast_border(image_array, breast_border):
+        breast_pick = rgb2gray(image_array) * breast_border
+        large_bright_area = binary_dilation(erosion(breast_pick, square(3)) > 0.3, square(100))
+        mask = binary_dilation(adjust_sigmoid(breast_pick * large_bright_area, cutoff=0.6) > 0.1, disk(1))
+        return mask
+
+    def plot_image_and_masks(images, masks, rows, cols):
+        fig, axes = plt.subplots(rows, cols, figsize=(3 * cols, 3 * rows))
+        axes_f = axes.flatten()
+        for imm, mm, ax in zip(images, masks, axes_f):
+            img = rgb2gray(imm)
+            ax.imshow(np.hstack([img, mm]), cmap='gray')
+            ax.set_axis_off()
+        fig.tight_layout()
+
+    tt = np.load('breast_border.npz')
+    ccs, images = tt['breast_borders'], tt['images']
+    mms = [extract_mask_by_breast_border(ii, cc) for cc, ii in zip(ccs, images)]
+    plot_image_and_masks(images, mms, 4, 6)
+    ```
 ## 图像匹配
-	```py
-	import numpy as np
-	import matplotlib.pyplot as plt
-	from skimage import data
-	from skimage.feature import match_template
+  ```py
+  import numpy as np
+  import matplotlib.pyplot as plt
+  from skimage import data
+  from skimage.feature import match_template
 
-	def match_gray(image_array, token_temp_array):
-			result = match_template(image, token_temp)
-			ij = np.unravel_index(np.argmax(result), result.shape)
-			x, y = ij[::-1]
-			return x, y, result
+  def match_gray(image_array, token_temp_array):
+      result = match_template(image_array, token_temp_array)
+      ij = np.unravel_index(np.argmax(result), result.shape)
+      x, y = ij[::-1]
+      return x, y, result
 
-	def plot_and_match(image_name, token_temp_name):
-			image = rgb2gray(imread(image_name))
-			token_temp = rgb2gray(imread(token_temp_name))
-			x, y, result = match_gray(image, token_temp)
+  def plot_and_match(image_name, token_temp_name):
+      image = rgb2gray(imread(image_name))
+      token_temp = rgb2gray(imread(token_temp_name))
+      x, y, result = match_gray(image, token_temp)
 
-			fig, axes = plt.subplots(1, 3, figsize=(8, 3))
-			axes[0].imshow(token_temp, cmap='gray')
-			axes[0].set_axis_off()
-			axes[0].set_title('template')
+      fig, axes = plt.subplots(1, 3, figsize=(8, 3))
+      axes[0].imshow(token_temp, cmap='gray')
+      axes[0].set_axis_off()
+      axes[0].set_title('template')
 
-			axes[1].imshow(image, cmap='gray')
-			axes[1].set_axis_off()
-			axes[1].set_title('image')
+      axes[1].imshow(image, cmap='gray')
+      axes[1].set_axis_off()
+      axes[1].set_title('image')
 
-			ht, wt = token_temp.shape[:2]
-			rect = plt.Rectangle((x, y), wt, ht, edgecolor='r', facecolor='none')
-			axes[1].add_patch(rect)
+      ht, wt = token_temp.shape[:2]
+      rect = plt.Rectangle((x, y), wt, ht, edgecolor='r', facecolor='none')
+      axes[1].add_patch(rect)
 
-			axes[2].imshow(result)
-			axes[2].set_axis_off()
-			axes[2].set_title('`match_template`\nresult')
-			# highlight matched region
-			axes[2].autoscale(False)
-			axes[2].plot(x, y, 'o', markeredgecolor='r', markerfacecolor='none', markersize=10)
+      axes[2].imshow(result)
+      axes[2].set_axis_off()
+      axes[2].set_title('`match_template`\nresult')
+      # highlight matched region
+      axes[2].autoscale(False)
+      axes[2].plot(x, y, 'o', markeredgecolor='r', markerfacecolor='none', markersize=10)
 
-			plt.show()
+      plt.show()
+      return x, y, result
 
-	plot_and_match('./dicom_png/IM258.png', './Selection_025.png')
-	```
+  plot_and_match('./dicom_png/IM258.png', './Selection_025.png')
+  ```
 ## CaPTK
   - [Github CBICA/CaPTk](https://github.com/CBICA/CaPTk)
   - [Cancer Imaging Phenomics Toolkit (CaPTk)](https://cbica.github.io/CaPTk/Getting_Started.html)
@@ -177,8 +306,8 @@
 ***
 
 # sunny_demmo
-	- The denoised result image obtained from Gaussian filter has blurred edges. However, the result from pixelwise adaptive **wiener** filtering technique show that sharp edges are preserved
-	- We clustered an image into 10 different colors **(k = 10)** which is sufficient to observe the level of detail of landmarks and their color distribution.
+  - The denoised result image obtained from Gaussian filter has blurred edges. However, the result from pixelwise adaptive **wiener** filtering technique show that sharp edges are preserved
+  - We clustered an image into 10 different colors **(k = 10)** which is sufficient to observe the level of detail of landmarks and their color distribution.
   ```py
   # MATLAB
   H = fspecial('Gaussian', [r, c], sigma);
@@ -228,19 +357,19 @@
           ipp = pydicom.dcmread(ii).pixel_array
           plt.imsave(ii + '.png', ipp, cmap=pylab.cm.bone)
   ```
-	```py
-	idd = glob2.glob('*/*/*/*.dcm')
+  ```py
+  idd = glob2.glob('*/*/*/*.dcm')
 
-	for ii in idd:
-			print(ii)
-			if not os.path.basename(os.path.dirname(ii)).startswith('999-'):
-					dest_name = os.path.join('PNG', ii) + ".png"
-					if not os.path.exists(os.path.dirname(dest_name)):
-							os.makedirs(os.path.dirname(dest_name), exist_ok=True)
-					if not os.path.exists(dest_name):
-							ipp = pydicom.dcmread(ii).pixel_array
-							plt.imsave(dest_name, ipp, cmap="gray")
-	```
+  for ii in idd:
+      print(ii)
+      if not os.path.basename(os.path.dirname(ii)).startswith('999-'):
+          dest_name = os.path.join('PNG', ii) + ".png"
+          if not os.path.exists(os.path.dirname(dest_name)):
+              os.makedirs(os.path.dirname(dest_name), exist_ok=True)
+          if not os.path.exists(dest_name):
+              ipp = pydicom.dcmread(ii).pixel_array
+              plt.imsave(dest_name, ipp, cmap="gray")
+  ```
 ***
 
 # skimage segmentation
@@ -371,6 +500,8 @@
   ```
   ![](images/skimage_seg_join.png)
 ## Morphological Snakes
+  - **活动轮廓分割 snakes** 使用用户定义的轮廓或线进行初始化，然后该轮廓慢慢收缩
+
   Morphological Snakes 1 are a family of methods for image segmentation. Their behavior is similar to that of active contours (for example, Geodesic Active Contours 2 or Active Contours without Edges 3). However, Morphological Snakes use morphological operators (such as dilation or erosion) over a binary array instead of solving PDEs over a floating point array, which is the standard approach for active contours. This makes Morphological Snakes faster and numerically more stable than their traditional counterpart.
 
   There are two Morphological Snakes methods available in this implementation: Morphological Geodesic Active Contours (MorphGAC, implemented in the function morphological_geodesic_active_contour) and Morphological Active Contours without Edges (MorphACWE, implemented in the function morphological_chan_vese).
@@ -470,27 +601,27 @@
 ***
 
 # sitk segmentation
-	```py
-	img = imread('cthead1.png')
-	img = sitk.GetImageFromArray(rgb2gray(img))
-	feature_img = sitk.GradientMagnitude(img)
-	plt.imshow(sitk.GetArrayFromImage(feature_img), cmap='gray')
+  ```py
+  img = imread('cthead1.png')
+  img = sitk.GetImageFromArray(rgb2gray(img))
+  feature_img = sitk.GradientMagnitude(img)
+  plt.imshow(sitk.GetArrayFromImage(feature_img), cmap='gray')
 
-	ws_img = sitk.MorphologicalWatershed(feature_img, level=0, markWatershedLine=True, fullyConnected=False)
-	plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(ws_img)))
+  ws_img = sitk.MorphologicalWatershed(feature_img, level=0, markWatershedLine=True, fullyConnected=False)
+  plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(ws_img)))
 
-	min_img = sitk.RegionalMinima(feature_img, backgroundValue=0, foregroundValue=1.0, fullyConnected=False, flatIsMinima=True)
-	marker_img = sitk.ConnectedComponent(min_img)
-	plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(marker_img)))
+  min_img = sitk.RegionalMinima(feature_img, backgroundValue=0, foregroundValue=1.0, fullyConnected=False, flatIsMinima=True)
+  marker_img = sitk.ConnectedComponent(min_img)
+  plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(marker_img)))
 
-	ws = sitk.MorphologicalWatershedFromMarkers(feature_img, marker_img, markWatershedLine=True, fullyConnected=False)
-	plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(ws)))
+  ws = sitk.MorphologicalWatershedFromMarkers(feature_img, marker_img, markWatershedLine=True, fullyConnected=False)
+  plt.imshow(sitk.GetArrayFromImage(sitk.LabelToRGB(ws)))
 
-	pt = [60,60]
-	idx = img.TransformPhysicalPointToIndex(pt)
-	marker_img *= 0
-	marker_img[0,0] = 1
-	marker_img[idx] = 2
-	ws = sitk.MorphologicalWatershedFromMarkers(feature_img, marker_img, markWatershedLine=True, fullyConnected=False)
-	plt.imshow(sitk.GetArrayFromImage(sitk.LabelOverlay(img, ws, opacity=.2)))
-	```
+  pt = [60,60]
+  idx = img.TransformPhysicalPointToIndex(pt)
+  marker_img *= 0
+  marker_img[0,0] = 1
+  marker_img[idx] = 2
+  ws = sitk.MorphologicalWatershedFromMarkers(feature_img, marker_img, markWatershedLine=True, fullyConnected=False)
+  plt.imshow(sitk.GetArrayFromImage(sitk.LabelOverlay(img, ws, opacity=.2)))
+  ```
