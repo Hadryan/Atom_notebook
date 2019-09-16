@@ -22,6 +22,10 @@ from keras.preprocessing.image import ImageDataGenerator
 aug = ImageDataGenerator(rotation_range=20, zoom_range=0.15,
     width_shift_range=0.2, height_shift_range=0.2, shear_range=0.15,
     horizontal_flip=True, fill_mode="nearest")
+
+model.fit_generator(aug.flow(trainX, trainY, batch_size=BS),
+  	validation_data=(testX, testY), steps_per_epoch=len(trainX) // BS,
+  	epochs=EPOCHS)
 ```
 ```py
 text_threshold = filters.threshold_local(text,block_size=51, offset=10)
@@ -347,6 +351,9 @@ image_show(text > text_threshold);
     ```
   - **提取 LBP 特征**
     ```py
+    import skimage
+    import skimage.feature
+
     def split_image(image, n_hor=3, n_vert=3, exclude_row=[], exclude_col=[]):
         rr, cc = image.shape[:2]
         for irr in range(n_hor):
@@ -393,6 +400,7 @@ image_show(text > text_threshold);
     ```py
     from sklearn.model_selection import GridSearchCV
     from sklearn import metrics
+    from sklearn.svm import SVC
 
     param_grid = {'C': [2**P for P in range(-3, 14, 2)],
                   'gamma': [2**P for P in range(-15, 0, 2)], }
@@ -439,6 +447,10 @@ image_show(text > text_threshold);
     # Confusion Matrix:
     # [[4328 1431]
     #  [ 103 3257]]
+
+    import joblib
+    joblib.dump(clf, 'foo.pkl')
+    clf2 = joblib.load('foo.pkl')
     ```
 ## 特征组合与模型选择
   ```py
@@ -1465,6 +1477,10 @@ image_show(text > text_threshold);
     resnet50.trainable = True
     xx = resnet50(inputs)
 
+    vgg19 = keras.applications.vgg19.VGG19(include_top=False, weights='imagenet')
+    vgg19.trainable = True
+    xx = vgg19(inputs)
+
     conv1 = layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001))(xx)
     drop1 = layers.Dropout(0.5)(conv1)
     pool1 = layers.AveragePooling2D(pool_size=512, strides=512, padding='same')(drop1)
@@ -1490,10 +1506,26 @@ image_show(text > text_threshold);
     callbacks = [
             keras.callbacks.TensorBoard(log_dir='./logs'),
             keras.callbacks.ModelCheckpoint("./keras_checkpoints", save_best_only=True),
-            keras.callbacks.EarlyStopping(monitor='val_loss', patience=20)
+            keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
     ]
     model.fit(train_x, train_y_oh, batch_size=16, epochs=50, callbacks=callbacks, validation_data=(test_x, test_y_oh))
     model.fit(train_x, train_y_oh, batch_size=32, epochs=50, callbacks=callbacks, validation_data=(test_x, test_y_oh))
+
+    from keras.preprocessing.image import ImageDataGenerator
+    # construct the training image generator for data augmentation
+    # class ImageDataGenerator(keras_preprocessing.image.image_data_generator.ImageDataGenerator)
+    # ImageDataGenerator(featurewise_center=False, samplewise_center=False, featurewise_std_normalization=False,
+    #       samplewise_std_normalization=False, zca_whitening=False, zca_epsilon=1e-06,
+    #       rotation_range=0, width_shift_range=0.0, height_shift_range=0.0, brightness_range=None,
+    #       shear_range=0.0, zoom_range=0.0, channel_shift_range=0.0, fill_mode='nearest', cval=0.0,
+    #       horizontal_flip=False, vertical_flip=False, rescale=None, preprocessing_function=None,
+    #       data_format=None, validation_split=0.0, dtype=None)
+    aug = ImageDataGenerator(rotation_range=20, zoom_range=0.15,
+        width_shift_range=0.2, height_shift_range=0.2, brightness_range=(0.1, 2),
+        shear_range=0.15, horizontal_flip=True, fill_mode="nearest")
+
+    BS = 32
+    model.fit_generator(aug.flow(train_x, train_y_oh, batch_size=BS), validation_data=(test_x, test_y_oh), steps_per_epoch=train_x.shape[0] // BS, epochs=50, callbacks=callbacks)
     ```
 ## Keras 使用 LBP 特征训练 CNN 模型
   - **训练数据**
@@ -1764,6 +1796,9 @@ image_show(text > text_threshold);
 
 # 数据集处理
 ```py
+from skimage.io import imread
+import glob2
+
 read_pngs = lambda pp: np.array([imread(ii)[:, :, :3] for ii in glob2.glob('{}/*/*.png'.format(pp))])
 train_real_x = read_pngs('./REAL')
 train_fake_1_x = read_pngs('./FAKE_1')
@@ -1772,21 +1807,23 @@ train_fake_3_x = read_pngs('./FAKE_3')
 print(train_real_x.shape, train_fake_1_x.shape, train_fake_2_x.shape, train_fake_3_x.shape)
 # (1463, 112, 112, 3) (829, 112, 112, 3) (1795, 112, 112, 3) (1463, 112, 112, 3)
 
-train_y = np.array([0] * train_real_x.shape[0] + [1] * train_fake_1_x.shape[0] + [2] * train_fake_2_x.shape[0] + [3] * train_fake_3_x.shape[0])
-train_x = np.vstack([train_real_x, train_fake_1_x, train_fake_2_x, train_fake_3_x])
-print(train_x.shape, train_y.shape)
+yy = np.array([0] * train_real_x.shape[0] + [1] * train_fake_1_x.shape[0] + [2] * train_fake_2_x.shape[0] + [3] * train_fake_3_x.shape[0])
+xx = np.vstack([train_real_x, train_fake_1_x, train_fake_2_x, train_fake_3_x])
+print(xx.shape, yy.shape)
 # (5550, 112, 112, 3) (5550,)
 
 from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(train_x, train_y, test_size=0.25, random_state=42)
-print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
-# (4162, 112, 112, 3) (1388, 112, 112, 3) (4162,) (1388,)
+train_x, test_x, train_y, test_y = train_test_split(xx, yy, test_size=0.5, random_state=42)
+print(train_x.shape, test_x.shape, train_y.shape, test_y.shape)
+# (2775, 112, 112, 3) (2775,) (2775, 112, 112, 3) (2775,)
 
-np.savez('train_test', train_x=X_train, train_y=y_train, test_x=X_test, test_y=y_test)
+np.savez('train_test', train_x=train_x, train_y=train_y, test_x=test_x, test_y=test_y)
 
 tt = np.load("/media/uftp/images/PAD/train_test.npz")
 train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
 to_dummy = lambda a: np.array([ np.where(np.unique(a)==t, 1, 0) for t in a ])
 train_y_oh = to_dummy(train_y)
 test_y_oh = to_dummy(test_y)
+print(train_y_oh.shape, test_y_oh.shape)
+# (2775, 4) (2775, 4)
 ```

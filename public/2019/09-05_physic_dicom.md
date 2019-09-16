@@ -176,6 +176,7 @@
     from skimage.morphology import erosion
     from skimage.morphology.selem import disk, square
     from skimage.filters.rank import enhance_contrast
+    from skimage.io import imread
 
     def breast_seg(image_array):
         # Read image as uint8, value scope in [1, 256]
@@ -213,13 +214,16 @@
     def plot_breast_seg_multi(images, rows, cols):
         fig, axes = plt.subplots(rows, cols, figsize=(3 * cols, 3 * rows))
         axes_f = axes.flatten()
+        ccs = []
         for imm, ax in zip(images, axes_f):
             img = imread(imm)
             cc = breast_seg(img)
             ax.imshow(img, cmap='gray')
             ax.contour(cc, [0.5], colors='r')
             ax.set_axis_off()
+            ccs.append(cc)
         fig.tight_layout()
+        return np.array(ccs)
 
     import glob2    
     aa = glob2.glob('./*.png')
@@ -369,6 +373,49 @@
           if not os.path.exists(dest_name):
               ipp = pydicom.dcmread(ii).pixel_array
               plt.imsave(dest_name, ipp, cmap="gray")
+  ```
+  ```py
+  idd = glob2.glob('dicom_2/*/*')
+
+  for ii in idd:
+      print(ii)
+      dest_name = os.path.join('PNG', ii) + ".png"
+      if not os.path.exists(os.path.dirname(dest_name)):
+          os.makedirs(os.path.dirname(dest_name), exist_ok=True)
+      if not os.path.exists(dest_name):
+          ipp = pydicom.dcmread(ii).pixel_array
+          plt.imsave(dest_name, ipp, cmap="gray")
+  ```
+  ```py
+  aa = glob2.glob('./dicom_png/DCE-7/*.png')
+  bb = glob2.glob('./masks/7/*.tif')
+  for ss, dd in zip(aa, bb):
+      nn = os.path.basename(ss).split('.')[0]
+      os.rename(dd, os.path.join(os.path.dirname(dd), nn + '.tif'))
+  os.rename('./masks/7', 'masks/DCE-7')
+
+  bb = glob2.glob('./known/masks/*/*.tif')
+  for ii in bb:
+      im = imread(ii)
+      plt.imsave(ii.replace('.tif', '.png'), im, cmap='gray')
+  rm ./known/masks/*/*.tif
+  ```
+  ```py
+  def plot_breast_seg_multi(image_dir, rows):
+      ccs = np.load(os.path.join(image_dir, "breast_border.npy"))
+      images = glob2.glob(image_dir + "/*.png")
+      masks = [ii.replace("dicom_png", "masks") for ii in images]
+      cols = len(ccs) // rows + (len(ccs) % rows != 0)
+      fig, axes = plt.subplots(rows, cols, figsize=(3 * cols, 3 * rows))
+      axes_f = axes.flatten()
+      for imm, mm, cc, ax in zip(images, masks, ccs, axes_f):
+          img = imread(imm)
+          mask = (imread(mm) != 0)[:, :, 0]
+          ax.imshow(img, cmap='gray')
+          ax.contour(cc, [0.5], colors='r')
+          ax.contour(mask, [0.5], colors='g')
+          ax.set_axis_off()
+      fig.tight_layout()
   ```
 ***
 

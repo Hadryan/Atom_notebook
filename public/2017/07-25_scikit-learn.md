@@ -176,7 +176,7 @@
   - 可以使用python内置的二进制存储模块 **pickle 存储模型**
   - 对于scikit，可以使用 **joblib (joblib.dump & joblib.load)**，在大数据集上更有效，但只能存储到文件中，随后可以在其他程序中使用存储的模型
     ```python
-    from sklearn.externals import joblib
+    import joblib
     # 存储
     joblib.dump(clf, 'foo.pkl')
     # Out[30]: ['foo.pkl']
