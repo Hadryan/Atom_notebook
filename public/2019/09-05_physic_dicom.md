@@ -676,45 +676,83 @@
 ***
 
 # UNet
-- [Colab physic_image_segmentation.ipynb](https://colab.research.google.com/drive/1IGims1mk8jI30N6jqj50KW8JzbE6QeA_#scrollTo=5PbSBm9uynpC&forceEdit=true&offline=true&sandboxMode=true)
-```py
-#!/usr/bin/env python3
+## 模型
+  - [Colab physic_image_segmentation.ipynb](https://colab.research.google.com/drive/1IGims1mk8jI30N6jqj50KW8JzbE6QeA_#scrollTo=5PbSBm9uynpC&forceEdit=true&offline=true&sandboxMode=true)
+  ```py
+  # UNet
+  Epoch 00012: val_dice_loss improved from 0.14963 to 0.14088, saving model to ./training_checkpoints/weights.hdf5
+  25/25 [==============================] - 11s 451ms/step - loss: 0.1946 - dice_loss: 0.1896 - val_loss: 0.1447 - val_dice_loss: 0.1409
 
-import tensorflow as tf
-import os
-import glob2
-from skimage.io import imread, imsave
-import numpy as np
+  # Resnet50 based UNet++ Realization 50 + 45
+  Epoch 00045: val_dice_loss improved from 0.14202 to 0.13994, saving model to ./training_checkpoints/weights.hdf5
+  25/25 [==============================] - 20s 817ms/step - loss: 0.1602 - dice_loss: 0.1561 - val_loss: 0.1438 - val_dice_loss: 0.1399
+  ```
+  ```py
+  x = tf.image.resize(x, (IM_H, IM_W))
+  --> x = tf.keras.layers.Lambda(lambda x: tf.image.resize(x, (IM_H, IM_W)))(x)
+  ```
+## 测试
+  ```py
+  #!/usr/bin/env python3
 
-def tumor_segmentation(source_image, output_path, model_path):
-    graph = tf.Graph()
-    with graph.as_default():
-        with graph.device("cpu"):
-            config = tf.ConfigProto(
-                gpu_options = tf.GPUOptions(allow_growth=True),
-                allow_soft_placement=True,
-                intra_op_parallelism_threads=4,
-                inter_op_parallelism_threads=4)
-            sess = tf.Session(config=config)
-            with sess.as_default():
-                meta_graph_def = tf.saved_model.loader.load(sess, ["serve"], model_path)
-                input_x = sess.graph.get_tensor_by_name("input_3:0")
-                outputs = sess.graph.get_tensor_by_name("conv2d_68/Sigmoid:0")
+  import tensorflow as tf
+  import os
+  import glob2
+  from skimage.io import imread, imsave
+  import numpy as np
 
-    aa = glob2.glob(source_image)
-    pred = np.array([sess.run(outputs, {input_x: [imread(ii)[:, :, :3] / 255]})[0, :, :, 0] for ii in aa])
-    for ii, pp in zip(aa, pred):
-        dest = os.path.join(output_path, os.path.basename(ii))
-        if not os.path.exists(os.path.dirname(dest)):
-            os.makedirs(os.path.dirname(dest))
-        imsave(dest, pp)
+  def tumor_segmentation(source_image, output_path, model_path):
+      graph = tf.Graph()
+      with graph.as_default():
+          with graph.device("cpu"):
+              config = tf.ConfigProto(
+                  gpu_options = tf.GPUOptions(allow_growth=True),
+                  allow_soft_placement=True,
+                  intra_op_parallelism_threads=4,
+                  inter_op_parallelism_threads=4)
+              sess = tf.Session(config=config)
+              with sess.as_default():
+                  meta_graph_def = tf.saved_model.loader.load(sess, ["serve"], model_path)
+                  input_x = sess.graph.get_tensor_by_name("input_3:0")
+                  outputs = sess.graph.get_tensor_by_name("conv2d_68/Sigmoid:0")
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-s", "--source_image", type=str, required=True, help="Source image path.")
-    parser.add_argument("-d", "--output_path", type=str, required=True, help="Output path to save prediction.")
-    parser.add_argument("-m", "--model_path", type=str, default="./1", help="Saved model path.")
-    args = parser.parse_args()
-    tumor_segmentation(args.source_image, args.output_path, args.model_path)
-```
+      aa = glob2.glob(source_image)
+      pred = np.array([sess.run(outputs, {input_x: [imread(ii)[:, :, :3] / 255]})[0, :, :, 0] for ii in aa])
+      for ii, pp in zip(aa, pred):
+          dest = os.path.join(output_path, os.path.basename(ii))
+          if not os.path.exists(os.path.dirname(dest)):
+              os.makedirs(os.path.dirname(dest))
+          imsave(dest, pp)
+
+  if __name__ == "__main__":
+      import argparse
+      parser = argparse.ArgumentParser()
+      parser.add_argument("-s", "--source_image", type=str, required=True, help="Source image path.")
+      parser.add_argument("-d", "--output_path", type=str, required=True, help="Output path to save prediction.")
+      parser.add_argument("-m", "--model_path", type=str, default="./1", help="Saved model path.")
+      args = parser.parse_args()
+      tumor_segmentation(args.source_image, args.output_path, args.model_path)
+  ```
+
+# FOO
+- Q: 创建 keras 模型报错
+  ```py
+  AttributeError: 'Node' object has no attribute 'output_masks'
+  ```
+  A: 导入的层应全部使用 tensorflow.keras 或者 keras 的
+- Q: plot_model 错误
+  ```py
+  tf.keras.utils.vis_utils.plot_model() raises TypeError: 'InputLayer' object is not iterable
+  ```
+  A: 使用 `tf.keras.utils.plot_model` 替换 `tf.keras.utils.vis_utils.plot_model`，或参考 [Fix TypeError when using tf.keras.utils.plot_model](https://github.com/tensorflow/tensorflow/pull/24625)
+- Q: 模型导出报错
+  ```py
+  Cannot export Keras model TypeError: ('Not JSON Serializable:', b'\n...')
+  ```
+  A: 使用 `tf.keras.layers.Lambda` 封装模型中的函数
+  ```py
+  # From
+  inputs_3 = tf.image.grayscale_to_rgb(inputs)
+  # To
+  inputs_3 = tf.keras.layers.Lambda(lambda x: tf.image.grayscale_to_rgb(x))(inputs)
+  ```

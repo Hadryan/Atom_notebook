@@ -387,7 +387,8 @@
     ```python
     class MyLayer(keras.layers.Layer):
         def __init__(self, output_dim, **kwargs):
-            self.(MyLayer, self).__init__(**kwargs)
+            self.output_dim = output_dim
+            super(MyLayer, self).__init__(**kwargs)
 
         def build(self, input_shape):
             shape = tf.TensorShape((input_shape[1], self.output_dim))
