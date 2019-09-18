@@ -109,7 +109,6 @@ image_show(text > text_threshold);
   import numpy as np
 
   image_size = (112, 112)
-  image_size = (224, 224)
   def extract_face_location(ff):
       img = skimage.io.imread(ff)
       bb, pp = fm.get_face_location(img)
@@ -123,7 +122,7 @@ image_show(text > text_threshold);
       return nn[0] if nn.shape[0] != 0 else np.zeros([image_size[0], image_size[1], 3], dtype=uint8)
 
 
-  def image_collection_by_file(file_name, file_path, limit=None, to_array=True, save_local=True, save_base_path="./Cropped", load_func=extract_face_location_2):
+  def image_collection_by_file(file_name, file_path, limit=None, to_array=True, save_local=True, save_base_path="./Cropped", load_func=extract_face_location):
       with open(file_name, 'r') as ff:
           aa = ff.readlines()
       if limit:
@@ -1494,7 +1493,7 @@ image_show(text > text_threshold);
     model.compile(optimizer=tf.train.AdamOptimizer(0.01), loss=tf.nn.softmax_cross_entropy_with_logits_v2, metrics=['accuracy'])
     model.compile(optimizer=tf.train.MomentumOptimizer(0.001, momentum=0.9), loss=loss, metrics=['accuracy'])
     model.compile(optimizer=tf.train.RMSPropOptimizer(0.01, momentum=0.9), loss='categorical_crossentropy', metrics=['accuracy'])
-    model.compile(optimizer=tf.train.AdadeltaOptimizer(0.01), loss=keras.losses.categorical_crossentropy, metrics=['accuracy'])
+    model.compile(optimizer=keras.optimizers.Adadelta(0.01), loss=keras.losses.categorical_crossentropy, metrics=['accuracy'])
 
     import os
     import numpy as np
@@ -1505,7 +1504,7 @@ image_show(text > text_threshold);
 
     callbacks = [
             keras.callbacks.TensorBoard(log_dir='./logs'),
-            keras.callbacks.ModelCheckpoint("./keras_checkpoints", save_best_only=True),
+            keras.callbacks.ModelCheckpoint("./keras_checkpoints", monitor='val_loss', save_best_only=True),
             keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
     ]
     model.fit(train_x, train_y_oh, batch_size=16, epochs=50, callbacks=callbacks, validation_data=(test_x, test_y_oh))
@@ -1826,4 +1825,86 @@ train_y_oh = to_dummy(train_y)
 test_y_oh = to_dummy(test_y)
 print(train_y_oh.shape, test_y_oh.shape)
 # (2775, 4) (2775, 4)
+```
+# ImageDataGenerator
+```py
+import numpy as np
+import matplotlib.pyplot as plt
+from keras.preprocessing.image import *
+
+img = np.random.rand(1, 500, 500, 3)
+
+fig, ax = plt.subplots(1, 5, figsize=(20, 10))
+ax = ax.ravel()
+ax[0].imshow(img[0])
+ax[1].imshow(next(ImageDataGenerator().flow(img))[0])
+ax[2].imshow(next(ImageDataGenerator(brightness_range=(0., 0.)).flow(img))[0])
+ax[3].imshow(next(ImageDataGenerator(brightness_range=(1., 1.)).flow(img))[0])
+ax[4].imshow(next(ImageDataGenerator(brightness_range=(1., 1.)).flow(img))[0] / 255)
+```
+```py
+seed = 1
+from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
+
+data_gen = ImageDataGenerator(rescale=1./255, validation_split=0.1)
+
+
+img_gen = data_gen.flow_from_directory('segmentation_dataset/tumorImage/', target_size=(512, 512), batch_size=4,
+                                       class_mode=None, seed=seed, color_mode='grayscale')
+mask_gen = data_gen.flow_from_directory('segmentation_dataset/maskImage/', target_size=(512, 512), batch_size=4,
+                                       class_mode=None, seed=seed, color_mode='grayscale')
+
+train_gen = zip(img_gen, mask_gen)
+```
+The keras implementation in TF 1.14 and TF 2.0-RC seems to not recognize zip objects as generators or sequences. I created a bug for the TensorFlow project.
+
+Workaround for now: Create an inline generator
+train_gen = (pair for pair in zip(img_gen, mask_gen))
+```py
+data_gen_args = dict(rotation_range=0.2,
+                    width_shift_range=0.05,
+                    height_shift_range=0.05,
+                    shear_range=0.05,
+                    zoom_range=0.05,
+                    horizontal_flip=True,
+                    fill_mode='nearest',
+                    rescale=1./255)
+
+image_generator = tf.keras.preprocessing.image.ImageDataGenerator(data_gen_args)
+mask_generator = tf.keras.preprocessing.image.ImageDataGenerator(data_gen_args)
+
+imageGenerator = image_generator.flow_from_directory('membrane/train',color_mode="grayscale",classes=['image'],class_mode=None,batch_size=5)
+maskGenerator = mask_generator.flow_from_directory('membrane/train',color_mode="grayscale",classes=['label'],class_mode=None,batch_size=5)
+
+train_generator = zip(imageGenerator, maskGenerator)
+
+
+history = model.fit_generator(train_generator,steps_per_epoch=100,epochs=3)
+```
+```py
+def my_input_fn(total_items, epochs):
+    dataset = tf.data.Dataset.from_generator(lambda: my_generator(total_items),
+                                             output_types=(tf.float64, tf.int64))
+
+    dataset = dataset.repeat(epochs)
+    dataset = dataset.batch(32)
+    return dataset
+
+if __name__ == "__main__":
+    tf.enable_eager_execution()
+
+    model = tf.keras.Sequential([tf.keras.layers.Flatten(input_shape=(4, 20, 1)),
+                                 tf.keras.layers.Dense(64, activation=tf.nn.relu),
+                                 tf.keras.layers.Dense(12, activation=tf.nn.softmax)])
+
+    model.compile(optimizer='adam',
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+
+    total_items = 100
+    batch_size = 32
+    epochs = 10
+    num_batches = int(total_items/batch_size)
+    dataset = my_input_fn(total_items, epochs)
+    model.fit_generator(dataset, epochs=epochs, steps_per_epoch=num_batches)
 ```

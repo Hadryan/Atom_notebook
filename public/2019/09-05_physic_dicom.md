@@ -13,6 +13,7 @@
   - [SimpleITK Notebooks](http://insightsoftwareconsortium.github.io/SimpleITK-Notebooks/)
   - [Yonv1943/Unsupervised-Segmentation](https://github.com/Yonv1943/Unsupervised-Segmentation/tree/master)
   - [Automatic and fast segmentation of breast region-of-interest (ROI) and density in MRIs](https://www.sciencedirect.com/science/article/pii/S2405844018327178)
+  - [研习U-Net](https://zhuanlan.zhihu.com/p/44958351)
 ***
 
 # Dicom
@@ -672,3 +673,48 @@
   ws = sitk.MorphologicalWatershedFromMarkers(feature_img, marker_img, markWatershedLine=True, fullyConnected=False)
   plt.imshow(sitk.GetArrayFromImage(sitk.LabelOverlay(img, ws, opacity=.2)))
   ```
+***
+
+# UNet
+- [Colab physic_image_segmentation.ipynb](https://colab.research.google.com/drive/1IGims1mk8jI30N6jqj50KW8JzbE6QeA_#scrollTo=5PbSBm9uynpC&forceEdit=true&offline=true&sandboxMode=true)
+```py
+#!/usr/bin/env python3
+
+import tensorflow as tf
+import os
+import glob2
+from skimage.io import imread, imsave
+import numpy as np
+
+def tumor_segmentation(source_image, output_path, model_path):
+    graph = tf.Graph()
+    with graph.as_default():
+        with graph.device("cpu"):
+            config = tf.ConfigProto(
+                gpu_options = tf.GPUOptions(allow_growth=True),
+                allow_soft_placement=True,
+                intra_op_parallelism_threads=4,
+                inter_op_parallelism_threads=4)
+            sess = tf.Session(config=config)
+            with sess.as_default():
+                meta_graph_def = tf.saved_model.loader.load(sess, ["serve"], model_path)
+                input_x = sess.graph.get_tensor_by_name("input_3:0")
+                outputs = sess.graph.get_tensor_by_name("conv2d_68/Sigmoid:0")
+
+    aa = glob2.glob(source_image)
+    pred = np.array([sess.run(outputs, {input_x: [imread(ii)[:, :, :3] / 255]})[0, :, :, 0] for ii in aa])
+    for ii, pp in zip(aa, pred):
+        dest = os.path.join(output_path, os.path.basename(ii))
+        if not os.path.exists(os.path.dirname(dest)):
+            os.makedirs(os.path.dirname(dest))
+        imsave(dest, pp)
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-s", "--source_image", type=str, required=True, help="Source image path.")
+    parser.add_argument("-d", "--output_path", type=str, required=True, help="Output path to save prediction.")
+    parser.add_argument("-m", "--model_path", type=str, default="./1", help="Saved model path.")
+    args = parser.parse_args()
+    tumor_segmentation(args.source_image, args.output_path, args.model_path)
+```
