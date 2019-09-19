@@ -16,6 +16,34 @@
   - [研习U-Net](https://zhuanlan.zhihu.com/p/44958351)
 ***
 
+# Q and A
+  - Q: 创建 keras 模型报错
+    ```py
+    AttributeError: 'Node' object has no attribute 'output_masks'
+    ```
+    A: 导入的层应全部使用 tensorflow.keras 或者 keras 的
+  - Q: plot_model 错误
+    ```py
+    tf.keras.utils.vis_utils.plot_model() raises TypeError: 'InputLayer' object is not iterable
+    ```
+    A: 使用 `tf.keras.utils.plot_model` 替换 `tf.keras.utils.vis_utils.plot_model`，或参考 [Fix TypeError when using tf.keras.utils.plot_model](https://github.com/tensorflow/tensorflow/pull/24625)
+  - Q: 模型导出报错
+    ```py
+    Cannot export Keras model TypeError: ('Not JSON Serializable:', b'\n...')
+    ```
+    A: 使用 `tf.keras.layers.Lambda` 封装模型中的函数
+    ```py
+    inputs_3 = tf.image.grayscale_to_rgb(inputs)
+    --> inputs_3 = tf.keras.layers.Lambda(lambda x: tf.image.grayscale_to_rgb(x))(inputs)
+
+    x = tf.math.divide(x, tf.reduce_max(x))
+    --> x = tf.keras.layers.Lambda(lambda x: tf.math.divide(x, tf.reduce_max(x)))(x)
+
+    concat = tf.concat([foo, bar], axis=3)
+    --> concat = tf.keras.layers.Concatenate(axis=3)([foo, bar])
+    ```
+***
+
 # Dicom
 ## 图像读取
   - **pydicom**
@@ -172,16 +200,21 @@
     import numpy as np
     import matplotlib.pyplot as plt
     from skimage.color import rgb2gray
-    from skimage.exposure import equalize_adapthist
+    from skimage.exposure import equalize_adapthist, adjust_sigmoid
     from skimage.segmentation import morphological_geodesic_active_contour, inverse_gaussian_gradient
-    from skimage.morphology import erosion
+    from skimage.morphology import erosion, binary_closing
     from skimage.morphology.selem import disk, square
     from skimage.filters.rank import enhance_contrast
     from skimage.io import imread
+    import pydicom
 
     def breast_seg(image_array):
         # Read image as uint8, value scope in [1, 256]
-        image = (rgb2gray(image_array) * 255).astype(np.uint8)
+        if image_array.max() > 255:
+            image_gray = rgb2gray(image_array) / image_array.max()
+        else:
+            image_gray = rgb2gray(image_array)
+        image = (image_gray * 255).astype(np.uint8)
         # Enhance image by erosion, enhance contrast and equalize hist
         image_enhance = equalize_adapthist(enhance_contrast(erosion(image, square(3)), disk(3)))
         # Inverse Gaussian gradient for morphology snakes
@@ -196,21 +229,30 @@
         init_ls = np.zeros(image.shape, dtype=np.int8)
         init_ls[10:-low_edge_y, 10:-10] = 1
         # The first part is the thorax area
-        body_cc = morphological_geodesic_active_contour(gimage, 50, init_ls, smoothing=8, balloon=-1, threshold=0.69)
+        body_cc = morphological_geodesic_active_contour(gimage, 50, init_ls, smoothing=2, balloon=-1, threshold=0.69)
+        # body_cc = 1 - binary_closing(1 - body_cc, disk(25))
 
+        # Detect the position of breast edge in height
+        low_breast_edge = ((image_enhance > 0.1).sum(1) > 10)[::-1].argmax() - 5
+        print("low_breast_edge = %d" % low_breast_edge)
         # Initial mask for morphology snakes of the breast area
-        init_ls = np.zeros(image.shape, dtype=np.int8)
+        init_ls_2 = np.zeros(image.shape, dtype=np.int8)
         keep_body_border = (image.shape[1] - low_edge_y) // 5 * 4
-        init_ls[keep_body_border:-10, 10:-10] = 1
-        init_ls *= (1 - body_cc)
+        init_ls_2[keep_body_border:-low_breast_edge, 10:-10] = 1
+        init_ls_2 *= (1 - body_cc)
+        init_ls_2 = binary_closing(init_ls_2, disk(25))
+
         # Breast area
-        breast_cc = morphological_geodesic_active_contour(gimage, 300, init_ls, smoothing=8, balloon=-1, threshold=0.9)
+        image_enhance_2 = adjust_sigmoid(equalize_adapthist(image), cutoff=0.4)
+        gimage_2 = inverse_gaussian_gradient(image_enhance_2)
+        breast_cc = morphological_geodesic_active_contour(gimage_2, 150, init_ls_2, smoothing=4, balloon=-1, threshold=0.85)
+        breast_cc = binary_closing(breast_cc, disk(25))
 
         # Move the breast border 5 pixels up to exclude the border line
-        # up_border = breast_cc[:-low_edge_y-10, :]
-        # low_border = binary_erosion(breast_cc[-low_edge_y:, :], square(5))
-        # return np.vstack([up_border, low_border])
-        return np.vstack([breast_cc[:-low_edge_y-5, :], breast_cc[-low_edge_y:, :], np.zeros([5, 512])])
+        up_border = breast_cc[:-low_edge_y-10, :]
+        low_border = binary_erosion(breast_cc[-low_edge_y-10:, :], disk(8))
+        return np.vstack([up_border, low_border])
+        # return np.vstack([breast_cc[:-low_edge_y-5, :], breast_cc[-low_edge_y:, :], np.zeros([5, 512])])
 
     def plot_breast_seg_multi(images, rows, cols):
         fig, axes = plt.subplots(rows, cols, figsize=(3 * cols, 3 * rows))
@@ -226,7 +268,7 @@
         fig.tight_layout()
         return np.array(ccs)
 
-    import glob2    
+    import glob2
     aa = glob2.glob('./*.png')
     plot_breast_seg_multi(aa, 4, 6)
 
@@ -417,6 +459,14 @@
           ax.contour(mask, [0.5], colors='g')
           ax.set_axis_off()
       fig.tight_layout()
+  ```
+  ```py
+  aa = glob2.glob('../../datasets/physic_segmentation/known/dicom_png/DCE-11/*.png')
+  bb = np.array([imread(ii)[:, :, 0] for ii in aa])
+  dd = glob2.glob('../../datasets/physic_segmentation/known/masks/DCE-11/*.png')
+  ee = np.array([imread(ii)[:, :, 0] for ii in dd])
+  imsave('./goo.png', np.hstack([np.vstack(bb.transpose(2, 0, 1)), np.ones((13312, 5)) * 255, np.vstack(ee.transpose(2, 0, 1))]))
+  imsave('./foo.png', np.hstack([np.vstack(bb.transpose(1, 0, 2)), np.ones((13312, 5)) * 255, np.vstack(ee.transpose(1, 0, 2))]))
   ```
 ***
 
@@ -687,10 +737,6 @@
   Epoch 00045: val_dice_loss improved from 0.14202 to 0.13994, saving model to ./training_checkpoints/weights.hdf5
   25/25 [==============================] - 20s 817ms/step - loss: 0.1602 - dice_loss: 0.1561 - val_loss: 0.1438 - val_dice_loss: 0.1399
   ```
-  ```py
-  x = tf.image.resize(x, (IM_H, IM_W))
-  --> x = tf.keras.layers.Lambda(lambda x: tf.image.resize(x, (IM_H, IM_W)))(x)
-  ```
 ## 测试
   ```py
   #!/usr/bin/env python3
@@ -733,26 +779,27 @@
       args = parser.parse_args()
       tumor_segmentation(args.source_image, args.output_path, args.model_path)
   ```
+***
+The pre-contrast frame (F1): 0-115
+First post-contrast frame (F2): 116-231
+Second post-contrast frame (F3): 232-347
+Third post-contrast frame (F4): 348-463
+Forth post-contrast frame (F5): 464-579
+Fifth post-contrast frame (F6): 580-695
 
-# FOO
-- Q: 创建 keras 模型报错
-  ```py
-  AttributeError: 'Node' object has no attribute 'output_masks'
-  ```
-  A: 导入的层应全部使用 tensorflow.keras 或者 keras 的
-- Q: plot_model 错误
-  ```py
-  tf.keras.utils.vis_utils.plot_model() raises TypeError: 'InputLayer' object is not iterable
-  ```
-  A: 使用 `tf.keras.utils.plot_model` 替换 `tf.keras.utils.vis_utils.plot_model`，或参考 [Fix TypeError when using tf.keras.utils.plot_model](https://github.com/tensorflow/tensorflow/pull/24625)
-- Q: 模型导出报错
-  ```py
-  Cannot export Keras model TypeError: ('Not JSON Serializable:', b'\n...')
-  ```
-  A: 使用 `tf.keras.layers.Lambda` 封装模型中的函数
-  ```py
-  # From
-  inputs_3 = tf.image.grayscale_to_rgb(inputs)
-  # To
-  inputs_3 = tf.keras.layers.Lambda(lambda x: tf.image.grayscale_to_rgb(x))(inputs)
-  ```
+标注的mask是根据第三个时间点的数据剪掉第一个时间点的数据影像
+```py
+import glob2
+from skimage.io import imread, ImageCollection, imsave
+
+aa = glob2.glob('./*.tif')
+bb = sorted(aa)
+tt = np.array([imread(ii) for ii in bb])
+tt_1 = tt[0:115]
+tt_3 = tt[232:347]
+dd = tt_3 - tt_1
+plt.imshow(np.vstack([np.hstack(ii) for ii in np.vsplit(dd, 5)] + [np.hstack(ii) for ii in np.vsplit(tt_1, 5)] + [np.hstack(ii) for ii in np.vsplit(tt_3, 5)]))
+plt.axis('off')
+plt.tight_layout()
+```
+193 -- 309 -- 425 -- 541 -- 657 -- 77
