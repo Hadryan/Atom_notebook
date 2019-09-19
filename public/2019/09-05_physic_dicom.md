@@ -245,7 +245,7 @@
         # Breast area
         image_enhance_2 = adjust_sigmoid(equalize_adapthist(image), cutoff=0.4)
         gimage_2 = inverse_gaussian_gradient(image_enhance_2)
-        breast_cc = morphological_geodesic_active_contour(gimage_2, 150, init_ls_2, smoothing=4, balloon=-1, threshold=0.85)
+        breast_cc = morphological_geodesic_active_contour(gimage_2, 150, init_ls_2, smoothing=4, balloon=-1, threshold=0.9)
         breast_cc = binary_closing(breast_cc, disk(25))
 
         # Move the breast border 5 pixels up to exclude the border line
