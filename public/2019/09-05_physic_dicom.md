@@ -743,21 +743,22 @@
           image_gray = rgb2gray(image_array)
       image = (image_gray * 255).astype(np.uint8)
       # Enhance image by erosion, enhance contrast and equalize hist
-      image_enhance = equalize_adapthist(enhance_contrast(erosion(image, square(3)), disk(3)))
+      image_enhance = equalize_adapthist(enhance_contrast(erosion(image, disk(3)), disk(3)))
       # Inverse Gaussian gradient for morphology snakes
-      gimage = inverse_gaussian_gradient(image_enhance)
+      gimage = inverse_gaussian_gradient(image_enhance, alpha=100.0, sigma=3.0)
 
       # Detect the position of breast edge in middle area
       middle_pix = image.shape[1] // 2
-      low_edge_y = (image_enhance[:, middle_pix-10:middle_pix+10].sum(1)[::-1] > 2).argmax()
+      low_edge_y = ((image_enhance[:, middle_pix-20:middle_pix+20] > 0.1).sum(1)[::-1] > 10).argmax()
       print("low_edge_y = %d" % low_edge_y)
 
       # Initial mask for morphology snakes of the thorax area
       init_ls = np.zeros(image.shape, dtype=np.int8)
-      init_ls[10:-low_edge_y, 10:-10] = 1
+      init_ls[10:-low_edge_y-5, 10:-10] = 1
       # The first part is the thorax area
-      body_cc = morphological_geodesic_active_contour(gimage, 50, init_ls, smoothing=2, balloon=-1, threshold=0.69)
+      body_cc = morphological_geodesic_active_contour(gimage, 50, init_ls, smoothing=2, balloon=-1, threshold=0.79)
       # body_cc = 1 - binary_closing(1 - body_cc, disk(25))
+      return body_cc
 
       # Detect the position of breast edge in height
       low_breast_edge = ((image_enhance > 0.2).sum(1) > 10)[::-1].argmax() - 5
@@ -804,6 +805,18 @@
       fig.tight_layout()
       plt.show()
       return np.array(ccs)
+
+  def foo(image_array):
+      # Read image as uint8, value scope in [1, 256]
+      if image_array.max() > 255:
+          image_gray = rgb2gray(image_array) / image_array.max()
+      else:
+          image_gray = rgb2gray(image_array)
+      image = (image_gray * 255).astype(np.uint8)
+      init_ls = checkerboard_level_set(image.shape, 6)
+      init_ls[:10], init_ls[:, :10], init_ls[-10:], init_ls[:, -10:]= (0, 0, 0, 0)
+      cv = morphological_chan_vese(image, 20, init_ls, smoothing=3)
+      return binary_closing(binary_fill_holes(cv), disk(25))
 
   if __name__ == "__main__":
       import argparse
