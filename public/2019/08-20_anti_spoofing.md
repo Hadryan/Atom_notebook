@@ -1465,7 +1465,7 @@ image_show(text > text_threshold);
     keras.backend.set_session(sess)
 
     from tensorflow.python.keras import layers
-    img_shape = (112, 112, 3)
+    img_shape = (512, 512, 3)
     inputs = layers.Input(shape=img_shape)
 
     xception = tf.keras.applications.xception.Xception(include_top=False, weights='imagenet')
@@ -1482,11 +1482,21 @@ image_show(text > text_threshold);
 
     conv1 = layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001))(xx)
     drop1 = layers.Dropout(0.5)(conv1)
-    pool1 = layers.AveragePooling2D(pool_size=512, strides=512, padding='same')(drop1)
+    # pool1 = layers.AveragePooling2D(pool_size=512, strides=512, padding='same')(drop1)
     pool1 = layers.GlobalAveragePooling2D()(drop1)
     flatten1 = layers.Flatten()(pool1)
     output = layers.Dense(4, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001))(flatten1)
     model = tf.keras.models.Model(inputs=[inputs], outputs=[output])
+    model = tf.keras.Sequential([
+        layers.Input(shape=img_shape),
+        resnet50,
+        layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)),
+        layers.Dropout(0.5),
+        # layers.AveragePooling2D(pool_size=512, strides=512, padding='same'),
+        layers.GlobalAveragePooling2D(),
+        layers.Flatten(),
+        layers.Dense(4, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001)),        
+    ])
     model.summary()
 
     loss = focal_loss()
@@ -1494,6 +1504,7 @@ image_show(text > text_threshold);
     model.compile(optimizer=tf.train.MomentumOptimizer(0.001, momentum=0.9), loss=loss, metrics=['accuracy'])
     model.compile(optimizer=tf.train.RMSPropOptimizer(0.01, momentum=0.9), loss='categorical_crossentropy', metrics=['accuracy'])
     model.compile(optimizer=keras.optimizers.Adadelta(0.01), loss=keras.losses.categorical_crossentropy, metrics=['accuracy'])
+    model.compile(optimizer=keras.optimizers.SGD(lr=0.01, decay=1e-5, momentum=0.9), loss=keras.losses.categorical_crossentropy, metrics=['accuracy'])
 
     import os
     import numpy as np
@@ -1907,4 +1918,105 @@ if __name__ == "__main__":
     num_batches = int(total_items/batch_size)
     dataset = my_input_fn(total_items, epochs)
     model.fit_generator(dataset, epochs=epochs, steps_per_epoch=num_batches)
+```
+# Dog Species Classifier
+```py
+import tensorflow as tf
+from tensorflow import keras
+# config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5, allow_growth=True))
+config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
+sess = tf.Session(config=config)
+keras.backend.set_session(sess)
+
+from tensorflow.python.keras import layers
+from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+train_data_gen = ImageDataGenerator(rescale=1./255, rotation_range=20, zoom_range=0.15,
+    width_shift_range=0.2, height_shift_range=0.2, brightness_range=(0.1, 2),
+    shear_range=0.15, horizontal_flip=True, fill_mode="nearest")
+
+train_img_gen = train_data_gen.flow_from_directory('./dogImages/train/', target_size=(512, 512), batch_size=4, seed=1)
+val_data_gen = ImageDataGenerator(rescale=1./255)
+val_img_gen = val_data_gen.flow_from_directory('./dogImages/valid/', target_size=(512, 512), seed=1)
+
+img_shape = (512, 512, 3)
+xx = keras.applications.resnet50.ResNet50(include_top=False, weights='imagenet')
+# xx = keras.applications.vgg19.VGG19(include_top=False, weights='imagenet')
+xx.trainable = True
+model = tf.keras.Sequential([
+    layers.Input(shape=img_shape),
+    xx,
+    layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)),
+    # layers.MaxPooling2D(2),
+    layers.Dropout(0.5),
+    # layers.AveragePooling2D(pool_size=512, strides=512, padding='same'),
+    layers.GlobalAveragePooling2D(),
+    layers.Flatten(),
+    layers.Dense(133, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001)),        
+])
+model.summary()
+
+callbacks = [
+        keras.callbacks.TensorBoard(log_dir='./logs'),
+        keras.callbacks.ModelCheckpoint("./keras_checkpoints", monitor='val_loss', save_best_only=True),
+        keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
+]
+model.compile(optimizer=keras.optimizers.Adadelta(0.1), loss='categorical_crossentropy', metrics=['accuracy'])
+model.fit_generator(train_img_gen, validation_data=val_img_gen, epochs=50, callbacks=callbacks, verbose=1, workers=10)
+
+import glob2
+from skimage.io import imread
+from skimage.transform import resize
+
+imm = glob2.glob('./dogImages/test/*/*')
+xx = np.array([resize(imread(ii), (512, 512)) for ii in imm])
+yy = np.array([int(os.path.basename(os.path.dirname(ii)).split('.')[0]) -1 for ii in imm])
+pp = model.predict(xx)
+tt = np.argmax(pp, 1)
+(tt == yy).sum() / yy.shape[0]
+```
+```py
+In [53]: model.fit_generator(img_gen, validation_data=val_img_gen, steps_per_epoch=1670, epochs=50)                                                                                                                
+Epoch 1/50                                                                                                                                                                                                         
+286s 171ms/step - loss: 4.5538 - acc: 0.0972 - val_loss: 3.1535 - val_acc: 0.3653                                                                                     
+Epoch 2/50                                                                                                                                                                                                         
+265s 159ms/step - loss: 3.0760 - acc: 0.3717 - val_loss: 1.7518 - val_acc: 0.5425                                                                                     
+Epoch 3/50                                                                                                                                                                                                         
+265s 159ms/step - loss: 2.0036 - acc: 0.5808 - val_loss: 1.1483 - val_acc: 0.6958                                                                                     
+Epoch 4/50                                                                                                                                                                                                         
+264s 158ms/step - loss: 1.3548 - acc: 0.7090 - val_loss: 0.8581 - val_acc: 0.7461                                                                                     
+Epoch 5/50                                                                                                                                                                                                         
+263s 157ms/step - loss: 0.9638 - acc: 0.7867 - val_loss: 0.6582 - val_acc: 0.7940                                                                                     
+Epoch 6/50                                                                                                                                                                                                         
+264s 158ms/step - loss: 0.7056 - acc: 0.8491 - val_loss: 0.6143 - val_acc: 0.8036                                                                                     
+Epoch 7/50                                                                                                                                                                                                         
+262s 157ms/step - loss: 0.5121 - acc: 0.8930 - val_loss: 0.5670 - val_acc: 0.8120                                                                                     
+Epoch 8/50                                                                                                                                                                                                         
+263s 158ms/step - loss: 0.3942 - acc: 0.9214 - val_loss: 0.5004 - val_acc: 0.8287                                                                                     
+Epoch 9/50                                                                                                                                                                                                         
+262s 157ms/step - loss: 0.2876 - acc: 0.9494 - val_loss: 0.5043 - val_acc: 0.8347                                                                                     
+Epoch 10/50                                                                                                                                                                                                        
+261s 157ms/step - loss: 0.2134 - acc: 0.9675 - val_loss: 0.4845 - val_acc: 0.8371                                                                                     
+Epoch 11/50                                                                                                                                                                                                        
+261s 156ms/step - loss: 0.1581 - acc: 0.9787 - val_loss: 0.5210 - val_acc: 0.8431                                                                                     
+Epoch 12/50                                                                                                                                                                                                        
+259s 155ms/step - loss: 0.1245 - acc: 0.9837 - val_loss: 0.5383 - val_acc: 0.8455                                                                                     
+Epoch 13/50                                                                                                                                                                                                        
+259s 155ms/step - loss: 0.0966 - acc: 0.9891 - val_loss: 0.5775 - val_acc: 0.8216                                                                                     
+Epoch 14/50                                                                                                                                                                                                        
+259s 155ms/step - loss: 0.0768 - acc: 0.9937 - val_loss: 0.5472 - val_acc: 0.8479                                                                                     
+Epoch 15/50                                                                                                                                                                                                        
+259s 155ms/step - loss: 0.0631 - acc: 0.9958 - val_loss: 0.5706 - val_acc: 0.8323                                                                                     
+Epoch 16/50                                                                                                                                                                                                        
+258s 155ms/step - loss: 0.0512 - acc: 0.9955 - val_loss: 0.5518 - val_acc: 0.8383                                                                                     
+Epoch 17/50                                                                                                                                                                                                        
+259s 155ms/step - loss: 0.0420 - acc: 0.9972 - val_loss: 0.5768 - val_acc: 0.8479
+Epoch 18/50
+258s 154ms/step - loss: 0.0384 - acc: 0.9969 - val_loss: 0.5550 - val_acc: 0.8443
+Epoch 19/50
+257s 154ms/step - loss: 0.0331 - acc: 0.9981 - val_loss: 0.5396 - val_acc: 0.8479
+Epoch 20/50
+  17/1670 [..............................] - ETA: 3:59 - loss: 0.0201 - acc: 1.0000^C---------------------------------------------------------------------------
 ```

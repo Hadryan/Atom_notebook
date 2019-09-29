@@ -364,16 +364,18 @@
     sudo cp include/cudnn.h /usr/local/cuda/include
     sudo cp lib64/libcudnn* /usr/local/cuda/lib64
     ```
-  - **安装 libcupti**
-    ```shell
-    sudo apt-get install libcupti-dev
-    ```
   - **设置 LD_LIBRARY_PATH 和 CUDA_HOME 环境变量**
     ```shell
     export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/cuda/extras/CUPTI/lib64"
     export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/cuda/lib64"
     export PATH="/usr/local/cuda/bin:$PATH"
     export CUDA_HOME=/usr/local/cuda
+    ```
+  - **libcupti**，使用时报错 `Could not dlopen library 'libcupti.so.10.0';`
+    ```shell
+    # 复制 CUDA 中的 libcupti 到对应的 lib64 文件夹中
+    cd /usr/local/cuda
+    cp -d extras/CUPTI/lib64/* lib64/
     ```
   - **python 测试**
     ```python

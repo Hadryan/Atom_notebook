@@ -1230,6 +1230,24 @@
     sudo netplan apply
     ip add show dev enp7s0
     ```
+## 更改登录界面
+  - 可以将背景图放到 `/usr/share/backgrounds/`
+  - 修改 `/etc/alternatives/gdm3.css`
+    ```sh
+    # sudo vi /etc/alternatives/gdm3.css
+    #找到默认的这个部分
+    #lockDialogGroup {
+      background: #2c001e url(resource:///org/gnome/shell/theme/noise-texture.png);
+      background-repeat: repeat;
+    }
+    #改为
+    #lockDialogGroup {
+      background: #2c001e url(file:///usr/share/backgrounds/lock_back.jpg);
+      background-repeat: no-repeat;
+      background-size: cover;
+      background-position: center;
+    }
+    ```
 ***
 
 # 软件

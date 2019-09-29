@@ -745,3 +745,46 @@
   docker commit `docker ps -a | grep tensorflow | cut -d ' ' -f 1` insightface
   docker run -e CUDA_VISIBLE_DEVICES='1' -v /home/tdtest/workspace/:/workspace -it -p 9082:8082 -w /workspace/insightface-master insightface:latest ./server_flask.py
   ```
+***
+
+# 视频中识别人脸保存
+  ```py
+  "rtsp://admin:admin111@192.168.0.65:554/cam/realmonitor?channel=1&subtype=1"
+  import cv2
+  import sys
+
+  sys.path.append("../")
+  from face_model import FaceModel
+  fm = FaceModel(None)
+
+  def video_capture_local_mtcnn(fm, dest_path, dest_name_pre, video_src=0, skip_frame=5):
+      cap = cv2.VideoCapture(video_src)
+      pic_id = 0
+      cur_frame = 0
+      while(cap.isOpened()):
+          ret, frame = cap.read()
+          if ret == True:
+              frame = cv2.flip(frame, 0)
+
+              if cur_frame == 0:
+                  frame_rgb = frame[:, :, ::-1]
+                  bbs, pps = fm.get_face_location(frame_rgb)
+                  if len(bbs) != 0:
+                      nns = fm.face_align_landmarks(frame_rgb, pps)
+                      for nn in nns:
+                          fname = os.path.join(dest_path, dest_name_pre + "_{}.png".format(pic_id))
+                          print("fname = %s" % fname)
+                          plt.imsave(fname, nn)
+                          pic_id += 1
+
+              cv2.imshow('frame', frame)
+              cur_frame = (cur_frame + 1) % skip_frame
+              key = cv2.waitKey(1) & 0xFF
+              if key == ord('q'):
+                  break
+          else:
+              break
+
+      cap.release()
+      cv2.destroyAllWindows()
+  ```

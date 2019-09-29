@@ -37,7 +37,14 @@
   	- [图像分割 Image Segmentation](#图像分割-image-segmentation)
   	- [morphology 形态学滤波](#morphology-形态学滤波)
   	- [filters.rank 高级滤波](#filtersrank-高级滤波)
-  - [处理视频文件](#处理视频文件)
+  - [视频文件](#视频文件)
+  	- [视频读取](#视频读取)
+  	- [视频保存](#视频保存)
+  	- [CV2 显示中文](#cv2-显示中文)
+  - [图像曲线闭合](#图像曲线闭合)
+  	- [平移扩充边界](#平移扩充边界)
+  	- [Morphology](#morphology)
+  	- [逐行寻找左右边界](#逐行寻找左右边界)
 
   <!-- /TOC -->
 ***
@@ -1791,85 +1798,43 @@
     vs.stop()
     ```
 ## 视频保存
-```py
-import cv2
-def video_capture_local(dest, video_src=0):
-    cap = cv2.VideoCapture(video_src)
+  ```py
+  import cv2
+  def video_capture_local(dest, video_src=0):
+      cap = cv2.VideoCapture(video_src)
 
-    dest_format = dest.split('.')[-1].lower()
-    format_dict = {"avi": "XVID"}
-    format = format_dict.get(dest_format, "XVID")
-    fourcc = cv2.VideoWriter_fourcc(*format)
+      dest_format = dest.split('.')[-1].lower()
+      format_dict = {"avi": "XVID"}
+      format = format_dict.get(dest_format, "XVID")
+      fourcc = cv2.VideoWriter_fourcc(*format)
 
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    size = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-    out = cv2.VideoWriter(dest, fourcc, fps, size)
+      fps = cap.get(cv2.CAP_PROP_FPS)
+      size = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+      out = cv2.VideoWriter(dest, fourcc, fps, size)
 
-    WRITE_START = False
-    while(cap.isOpened()):
-        ret, frame = cap.read()
-        if ret == True:
-            frame = cv2.flip(frame, 0)
-            if WRITE_START:
-                out.write(frame)
-            cv2.imshow('frame', frame)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('s'):
-                WRITE_START = True
-            elif key == ord('e'):
-                WRITE_START = False
-            elif key == ord('q'):
-                break
-        else:
-            break
+      WRITE_START = False
+      while(cap.isOpened()):
+          ret, frame = cap.read()
+          if ret == True:
+              frame = cv2.flip(frame, 0)
+              if WRITE_START:
+                  out.write(frame)
+              cv2.imshow('frame', frame)
+              key = cv2.waitKey(1) & 0xFF
+              if key == ord('s'):
+                  WRITE_START = True
+              elif key == ord('e'):
+                  WRITE_START = False
+              elif key == ord('q'):
+                  break
+          else:
+              break
 
-    cap.release()
-    out.release()
-    cv2.destroyAllWindows()
-```
-```py
-"rtsp://admin:admin111@192.168.0.65:554/cam/realmonitor?channel=1&subtype=1"
-import cv2
-import sys
-
-sys.path.append("../")
-from face_model import FaceModel
-fm = FaceModel(None)
-
-def video_capture_local_mtcnn(fm, dest_path, dest_name_pre, video_src=0, skip_frame=5):
-    cap = cv2.VideoCapture(video_src)
-    pic_id = 0
-    cur_frame = 0
-    while(cap.isOpened()):
-        ret, frame = cap.read()
-        if ret == True:
-            frame = cv2.flip(frame, 0)
-
-            if cur_frame == 0:
-                frame_rgb = frame[:, :, ::-1]
-                bbs, pps = fm.get_face_location(frame_rgb)
-                if len(bbs) != 0:
-                    nns = fm.face_align_landmarks(frame_rgb, pps)
-                    for nn in nns:
-                        fname = os.path.join(dest_path, dest_name_pre + "_{}.png".format(pic_id))
-                        print("fname = %s" % fname)
-                        plt.imsave(fname, nn)
-                        pic_id += 1
-
-            cv2.imshow('frame', frame)
-            cur_frame = (cur_frame + 1) % skip_frame
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                break
-        else:
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
-```
-***
-
-# CV2 显示中文
+      cap.release()
+      out.release()
+      cv2.destroyAllWindows()
+  ```
+## CV2 显示中文
   ```py
   import cv2
   from PIL import Image, ImageDraw, ImageFont
@@ -1885,166 +1850,160 @@ def video_capture_local_mtcnn(fm, dest_path, dest_name_pre, video_src=0, skip_fr
   ```
 ***
 
-# skimage segmentation
+# 图像曲线闭合
+## 平移扩充边界
+  ```py
+  from skimage import io
+  def ful_fill_hole(im_path, repeat=1):
+    image = io.imread(im_path)
+    pp = (255 - image) / 255
+    max_line = pp.shape[0]
+    max_row = pp.shape[1]
 
-```py
-from skimage import io
-image = io.imread('./1.png')
-pp = (255 - image) / 255
-max_line = pp.shape[0]
-max_row = pp.shape[1]
+    for _ in range(4 * repeat):
+      for pp_line in pp:
+        left_edge = 0
+        for num_row in range(0, pp.shape[1] - 1):
+          if pp_line[num_row] == 1 and left_edge == 0:
+            left_edge = 1
 
-for num_line, pp_line in enumerate(pp[::2, ::2]):
-    for num_row, pp_row in enumerate(pp_line):
-        if pp_row == 1:
-            area_step = 1
-            while True:
-                line_ss = max(0, num_line - area_step)
-                line_ee = min(max_line, num_line + area_step)
-                row_ss = max(0, num_row - area_step)
-                row_ee = min(max_row, num_row + area_step)
-                if pp[line:ss:line_ee, row_ss:row_ee].sum() < 3:
-                    area_step += 1
-                else:
-                  if area_step == 1:
-                      break
-                  else:
+          if left_edge == 0:
+            continue
 
+          if pp_line[num_row + 1] == 1:
+            pp_line[num_row] = 1
 
-```
-```py
-from skimage import io
-def ful_fill_hole(im_path, repeat=1):
-  image = io.imread(im_path)
-  pp = (255 - image) / 255
-  max_line = pp.shape[0]
-  max_row = pp.shape[1]
+          # if pp_line[num_row] == 0 and pp_line[num_row + 1] == 0:
+          #   left_edge = 0
 
-  for _ in range(2 * repeat):
-    for pp_line in pp:
-      left_edge = 0
-      for num_row in range(0, pp.shape[1] - 1):
-        if pp_line[num_row] == 1 and left_edge == 0:
-          left_edge = 1
+      pp = pp.transpose()[:, ::-1]
 
-        if left_edge == 0:
-          continue
+    return pp, (255 - image) / 255
 
-        if pp_line[num_row + 1] == 1:
-          pp_line[num_row] = 1
-
-        # if pp_line[num_row] == 0 and pp_line[num_row + 1] == 0:
-        #   left_edge = 0
-
-    pp = pp.transpose()
-
-  return pp, (255 - image) / 255
-
-def display_image_2(pp, tt):
-  # 图片显示
-  fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
-  axes[0].imshow(pp, cmap=plt.cm.gray, interpolation='nearest')
-  axes[0].set_title('Original')
-  axes[1].imshow(tt, cmap=plt.cm.gray, interpolation='nearest')
-  axes[1].set_title('Converted image')
-
-pp, tt = ful_fill_hole('ian15780_label.png', repeat=10)
-display_image_2(pp, tt)
-```
-```py
-from skimage import io
-def ful_fill_hole(im_path, repeat=1):
-  image = io.imread(im_path)
-  pp = (255 - image) / 255
-  max_line = pp.shape[0]
-  max_row = pp.shape[1]
-
-  for _ in range(4 * repeat):
-    for pp_line in pp:
-      left_edge = 0
-      for num_row in range(0, pp.shape[1] - 1):
-        if pp_line[num_row] == 1 and left_edge == 0:
-          left_edge = 1
-
-        if left_edge == 0:
-          continue
-
-        if pp_line[num_row + 1] == 1:
-          pp_line[num_row] = 1
-
-        # if pp_line[num_row] == 0 and pp_line[num_row + 1] == 0:
-        #   left_edge = 0
-
-    pp = pp.transpose()[:, ::-1]
-
-  return pp, (255 - image) / 255
-
-def display_image_2(pp, tt):
-  # 图片显示
-  fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
-  axes[0].imshow(pp, cmap=plt.cm.gray, interpolation='nearest')
-  axes[0].set_title('Original')
-  axes[1].imshow(tt, cmap=plt.cm.gray, interpolation='nearest')
-  axes[1].set_title('Converted image')
-
-pp, tt = ful_fill_hole('ian15780_label.png', repeat=10)
-display_image_2(pp, tt)
-```
-```py
-import numpy as np
-import matplotlib.pyplot as plt
-
-# 扩展曲线边缘，填充空洞
-from skimage import io
-from skimage.morphology import reconstruction
-from skimage.morphology import closing
-from scipy.ndimage import gaussian_filter
-from scipy import ndimage as ndi
-
-pp = io.imread('./1.png')
-tt = gaussian_filter(255 - pp, 1)
-dilated = reconstruction(tt, tt, method='dilation')
-segmentation = ndi.binary_fill_holes(closing(dilated))
-
-# 填充颜色
-from skimage.color import label2rgb
-
-labeled_ss, _ = ndi.label(segmentation)
-image_label_overlay = label2rgb(labeled_ss, image=pp, colors=[[255,255,255], [255, 0, 0]])
-
-# 图片显示
-fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
-axes[0].imshow(pp, cmap=plt.cm.gray, interpolation='nearest')
-axes[0].set_title('Original')
-axes[1].imshow(image_label_overlay, cmap=plt.cm.gray, interpolation='nearest')
-axes[1].set_title('Converted image')
-```
-```py
-def fullfil_hole(im_path, dilation_disk=1, closing_disk=3):
-    im_orig = io.imread(im_path)
-    pp = (255 - im_orig) / 255
-    pp = closing(dilation(pp, disk(dilation_disk)), disk(closing_disk))
-    pp = ndi.binary_fill_holes(pp)
-
-    labeled_pp, _ = ndi.label(pp)
-    image_label_overlay = label2rgb(labeled_pp, image=im_orig, colors=[[255,255,255], [255, 0, 0]])
-
+  def display_image_2(pp, ii):
     # 图片显示
     fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
-    axes[0].imshow(pp, cmap=plt.cm.gray, interpolation='nearest')
+    axes[0].imshow(ii, cmap=plt.cm.gray, interpolation='nearest')
     axes[0].set_title('Original')
-    axes[1].imshow(image_label_overlay, cmap=plt.cm.gray, interpolation='nearest')
+    axes[1].imshow(pp, cmap=plt.cm.gray, interpolation='nearest')
     axes[1].set_title('Converted image')
-```
-```py
-fullfil_hole('ian12180_label.png', dilation_disk=1, closing_disk=3)
-fullfil_hole('ian14520_label.png', dilation_disk=1, closing_disk=3)
-fullfil_hole('ian14760_label.png', dilation_disk=1, closing_disk=5)
-fullfil_hole('ian15000_label.png', dilation_disk=1, closing_disk=5)
-fullfil_hole('ian15720_label.png', dilation_disk=1, closing_disk=5)
-fullfil_hole('ian15780_label.png', dilation_disk=2, closing_disk=5)
-fullfil_hole('ian16740_label.png', dilation_disk=2, closing_disk=3)
-fullfil_hole('ian19620_label.png', dilation_disk=1, closing_disk=3)
-fullfil_hole('ian1980_label.png', dilation_disk=1, closing_disk=3)
-fullfil_hole('ian9660_label.png', dilation_disk=1, closing_disk=3)
-```
+
+  pp, ii = ful_fill_hole('ian15780_label.png', repeat=10)
+  display_image_2(pp, ii)
+  ```
+  ![](images/skimage_border_fulfill_1.jpeg)
+## Morphology
+  ```py
+  import numpy as np
+  import matplotlib.pyplot as plt
+
+  # 扩展曲线边缘，填充空洞
+  from skimage import io
+  from skimage.morphology import reconstruction
+  from skimage.morphology import closing, erosion, dilation
+  from scipy.ndimage import gaussian_filter
+  from scipy import ndimage as ndi
+
+  pp = io.imread('./1.png')
+  tt = gaussian_filter(255 - pp, 1)
+  dilated = reconstruction(tt, tt, method='dilation')
+  segmentation = ndi.binary_fill_holes(closing(dilated))
+  segmentation = erosion(segmentation, disk(3))
+
+  # 填充颜色
+  from skimage.color import label2rgb
+
+  labeled_ss, _ = ndi.label(segmentation)
+  image_label_overlay = label2rgb(labeled_ss, image=pp, colors=[[255,255,255], [255, 0, 0]])
+
+  # 图片显示
+  fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
+  axes[0].imshow(pp, cmap=plt.cm.gray, interpolation='nearest')
+  axes[0].set_title('Original')
+  axes[1].imshow(image_label_overlay, cmap=plt.cm.gray, interpolation='nearest')
+  axes[1].set_title('Converted image')
+  ```
+  ![](images/skimage_border_fulfill_2.jpeg)
+  ```py
+  def fullfil_hole(im_path, dilation_disk=1, closing_disk=3):
+      im_orig = io.imread(im_path)
+      pp = (255 - im_orig) / 255
+      pp = closing(dilation(pp, disk(dilation_disk)), disk(closing_disk))
+      pp = ndi.binary_fill_holes(pp)
+      pp = erosion(pp, disk(3))
+
+      labeled_pp, _ = ndi.label(pp)
+      image_label_overlay = label2rgb(labeled_pp, image=im_orig, colors=[[255,255,255], [255, 0, 0]])
+
+      # 图片显示
+      fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
+      axes[0].imshow(pp, cmap=plt.cm.gray, interpolation='nearest')
+      axes[0].set_title('Original')
+      axes[1].imshow(image_label_overlay, cmap=plt.cm.gray, interpolation='nearest')
+      axes[1].set_title('Converted image')
+  ```
+  ```py
+  fullfil_hole('ian12180_label.png', dilation_disk=1, closing_disk=3)
+  fullfil_hole('ian14520_label.png', dilation_disk=1, closing_disk=3)
+  fullfil_hole('ian14760_label.png', dilation_disk=1, closing_disk=5)
+  fullfil_hole('ian15000_label.png', dilation_disk=1, closing_disk=5)
+  fullfil_hole('ian15720_label.png', dilation_disk=1, closing_disk=5)
+  fullfil_hole('ian15780_label.png', dilation_disk=2, closing_disk=5)
+  fullfil_hole('ian16740_label.png', dilation_disk=2, closing_disk=3)
+  fullfil_hole('ian19620_label.png', dilation_disk=1, closing_disk=3)
+  fullfil_hole('ian1980_label.png', dilation_disk=1, closing_disk=3)
+  fullfil_hole('ian9660_label.png', dilation_disk=1, closing_disk=3)
+  ```
+## 逐行寻找左右边界
+  ```py
+  from skimage.io import imread
+  from skimage.morphology import opening, disk
+  from scipy import ndimage as ndi
+
+  def ful_fill_border_h(aa, vs, ve):
+      bb = (aa[vs].argmin(), aa.shape[1] - aa[vs][::-1].argmin() - 1)
+      for irr in arange(vs + 1, aa.shape[0] - ve):
+          cc_s = aa[irr].argmin()
+          cc_e = aa.shape[1] - aa[irr][::-1].argmin() - 1
+          if np.sum(aa[irr, cc_s:cc_e]) == 0:
+              # print(irr, cc_s, cc_e, 'one')
+              if np.abs(cc_s - bb[0]) > np.abs(cc_e - bb[1]):
+                  aa[irr, bb[0]] = 0
+                  cc_s = bb[0]
+              else:
+                  aa[irr, bb[1]] = 0
+                  cc_e = bb[1]
+          if cc_s == 0:
+              aa[irr, bb[0]] = 0
+              aa[irr, bb[1]] = 0
+              cc_s = bb[0]
+              cc_e = bb[1]
+          bb = (cc_s, cc_e)
+      return aa
+
+  def ful_fill_border(iaa):
+      col_vs = np.alltrue(iaa == 255, 0).argmin()
+      col_ve = np.alltrue(iaa == 255, 0)[::-1].argmin()
+      row_vs = np.alltrue(iaa == 255, 1).argmin()
+      row_ve = np.alltrue(iaa == 255, 1)[::-1].argmin()
+      print(row_vs, row_ve, col_vs, col_ve)
+
+      aa = iaa.copy()
+      aa = ful_fill_border_h(aa, row_vs, row_ve)
+      aa = ful_fill_border_h(aa.T, col_vs, col_ve)
+      return opening(aa.T, disk(3))
+
+  def ful_fill_border_and_display(image_path):
+      iaa = imread(image_path)
+      aa = ful_fill_border(iaa)
+
+      fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
+      axes[0].imshow(iaa, cmap=plt.cm.gray, interpolation='nearest')
+      axes[0].set_title('Original')
+      axes[1].imshow(ndi.binary_fill_holes(255 - aa), cmap=plt.cm.gray, interpolation='nearest')
+      axes[1].set_title('Converted image')
+
+  ful_fill_border_and_display('1.png')
+  ```
+  ![](images/skimage_border_fulfill_3.jpeg)
+***

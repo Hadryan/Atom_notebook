@@ -14,6 +14,13 @@
   - [Yonv1943/Unsupervised-Segmentation](https://github.com/Yonv1943/Unsupervised-Segmentation/tree/master)
   - [Automatic and fast segmentation of breast region-of-interest (ROI) and density in MRIs](https://www.sciencedirect.com/science/article/pii/S2405844018327178)
   - [研习U-Net](https://zhuanlan.zhihu.com/p/44958351)
+  - [Interpolation (scipy.interpolate)](https://docs.scipy.org/doc/scipy/reference/tutorial/interpolate.html)
+  - [Opencv-Python学习笔记八——图像平滑（滤波）smoothing&blurring](https://www.jianshu.com/p/4ae5e8cef9ae)
+  - [开源nnU-Net医学影像分割论文，可自动调参，适应所有数据集](https://mp.weixin.qq.com/s?__biz=MzI5MDUyMDIxNA==&mid=2247490747&idx=1&sn=79be3325bc8a52c4fd5cda27881a4f7c&chksm=ec1ff142db687854f1d29b67baf68c82fac16035171223e570e1acd2b102b61a49e605604899&mpshare=1&scene=1&srcid=0924S7UCw3gx2ZW9E2n02Pro&sharer_sharetime=1569338713076&sharer_shareid=39fcc1218ba6b37488dcb9fb160affa6&pass_ticket=3Ax8ZJVGeWBc5I1gSKiPxa2vXD%2F5Sk3Io1oaZ%2BwQTJ5k1v48%2Fcacrj2chLcnHbtY#rd)
+  - [3D U-Net论文解析](http://www.mamicode.com/info-detail-2399938.html)
+  - [Github ozan-oktay/Attention-Gated-Networks](https://github.com/ozan-oktay/Attention-Gated-Networks)
+  - [Github wolny/pytorch-3dunet](https://github.com/wolny/pytorch-3dunet)
+  - [Github xmengli999/H-DenseUNet](https://github.com/xmengli999/H-DenseUNet)
 ***
 
 # Q and A
@@ -723,6 +730,8 @@
   ```
 ## breast seg
   ```py
+  #!/usr/bin/env python3
+  import os
   import numpy as np
   import matplotlib.pyplot as plt
   from skimage.color import rgb2gray
@@ -730,6 +739,159 @@
   from skimage.segmentation import morphological_geodesic_active_contour, inverse_gaussian_gradient
   from skimage.morphology import erosion, closing, opening, binary_closing, binary_erosion, binary_opening
   from skimage.morphology.selem import disk, square
+  from skimage.filters import scharr_h
+  from skimage.filters.rank import enhance_contrast
+  from skimage.io import imread
+  from scipy.ndimage import binary_fill_holes
+  import pydicom
+  from concurrent.futures import ThreadPoolExecutor
+
+  def breast_seg(image_name):
+      if image_name.endswith('.png'):
+        image_array = imread(image_name)
+      else:
+        image_array = pydicom.read_file(image_name).pixel_array
+
+      # Read image as uint8, value scope in [1, 256]
+      if image_array.max() > 255:
+        image_gray = rgb2gray(image_array) / image_array.max()
+      else:
+        image_gray = rgb2gray(image_array)
+        image = (image_gray * 255).astype(np.uint8)
+
+        # Enhance image by erosion, enhance contrast and equalize hist
+        image_enhance = equalize_adapthist(enhance_contrast(erosion(image, disk(3)), disk(3)))
+        # Detect the position of breast edge in middle area
+        middle_pix = image.shape[1] // 2
+        low_edge_y = ((image_enhance[:, middle_pix-20:middle_pix+20] > 0.1).sum(1)[::-1] > 10).argmax()
+        print("low_edge_y = %d" % low_edge_y)
+
+        # Inverse Gaussian gradient for morphology snakes
+        imm = image_enhance.copy()
+        for ii in range(1):
+          imm = (scharr_h(imm) < 0) * imm
+          gimage = inverse_gaussian_gradient(imm, alpha=100.0, sigma=5.0)
+
+          # Initial mask for morphology snakes of the thorax area
+          init_ls = np.zeros(image.shape, dtype=np.int8)
+          init_ls[10:-low_edge_y, 10:-10] = 1
+          # The first part is the thorax area
+          body_cc = morphological_geodesic_active_contour(gimage, 30, init_ls, smoothing=8, balloon=-1, threshold=0.69)
+          # body_cc = 1 - binary_closing(1 - body_cc, disk(25))
+          # return body_cc
+
+          # Detect the position of breast edge in height
+          low_breast_edge = ((image_enhance > 0.1).sum(1) > 10)[::-1].argmax() - 10
+          # low_breast_edge = ((image_enhance > 0.2).sum(1) > 5)[::-1].argmax() - 5
+          print("low_breast_edge = %d" % low_breast_edge)
+
+          # Initial mask for morphology snakes of the breast area
+          init_ls_2 = np.zeros(image.shape, dtype=np.int8)
+          keep_body_border = (image.shape[1] - low_edge_y) // 5 * 4
+          init_ls_2[keep_body_border:-low_breast_edge, 10:-10] = 1
+          init_ls_2 *= (1 - body_cc)
+          init_ls_2 = binary_closing(init_ls_2, disk(25))
+
+          # Breast area
+          image_enhance_2 = adjust_sigmoid(enhance_contrast(closing(opening(image, disk(3)), disk(13)), square(7)), cutoff=0.1)
+          breast_cc = binary_opening(binary_fill_holes(image_enhance_2 > (image_enhance_2[-low_breast_edge+5:].max() + 12)), disk(10))
+          final_cc = init_ls_2 * breast_cc
+
+          # Move the breast border 5 pixels up to exclude the border line
+          up_border = final_cc[:-low_edge_y-5, :]
+          low_border = binary_erosion(final_cc[-low_edge_y-5:, :], disk(8))
+          return np.vstack([up_border, low_border])
+          # return np.vstack([breast_cc[:-low_edge_y-5, :], breast_cc[-low_edge_y:, :], np.zeros([5, 512])])
+
+          def plot_and_save_breast_seg_multi(images_pattern, rows=0, save=True, display=True, threads=10):
+          if os.path.isdir(images_pattern):
+          print("directory = %s" % images_pattern)
+          images = glob2.glob(os.path.join(images_pattern, '*'))
+          else:
+          images = glob2.glob(images_pattern)
+
+          if len(images) == 0:
+          print("Empty images")
+          return np.array([])
+
+          executor = ThreadPoolExecutor(max_workers=threads)
+          rets = executor.map(breast_seg, images)
+
+          if rows == 0:
+          rows = int(round(np.sqrt(len(images)) / 1.2))
+          # rows = int(np.ceil(len(images) / 6))
+          cols = int(np.ceil(len(images) / rows))
+          print("Total images = %d, rows = %d, cols = %d" % (len(images), rows, cols))
+
+          fig, axes = plt.subplots(rows, cols, figsize=(3 * cols, 3 * rows))
+          if len(images) != 1:
+          axes_f = axes.flatten()
+          else:
+          axes_f = [axes]
+
+          if save:
+          save_name = os.path.basename(os.path.dirname(images[0]))
+          save_dir = os.path.dirname(os.path.dirname(images[0]))
+          save_png = os.path.join(save_dir, save_name + '.png')
+          save_result_dir = os.path.join(save_dir, "seg_result", save_name)
+          if not os.path.exists(save_result_dir):
+          os.makedirs(save_result_dir)
+
+          ccs = []
+          for iid, (cc, imm, ax) in enumerate(zip(rets, images, axes_f)):
+          print('iid = %d, imm = %s' % (iid, imm))
+          if imm.endswith('.png'):
+          img = imread(imm)
+          else:
+          img = pydicom.read_file(imm).pixel_array
+
+          ax.imshow(img, cmap='gray')
+          ax.contour(cc, [0.5], colors='r')
+          # ax.imshow(img[:, :, 0] * cc, cmap='gray')
+          ax.set_axis_off()
+          ccs.append(cc)
+          if save:
+          if len(img.shape) == 3:
+          img = img[:, :, 0]
+          plt.imsave(os.path.join(save_result_dir, os.path.basename(imm).split('.')[0] + '.png'), img * cc, cmap='gray')
+          fig.tight_layout()
+          if display:
+          plt.show()
+
+          if save:
+          fig.savefig(save_png)
+          return np.array(ccs)
+
+          if __name__ == "__main__":
+          import argparse
+          import glob2
+
+          parser = argparse.ArgumentParser()
+          parser.add_argument('-i', '--image_pattern', type=str, required=True, help="Dicom Image path to parse.")
+          parser.add_argument('-r', '--rows', type=int, default=0, help="Rows of images to display.")
+          parser.add_argument('-t', '--threads', type=int, default=10, help="Threads to use.")
+          parser.add_argument('-D', '--no_display', action="store_true", help="Disable plt display.")
+          parser.add_argument('-2', '--depth_2', action="store_true", help="Directory depth is 2.")
+          args = parser.parse_args()
+          if args.depth_2:
+          for ii in os.listdir(args.image_pattern):
+          dd = os.path.join(args.image_pattern, ii)
+          if os.path.isdir(dd):
+          plot_and_save_breast_seg_multi(dd, args.rows, display=False, threads=args.threads)
+          else:
+          plot_and_save_breast_seg_multi(args.image_pattern, args.rows, display=not args.no_display, threads=args.threads)
+          ```
+## breast seg
+  ```py
+  import os
+  import numpy as np
+  import matplotlib.pyplot as plt
+  from skimage.color import rgb2gray
+  from skimage.exposure import equalize_adapthist, adjust_sigmoid
+  from skimage.segmentation import morphological_geodesic_active_contour, inverse_gaussian_gradient
+  from skimage.morphology import erosion, closing, opening, binary_closing, binary_erosion, binary_opening
+  from skimage.morphology.selem import disk, square
+  from skimage.filters import scharr_h
   from skimage.filters.rank import enhance_contrast
   from skimage.io import imread
   from scipy.ndimage import binary_fill_holes
@@ -744,24 +906,60 @@
       image = (image_gray * 255).astype(np.uint8)
       # Enhance image by erosion, enhance contrast and equalize hist
       image_enhance = equalize_adapthist(enhance_contrast(erosion(image, disk(3)), disk(3)))
-      # Inverse Gaussian gradient for morphology snakes
-      gimage = inverse_gaussian_gradient(image_enhance, alpha=100.0, sigma=3.0)
-
       # Detect the position of breast edge in middle area
       middle_pix = image.shape[1] // 2
       low_edge_y = ((image_enhance[:, middle_pix-20:middle_pix+20] > 0.1).sum(1)[::-1] > 10).argmax()
       print("low_edge_y = %d" % low_edge_y)
 
+      # Inverse Gaussian gradient for morphology snakes
+      imm = image_enhance.copy()
+      for ii in range(2):
+          for irr in np.arange(0, 512, 2):
+              for icc in np.arange(0, 512):
+                  if imm[irr, icc] > imm[irr+1, icc]:
+                      imm[irr+1, icc] = imm[irr, icc]
+
+          for irr in np.arange(1, 510, 2):
+              for icc in np.arange(0, 512):
+                  if imm[irr, icc] > imm[irr+1, icc]:
+                      imm[irr+1, icc] = imm[irr, icc]
+          imm = (scharr_h(imm) < 0) * imm
+
+      for ii in range(4):
+          for irr in np.arange(0, 512 - low_edge_y - 5, 2):
+              for icc in np.arange(0, 512):
+                  if imm[irr, icc] < imm[irr + 1, icc]:
+                      imm[irr, icc] = imm[irr + 1, icc]
+
+          for irr in np.arange(1, 512 - low_edge_y - 5, 2):
+              for icc in np.arange(0, 512):
+                  if imm[irr, icc] < imm[irr + 1, icc]:
+                      imm[irr, icc] = imm[irr + 1, icc]
+
+      for ii in range(2):
+          for irr in np.arange(0, 512, 2):
+              for icc in np.arange(0, 512):
+                  if imm[irr, icc] > imm[irr+1, icc]:
+                      imm[irr, icc] = imm[irr+1, icc]
+
+          for irr in np.arange(1, 510, 2):
+              for icc in np.arange(0, 512):
+                  if imm[irr, icc] > imm[irr+1, icc]:
+                      imm[irr, icc] = imm[irr+1, icc]
+      gimage = inverse_gaussian_gradient(adjust_sigmoid(imm, cutoff=0.2), alpha=100.0, sigma=5.0)
+
       # Initial mask for morphology snakes of the thorax area
       init_ls = np.zeros(image.shape, dtype=np.int8)
-      init_ls[10:-low_edge_y-5, 10:-10] = 1
+      init_ls[10:-low_edge_y, 10:-10] = 1
       # The first part is the thorax area
-      body_cc = morphological_geodesic_active_contour(gimage, 50, init_ls, smoothing=2, balloon=-1, threshold=0.79)
+      body_cc = morphological_geodesic_active_contour(gimage, 30, init_ls, smoothing=8, balloon=-1, threshold=0.89)
+      body_cc = binary_erosion(body_cc, disk(5))
       # body_cc = 1 - binary_closing(1 - body_cc, disk(25))
-      return body_cc
+      # return body_cc
 
       # Detect the position of breast edge in height
-      low_breast_edge = ((image_enhance > 0.2).sum(1) > 10)[::-1].argmax() - 5
+      low_breast_edge = ((image_enhance > 0.1).sum(1) > 10)[::-1].argmax() - 10
+      # low_breast_edge = ((image_enhance > 0.2).sum(1) > 5)[::-1].argmax() - 5
       print("low_breast_edge = %d" % low_breast_edge)
 
       # Initial mask for morphology snakes of the breast area
@@ -773,23 +971,30 @@
 
       # Breast area
       image_enhance_2 = adjust_sigmoid(enhance_contrast(closing(opening(image, disk(3)), disk(13)), square(7)), cutoff=0.1)
-      breast_cc = binary_opening(binary_fill_holes(image_enhance_2 > (image_enhance_2[-low_breast_edge+5:].max() + 8)), disk(10))
+      breast_cc = binary_opening(binary_fill_holes(image_enhance_2 > (image_enhance_2[-low_breast_edge+5:].max() + 12)), disk(10))
       final_cc = init_ls_2 * breast_cc
 
       # Move the breast border 5 pixels up to exclude the border line
-      up_border = final_cc[:-low_edge_y-10, :]
-      low_border = binary_erosion(final_cc[-low_edge_y-10:, :], disk(8))
+      up_border = final_cc[:-low_edge_y, :]
+      low_border = binary_erosion(final_cc[-low_edge_y:, :], disk(8))
       return np.vstack([up_border, low_border])
       # return np.vstack([breast_cc[:-low_edge_y-5, :], breast_cc[-low_edge_y:, :], np.zeros([5, 512])])
 
-  def plot_breast_seg_multi(images, rows=0):
+  def plot_breast_seg_multi(images, rows=0, save_png=None, save_result_dir=None):
+      if len(images) == 0:
+          print("Empty images")
+          return np.array([])
+
       if rows == 0:
           rows = int(np.ceil(len(images) / 6))
       cols = int(np.ceil(len(images) / rows))
       print("Total images = %d, rows = %d, cols = %d" % (len(images), rows, cols))
 
       fig, axes = plt.subplots(rows, cols, figsize=(3 * cols, 3 * rows))
-      axes_f = axes.flatten()
+      if len(images) != 1:
+          axes_f = axes.flatten()
+      else:
+          axes_f = [axes]
       ccs = []
       for imm, ax in zip(images, axes_f):
           if imm.endswith('.png'):
@@ -802,21 +1007,26 @@
           # ax.imshow(img[:, :, 0] * cc, cmap='gray')
           ax.set_axis_off()
           ccs.append(cc)
+          if save_result_dir:
+              plt.imsave(os.path.join(save_result_dir, os.path.basename(imm)), img[:, :, 0] * cc, cmap='gray')
       fig.tight_layout()
       plt.show()
+
+      if save_png:
+          fig.savefig(save_png)
       return np.array(ccs)
 
-  def foo(image_array):
-      # Read image as uint8, value scope in [1, 256]
-      if image_array.max() > 255:
-          image_gray = rgb2gray(image_array) / image_array.max()
-      else:
-          image_gray = rgb2gray(image_array)
-      image = (image_gray * 255).astype(np.uint8)
-      init_ls = checkerboard_level_set(image.shape, 6)
-      init_ls[:10], init_ls[:, :10], init_ls[-10:], init_ls[:, -10:]= (0, 0, 0, 0)
-      cv = morphological_chan_vese(image, 20, init_ls, smoothing=3)
-      return binary_closing(binary_fill_holes(cv), disk(25))
+  def plot_and_save_dir(dir):
+      for ii in os.listdir(dir):
+          dd = os.path.join(dir, ii)
+          if os.path.isdir(dd):
+              print("directory = %s" % dd)
+              aa = glob2.glob(os.path.join(dd, '*'))
+              save_png = os.path.join(dir, ii + '.png')
+              save_result_dir = os.path.join(dir, "seg_result", ii)
+              if not os.path.exists(save_result_dir):
+                  os.makedirs(save_result_dir)
+              plot_breast_seg_multi(aa, save_png=save_png, save_result_dir=save_result_dir)
 
   if __name__ == "__main__":
       import argparse
@@ -826,16 +1036,171 @@
       parser.add_argument('-i', '--image', type=str, required=True, help="Dicom Image path to parse")
       parser.add_argument('-r', '--rows', type=int, default=0, help="Rows of images to display")
       args = parser.parse_args()
-      aa = glob2.glob(args.image)
-      plot_breast_seg_multi(aa, args.rows)
+      if os.path.isdir(args.image):
+          plot_and_save_dir(args.image)
+      else:
+          aa = glob2.glob(args.image)
+          plot_breast_seg_multi(aa, args.rows)
 
-  import glob2
-  aa = glob2.glob('./*.png')
-  plot_breast_seg_multi(aa, 4)
+    import glob2
+    aa = glob2.glob('./*.png')
+    plot_breast_seg_multi(aa, 4)
 
-  ccs = np.array([breast_seg(imread(ii)) for ii in aa])
-  images = np.array([imread(ii) for ii in aa])
-  np.savez('breast_border', breast_borders=ccs, images=images)
+    ccs = np.array([breast_seg(imread(ii)) for ii in aa])
+    images = np.array([imread(ii) for ii in aa])
+    np.savez('breast_border', breast_borders=ccs, images=images)
+  ```
+## breast seg
+  ```py
+  import os
+  import numpy as np
+  import matplotlib.pyplot as plt
+  from skimage.color import rgb2gray
+  from skimage.exposure import equalize_adapthist, adjust_sigmoid
+  from skimage.segmentation import morphological_geodesic_active_contour, inverse_gaussian_gradient
+  from skimage.morphology import erosion, closing, opening, binary_closing, binary_erosion, binary_opening
+  from skimage.morphology.selem import disk, square
+  from skimage.filters import scharr_h
+  from skimage.filters.rank import enhance_contrast
+  from skimage.io import imread
+  from scipy.ndimage import binary_fill_holes
+  import pydicom
+
+  bright_up = lambda ii: np.max([ii, np.vstack([ii[1:], np.zeros_like(ii[:1])])], 0)
+  dim_up = lambda ii: np.min([ii, np.vstack([ii[1:], np.zeros_like(ii[:1])])], 0)
+  bright_down = lambda ii: np.max([ii, np.vstack([np.zeros_like(ii[:1]), ii[:-1]])], 0)
+  dim_down = lambda ii: np.min([ii, np.vstack([np.zeros_like(ii[:1]), ii[:-1]])], 0)
+
+  def breast_seg(image_array):
+      # Read image as uint8, value scope in [1, 256]
+      if image_array.max() > 255:
+          image_gray = rgb2gray(image_array) / image_array.max()
+      else:
+          image_gray = rgb2gray(image_array)
+      image = (image_gray * 255).astype(np.uint8)
+      # Enhance image by erosion, enhance contrast and equalize hist
+      image_enhance = equalize_adapthist(enhance_contrast(erosion(image, disk(3)), disk(3)))
+      # Detect the position of breast edge in middle area
+      middle_pix = image.shape[1] // 2
+      low_edge_y = ((image_enhance[:, middle_pix-20:middle_pix+20] > 0.1).sum(1)[::-1] > 10).argmax()
+      print("low_edge_y = %d" % low_edge_y)
+
+      # Inverse Gaussian gradient for morphology snakes
+      imm = image_enhance.copy()
+      for ii in range(3):
+          imm = bright_down(imm)
+          imm = bright_down(imm)
+          imm = (scharr_h(imm) < 0) * imm
+
+      for ii in range(3):
+          imm = np.vstack([bright_up(imm[:-low_edge_y]), imm[-low_edge_y:]])
+          imm = np.vstack([bright_up(imm[:-low_edge_y]), imm[-low_edge_y:]])
+          imm = np.vstack([bright_up(imm[:-low_edge_y]), imm[-low_edge_y:]])
+          imm = dim_up(imm)
+          imm = dim_up(imm)
+      gimage = inverse_gaussian_gradient(adjust_sigmoid(imm, cutoff=0.2), alpha=100.0, sigma=5.0)
+
+      # Initial mask for morphology snakes of the thorax area
+      init_ls = np.zeros(image.shape, dtype=np.int8)
+      init_ls[10:-low_edge_y, 10:-10] = 1
+      # The first part is the thorax area
+      body_cc = morphological_geodesic_active_contour(gimage, 30, init_ls, smoothing=8, balloon=-1, threshold=0.89)
+      body_cc = binary_erosion(body_cc, disk(5))
+      # body_cc = 1 - binary_closing(1 - body_cc, disk(25))
+      # return body_cc
+
+      # Detect the position of breast edge in height
+      low_breast_edge = ((image_enhance > 0.1).sum(1) > 10)[::-1].argmax() - 10
+      # low_breast_edge = ((image_enhance > 0.2).sum(1) > 5)[::-1].argmax() - 5
+      print("low_breast_edge = %d" % low_breast_edge)
+
+      # Initial mask for morphology snakes of the breast area
+      init_ls_2 = np.zeros(image.shape, dtype=np.int8)
+      keep_body_border = (image.shape[1] - low_edge_y) // 5 * 4
+      init_ls_2[keep_body_border:-low_breast_edge, 10:-10] = 1
+      init_ls_2 *= (1 - body_cc)
+      init_ls_2 = binary_closing(init_ls_2, disk(25))
+
+      # Breast area
+      image_enhance_2 = adjust_sigmoid(enhance_contrast(closing(opening(image, disk(3)), disk(13)), square(7)), cutoff=0.1)
+      breast_cc = binary_opening(binary_fill_holes(image_enhance_2 > (image_enhance_2[-low_breast_edge+5:].max() + 12)), disk(10))
+      final_cc = init_ls_2 * breast_cc
+
+      # Move the breast border 5 pixels up to exclude the border line
+      up_border = final_cc[:-low_edge_y, :]
+      low_border = binary_erosion(final_cc[-low_edge_y:, :], disk(8))
+      return np.vstack([up_border, low_border])
+      # return np.vstack([breast_cc[:-low_edge_y-5, :], breast_cc[-low_edge_y:, :], np.zeros([5, 512])])
+
+  def plot_breast_seg_multi(images, rows=0, save_png=None, save_result_dir=None):
+      if len(images) == 0:
+          print("Empty images")
+          return np.array([])
+
+      if rows == 0:
+          rows = int(np.ceil(len(images) / 6))
+      cols = int(np.ceil(len(images) / rows))
+      print("Total images = %d, rows = %d, cols = %d" % (len(images), rows, cols))
+
+      fig, axes = plt.subplots(rows, cols, figsize=(3 * cols, 3 * rows))
+      if len(images) != 1:
+          axes_f = axes.flatten()
+      else:
+          axes_f = [axes]
+      ccs = []
+      for imm, ax in zip(images, axes_f):
+          if imm.endswith('.png'):
+              img = imread(imm)
+          else:
+              img = pydicom.read_file(imm).pixel_array
+          cc = breast_seg(img)
+          ax.imshow(img, cmap='gray')
+          ax.contour(cc, [0.5], colors='r')
+          # ax.imshow(img[:, :, 0] * cc, cmap='gray')
+          ax.set_axis_off()
+          ccs.append(cc)
+          if save_result_dir:
+              plt.imsave(os.path.join(save_result_dir, os.path.basename(imm)), img[:, :, 0] * cc, cmap='gray')
+      fig.tight_layout()
+      plt.show()
+
+      if save_png:
+          fig.savefig(save_png)
+      return np.array(ccs)
+
+  def plot_and_save_dir(dir):
+      for ii in os.listdir(dir):
+          dd = os.path.join(dir, ii)
+          if os.path.isdir(dd):
+              print("directory = %s" % dd)
+              aa = glob2.glob(os.path.join(dd, '*'))
+              save_png = os.path.join(dir, ii + '.png')
+              save_result_dir = os.path.join(dir, "seg_result", ii)
+              if not os.path.exists(save_result_dir):
+                  os.makedirs(save_result_dir)
+              plot_breast_seg_multi(aa, save_png=save_png, save_result_dir=save_result_dir)
+
+  if __name__ == "__main__":
+      import argparse
+      import glob2
+
+      parser = argparse.ArgumentParser()
+      parser.add_argument('-i', '--image', type=str, required=True, help="Dicom Image path to parse")
+      parser.add_argument('-r', '--rows', type=int, default=0, help="Rows of images to display")
+      args = parser.parse_args()
+      if os.path.isdir(args.image):
+          plot_and_save_dir(args.image)
+      else:
+          aa = glob2.glob(args.image)
+          plot_breast_seg_multi(aa, args.rows)
+
+    import glob2
+    aa = glob2.glob('./*.png')
+    plot_breast_seg_multi(aa, 4)
+
+    ccs = np.array([breast_seg(imread(ii)) for ii in aa])
+    images = np.array([imread(ii) for ii in aa])
+    np.savez('breast_border', breast_borders=ccs, images=images)
   ```
 ## tumor seg
   ```py
@@ -862,6 +1227,44 @@
   mms = [extract_mask_by_breast_border(ii, cc) for cc, ii in zip(ccs, images)]
   plot_image_and_masks(images, mms, 4, 6)
   ```
+## function
+```py
+bright_up = lambda ii: np.max([ii, np.vstack([ii[1:], np.zeros_like(ii[:1])])], 0)
+dim_up = lambda ii: np.min([ii, np.vstack([ii[1:], np.zeros_like(ii[:1])])], 0)
+bright_down = lambda ii: np.max([ii, np.vstack([np.zeros_like(ii[:1]), ii[:-1]])], 0)
+dim_down = lambda ii: np.min([ii, np.vstack([np.zeros_like(ii[:1]), ii[:-1]])], 0)
+
+iaa = image_enhance.copy()
+for ii in range(4):
+    iaa = bright_down(iaa)
+    iaa = bright_down(iaa)
+    iaa = (scharr_h(iaa) < 0) * iaa
+    iaa = np.vstack([bright_up(iaa[:-low_edge_y]), iaa[-low_edge_y:]])
+    iaa = np.vstack([bright_up(iaa[:-low_edge_y]), iaa[-low_edge_y:]])
+    iaa = np.vstack([bright_up(iaa[:-low_edge_y]), iaa[-low_edge_y:]])
+    iaa = dim_up(iaa)
+    iaa = dim_up(iaa)
+
+for ii in range(4):
+    iaa = np.vstack([bright_up(iaa[:-low_edge_y]), iaa[-low_edge_y:]])
+    iaa = np.vstack([bright_up(iaa[:-low_edge_y]), iaa[-low_edge_y:]])
+    iaa = np.vstack([bright_up(iaa[:-low_edge_y]), iaa[-low_edge_y:]])
+    iaa = dim_up(iaa)
+    iaa = dim_up(iaa)
+
+for ii in range(4):
+
+for ii in range(2):
+    for irr in np.arange(0, 512, 2):
+        for icc in np.arange(0, 512):
+            if imm[irr, icc] > imm[irr+1, icc]:
+                imm[irr, icc] = imm[irr+1, icc]
+
+    for irr in np.arange(1, 510, 2):
+        for icc in np.arange(0, 512):
+            if imm[irr, icc] > imm[irr+1, icc]:
+                imm[irr, icc] = imm[irr+1, icc]
+```
 ***
 
 # UNet
@@ -982,3 +1385,56 @@ shift_demo(img)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
 ```
+```py
+imm = image_enhance.copy()
+for irr in arange(0, 512, 2):
+    for icc in arange(0, 512):
+        if imm[irr, icc] > imm[irr+1, icc]:
+            print(irr, icc)
+            imm[irr+1, icc] = imm[irr, icc]
+
+for irr in arange(0, 512, 2):
+    for icc in arange(0, 512):
+        if imm[irr, icc] < imm[irr+1, icc]:
+            print(irr, icc)
+            imm[irr+1, icc] = imm[irr, icc]
+
+for irr in arange(0, 510, 3):
+    for icc in arange(0, 512):
+        if imm[irr, icc] > imm[irr+1, icc]:
+            print(irr, icc)
+            imm[irr+2, icc] = imm[irr+1, icc] = imm[irr, icc]
+
+for irr in arange(0, 510, 3):
+    for icc in arange(0, 512):
+        if imm[irr, icc] < imm[irr+1, icc]:
+            print(irr, icc)
+            imm[irr+2, icc] = imm[irr+1, icc] = imm[irr, icc]
+
+for irr in arange(0, 512, 4):
+    for icc in arange(0, 512):
+        if imm[irr, icc] > imm[irr+1, icc]:
+            print(irr, icc)
+            imm[irr+3, icc] = imm[irr+2, icc] = imm[irr+1, icc] = imm[irr, icc]
+
+for irr in arange(0, 512, 4):
+    for icc in arange(0, 512):
+        if imm[irr, icc] < imm[irr+1, icc]:
+            print(irr, icc)
+            imm[irr+3, icc] = imm[irr+2, icc] = imm[irr+1, icc] = imm[irr, icc]
+
+plt.imshow(np.hstack([image_enhance, imm]), cmap='gray')
+
+for irr in arange(0, 510, 3):
+    for icc in arange(0, 512):
+        if imm[irr, icc] > imm[irr+1, icc]:
+            print(irr, icc)
+            imm[irr+1, icc] = imm[irr, icc]
+            imm[irr+2, icc] = imm[irr, icc]
+plt.imshow(np.hstack([image_enhance, imm]), cmap='gray')
+plt.plot([0, 1000], [512-271, 512-271])
+```
+1641321 0113 - 0119, 0465, 0466
+1975297 0003 - 0013, 0066, 0112 - 0116, 0175, 0195 - 0199, 0231, 0232, 0291, 0407, 0510, 0626
+2100296 0126, 0127, 0158-0162, 0373
+2132229 0175
