@@ -2006,4 +2006,99 @@
   ful_fill_border_and_display('1.png')
   ```
   ![](images/skimage_border_fulfill_3.jpeg)
+## 寻找最近点
+  ```py
+  # X 轴连线
+  plt.scatter([0, 3], [2, 6])
+  plt.scatter(np.round(np.interp(arange(2 + 1, 6), [2, 6], [0, 3])), arange(2 + 1, 6))
+  ```
+  ![](images/image_process_scatter_interp_1.png)
+  ```py
+  # Y 轴连线
+  plt.scatter([5, 1], [0, 2])
+  plt.scatter(arange(1 + 1, 5), np.round(np.interp(arange(1 + 1, 5), [1, 5], [2, 0])))
+  ```
+  ![](images/image_process_scatter_interp_2.png)
+  ```py
+  import numpy as np
+  import matplotlib.pyplot as plt
+  from scipy import ndimage as ndi
+  from skimage.io import imread
+  from skimage.color import label2rgb
+
+  def conn_between_dots(iss, iee):
+      dd = np.abs(np.subtract(iee, iss))
+      # Insert in y if dd[0] < dd[1], else x
+      ins = 1 if dd[0] < dd[1] else 0
+      ins_p = (ins + 1) % 2
+
+      if iee[ins] < iss[ins]:
+          iss, iee = iee, iss
+      nxx = np.arange(iss[ins] + 1, iee[ins])
+      nyy = np.round(np.interp(nxx, [iss[ins], iee[ins]], [iss[ins_p], iee[ins_p]])).astype('int64')
+
+      return (nxx, nyy) if ins == 0 else (nyy, nxx)
+
+  def image_close_line(image_array):
+      xx, yy = np.where(image_array == 0)
+      cc = np.array([[ii, jj] for ii, jj in zip(xx, yy)])
+      bb = np.array([np.linalg.norm(ii - cc, axis=1) for ii in cc])
+
+      nn = []
+      for id, ii in enumerate(bb):
+          ss = ii.argsort()
+          # if ii[ss[2]] < 1.5:
+          if ii[ss[2]] == 1 or (ii[ss[2]] < 1.5 and bb[ss[2], ss[1]] != 1):
+              continue
+          if ii[ss[1]] > 1.5:
+              iss = cc[id]
+              iee = cc[ss[1]]
+              print("Isolated dot, iss = %s, iee = %s" % (iss, iee))
+              nxx, nyy = conn_between_dots(iss, iee)
+              nn.extend(list(zip(nxx, nyy)))
+
+          iss = cc[id]
+          iee = []
+          for iie in range(2, cc.shape[0]):
+              if bb[ss[iie], ss[iie - 1]] > 1.5:
+                  iee = cc[ss[iie]]
+                  break
+          if len(iee) == 0:
+              print(">>>> Error! iee is Empty, check this! <<<<")
+              continue
+          print("The second nearest dot, iss = %s, iee = %s, iie = %d" % (iss, iee, iie))
+          nxx, nyy = conn_between_dots(iss, iee)
+          nn.extend(list(zip(nxx, nyy)))
+
+      mm = [ii for ii in nn if image_array[ii[0], ii[1]] != 0]
+      image_closed = image_array.copy()
+      if len(mm) == 0:
+          return mm, image_closed
+
+      for ii in mm:
+          image_closed[ii[0], ii[1]] = 0
+      tt, image_closed = image_close_line(image_closed)
+      mm.extend(tt)
+      return mm, image_closed
+
+  def close_and_plot_image(image_name):
+      fig = plt.figure()
+      image_array = imread(image_name)
+      mm, image_closed = image_close_line(image_array)
+
+      # 填充颜色
+      segmentation = ndi.binary_fill_holes(255 - image_closed)
+      labeled_ss, _ = ndi.label(segmentation)
+      image_label_overlay = label2rgb(labeled_ss, image=image_closed, colors=[[255,255,255], [255, 0, 0]])
+
+      # plt.imshow(np.hstack([image_array, image_closed]), cmap='gray')
+      # plt.imshow(np.hstack([image_array, 255 - segmentation * 255]), cmap='gray')
+      plt.imshow(np.hstack([gray2rgb(image_array), image_label_overlay]))
+      plt.tight_layout()
+
+  close_and_plot_image('1.png')
+  import glob2
+  [close_and_plot_image(ii) for ii in glob2.glob('./*.png')]
+  ```
+  ![](images/image_process_close_border.png)
 ***
