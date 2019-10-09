@@ -133,7 +133,7 @@ image_show(text > text_threshold);
 
       if to_array:
           image_collection = image_collection.concatenate()
-          pick = np.any(image_collection != np.zeros([image_size[0], image_size[1], 3], dtype=uint8), axis=(1, 2, 3))
+          pick = np.any(image_collection != np.zeros([image_size[0], image_size[1], 3], dtype=np.uint8), axis=(1, 2, 3))
           image_collection = image_collection[pick]
           file_names = file_names[pick]
 
@@ -148,10 +148,10 @@ image_show(text > text_threshold);
       return image_collection, file_names
 
 
-  def load_train_test_data(raw_path="./", limit=None):
+  def load_train_test_data(raw_path="./", limit=None, save_name="./train_test_dataset.npz"):
       cur_dir = os.getcwd()
       os.chdir(raw_path.replace('~', os.environ['HOME']))
-      if not os.path.exists("./train_test_dataset.npz"):
+      if not os.path.exists(save_name):
           imposter_train, imposter_train_f = image_collection_by_file("imposter_train_raw.txt", "ImposterRaw", limit=limit, save_base_path="./Cropped/imposter_train")
           client_train, client_train_f = image_collection_by_file("client_train_raw.txt", "ClientRaw", limit=limit, save_base_path="./Cropped/client_train")
           imposter_test, imposter_test_f = image_collection_by_file("imposter_test_raw.txt", "ImposterRaw", limit=limit, save_base_path="./Cropped/imposter_test")
@@ -162,9 +162,9 @@ image_show(text > text_threshold);
           test_x = np.concatenate([imposter_test, client_test])
           test_y = np.array([0] * imposter_test.shape[0] + [1] * client_test.shape[0])
 
-          np.savez("train_test_dataset", train_x=train_x, train_y=train_y, test_x=test_x, test_y=test_y)
+          np.savez('.'.join(save_name.split('.')[:-1]), train_x=train_x, train_y=train_y, test_x=test_x, test_y=test_y)
       else:
-          tt = np.load("train_test_dataset.npz")
+          tt = np.load(save_name)
           train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
 
       os.chdir(cur_dir)
@@ -1608,6 +1608,10 @@ image_show(text > text_threshold);
     from tensorflow.keras import layers
     model = keras.Sequential([
         layers.Conv2D(512, 1, strides=1, activation='relu'),
+        layers.AveragePooling2D(pool_size=1),
+        layers.Conv2D(128, 1, strides=1, activation='relu'),
+        layers.AveragePooling2D(pool_size=1),
+        layers.Conv2D(32, 1, strides=1, activation='relu'),
         layers.Dropout(0.5),
         layers.AveragePooling2D(pool_size=1),
         layers.Flatten(),
@@ -1920,103 +1924,168 @@ if __name__ == "__main__":
     model.fit_generator(dataset, epochs=epochs, steps_per_epoch=num_batches)
 ```
 # Dog Species Classifier
+  ```py
+  import tensorflow as tf
+  from tensorflow import keras
+  # config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5, allow_growth=True))
+  config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
+  sess = tf.Session(config=config)
+  keras.backend.set_session(sess)
+
+  from tensorflow.python.keras import layers
+  from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
+  from PIL import ImageFile
+  ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+  train_data_gen = ImageDataGenerator(rescale=1./255, rotation_range=20, zoom_range=0.15,
+      width_shift_range=0.2, height_shift_range=0.2, brightness_range=(0.1, 2),
+      shear_range=0.15, horizontal_flip=True, fill_mode="nearest")
+
+  train_img_gen = train_data_gen.flow_from_directory('./dogImages/train/', target_size=(512, 512), batch_size=4, seed=1)
+  val_data_gen = ImageDataGenerator(rescale=1./255)
+  val_img_gen = val_data_gen.flow_from_directory('./dogImages/valid/', target_size=(512, 512), seed=1)
+
+  img_shape = (512, 512, 3)
+  xx = keras.applications.resnet50.ResNet50(include_top=False, weights='imagenet')
+  # xx = keras.applications.vgg19.VGG19(include_top=False, weights='imagenet')
+  xx.trainable = True
+  model = tf.keras.Sequential([
+      layers.Input(shape=img_shape),
+      xx,
+      layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)),
+      # layers.MaxPooling2D(2),
+      layers.Dropout(0.5),
+      # layers.AveragePooling2D(pool_size=512, strides=512, padding='same'),
+      layers.GlobalAveragePooling2D(),
+      layers.Flatten(),
+      layers.Dense(133, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001)),        
+  ])
+  model.summary()
+
+  callbacks = [
+      keras.callbacks.TensorBoard(log_dir='./logs'),
+      keras.callbacks.ModelCheckpoint("./keras_checkpoints", monitor='val_loss', save_best_only=True),
+      keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
+  ]
+  model.compile(optimizer=keras.optimizers.Adadelta(0.1), loss='categorical_crossentropy', metrics=['accuracy'])
+  model.fit_generator(train_img_gen, validation_data=val_img_gen, epochs=50, callbacks=callbacks, verbose=1, workers=10)
+
+  import glob2
+  from skimage.io import imread
+  from skimage.transform import resize
+
+  model = tf.keras.models.load_model('keras_checkpoints')
+  imm = glob2.glob('./dogImages/test/*/*')
+  xx = np.array([resize(imread(ii), (512, 512)) for ii in imm])
+  yy = np.array([int(os.path.basename(os.path.dirname(ii)).split('.')[0]) -1 for ii in imm])
+  pp = model.predict(xx)
+  tt = np.argmax(pp, 1)
+  print((tt == yy).sum() / yy.shape[0])
+  # 0.8588516746411483
+
+  top_3_err = [(np.sort(ii)[-3:], ii.argmax(), imm[id]) for id, (ii, jj) in enumerate(zip(pp, yy)) if jj not in ii.argsort()[-3:]]
+  print(1 - len(top_3_err) / yy.shape[0])
+  # 0.965311004784689
+
+  index_2_name = {vv: kk for kk, vv in train_img_gen.class_indices.items()}
+  aa = resize(imread('./dogImages/1806687557.jpg'), (512, 512))
+  pp = model.predict(np.expand_dims(aa, 0))
+  print(index_2_name[pp.argmax()])
+  # 029.Border_collie
+  ```
 ```py
-import tensorflow as tf
+import os
+import skimage
+import numpy as np
+img_shape = (224, 224)
+def read_sobel(ff, img_shape=img_shape):
+    img = skimage.io.imread(ff)
+    img_gray = skimage.color.rgb2gray(img)
+    img_edge = skimage.filters.sobel(img_gray)
+
+    return skimage.transform.resize(img_edge, img_shape)
+
+def image_collection_by_file(file_name, file_path, limit=None, to_array=True, save_local=True, save_base_path="./Cropped", load_func=read_sobel):
+    with open(file_name, 'r') as ff:
+        aa = ff.readlines()
+    if limit:
+        aa = aa[:limit]
+    image_list = [os.path.join(file_path, ii.strip().replace('\\', '/')) for ii in aa]
+    image_collection = skimage.io.ImageCollection(image_list, load_func=load_func)
+    file_names = np.array(image_collection.files)
+    image_collection = image_collection.concatenate()
+    return image_collection, file_names
+
+limit = None
+imposter_train, imposter_train_f = image_collection_by_file("imposter_train_raw.txt", "ImposterRaw", limit=limit, save_base_path="./Cropped/imposter_train")
+client_train, client_train_f = image_collection_by_file("client_train_raw.txt", "ClientRaw", limit=limit, save_base_path="./Cropped/client_train")
+imposter_test, imposter_test_f = image_collection_by_file("imposter_test_raw.txt", "ImposterRaw", limit=limit, save_base_path="./Cropped/imposter_test")
+client_test, client_test_f = image_collection_by_file("client_test_raw.txt", "ClientRaw", limit=limit, save_base_path="./Cropped/client_test")
+
+train_x = np.concatenate([imposter_train, client_train])
+train_y = np.array([[0, 1]] * imposter_train.shape[0] + [[1, 0]] * client_train.shape[0])
+test_x = np.concatenate([imposter_test, client_test])
+test_y = np.array([[0, 1]] * imposter_test.shape[0] + [[1, 0]] * client_test.shape[0])
+train_x = np.expand_dims(train_x, -1)
+test_x = np.expand_dims(test_x, -1)
+print(train_x.shape, train_y.shape, test_x.shape, test_y.shape)
+
+np.savez("train_test_sobel_dataset", train_x=train_x, train_y=train_y, test_x=test_x, test_y=test_y)
+tt = np.load('train_test_sobel_dataset.npz')
+train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
+
 from tensorflow import keras
-# config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5, allow_growth=True))
 config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
 sess = tf.Session(config=config)
 keras.backend.set_session(sess)
 
-from tensorflow.python.keras import layers
-from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
-from PIL import ImageFile
-ImageFile.LOAD_TRUNCATED_IMAGES = True
+from tensorflow.keras import layers
+model = keras.Sequential([
+    layers.Input(shape=(img_shape[0], img_shape[1], 1)),
+    layers.Conv2D(512, 1, strides=1, padding='same', activation='relu'),
+    layers.AveragePooling2D(pool_size=1),
+    layers.Conv2D(64, 1, strides=1, activation='relu'),
+    layers.AveragePooling2D(pool_size=1),
+    layers.Dropout(0.5),
+    layers.GlobalAveragePooling2D(),
+    layers.Flatten(),
+    layers.Dense(2, activation=tf.nn.softmax)
+])
 
-train_data_gen = ImageDataGenerator(rescale=1./255, rotation_range=20, zoom_range=0.15,
-    width_shift_range=0.2, height_shift_range=0.2, brightness_range=(0.1, 2),
-    shear_range=0.15, horizontal_flip=True, fill_mode="nearest")
+resnet50 = tf.keras.applications.resnet50.ResNet50(include_top=False, weights='imagenet')
+resnet50.trainable = True
 
-train_img_gen = train_data_gen.flow_from_directory('./dogImages/train/', target_size=(512, 512), batch_size=4, seed=1)
-val_data_gen = ImageDataGenerator(rescale=1./255)
-val_img_gen = val_data_gen.flow_from_directory('./dogImages/valid/', target_size=(512, 512), seed=1)
-
-img_shape = (512, 512, 3)
-xx = keras.applications.resnet50.ResNet50(include_top=False, weights='imagenet')
-# xx = keras.applications.vgg19.VGG19(include_top=False, weights='imagenet')
-xx.trainable = True
 model = tf.keras.Sequential([
-    layers.Input(shape=img_shape),
-    xx,
+    layers.Input(shape=(img_shape[0], img_shape[1], 1)),
+    resnet50,
     layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)),
-    # layers.MaxPooling2D(2),
     layers.Dropout(0.5),
     # layers.AveragePooling2D(pool_size=512, strides=512, padding='same'),
     layers.GlobalAveragePooling2D(),
     layers.Flatten(),
-    layers.Dense(133, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001)),        
+    layers.Dense(2, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001)),        
 ])
-model.summary()
 
+model.compile(optimizer=keras.optimizers.Adadelta(0.01), loss=keras.losses.categorical_crossentropy, metrics=['accuracy'])
 callbacks = [
-        keras.callbacks.TensorBoard(log_dir='./logs'),
-        keras.callbacks.ModelCheckpoint("./keras_checkpoints", monitor='val_loss', save_best_only=True),
-        keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
+    keras.callbacks.TensorBoard(log_dir='./logs'),
+    keras.callbacks.ModelCheckpoint("./keras_checkpoints", monitor='val_loss', save_best_only=True),
+    keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
 ]
-model.compile(optimizer=keras.optimizers.Adadelta(0.1), loss='categorical_crossentropy', metrics=['accuracy'])
-model.fit_generator(train_img_gen, validation_data=val_img_gen, epochs=50, callbacks=callbacks, verbose=1, workers=10)
 
-import glob2
-from skimage.io import imread
-from skimage.transform import resize
+from keras.preprocessing.image import ImageDataGenerator
+aug = ImageDataGenerator(rotation_range=20, zoom_range=0.15,
+    width_shift_range=0.2, height_shift_range=0.2, brightness_range=(0.1, 2),
+    shear_range=0.15, horizontal_flip=True, fill_mode="nearest")
 
-imm = glob2.glob('./dogImages/test/*/*')
-xx = np.array([resize(imread(ii), (512, 512)) for ii in imm])
-yy = np.array([int(os.path.basename(os.path.dirname(ii)).split('.')[0]) -1 for ii in imm])
-pp = model.predict(xx)
-tt = np.argmax(pp, 1)
-(tt == yy).sum() / yy.shape[0]
+model.fit_generator(aug.flow(train_x, train_y, batch_size=8), validation_data=(test_x, test_y), epochs=50, callbacks=callbacks)
+
+model.fit(train_x, train_y, batch_size=4, epochs=50, callbacks=callbacks, validation_data=(test_x, test_y))
 ```
-```py
-In [53]: model.fit_generator(img_gen, validation_data=val_img_gen, steps_per_epoch=1670, epochs=50)                                                                                                                
-Epoch 1/50                                                                                                                                                                                                         
-286s 171ms/step - loss: 4.5538 - acc: 0.0972 - val_loss: 3.1535 - val_acc: 0.3653                                                                                     
-Epoch 2/50                                                                                                                                                                                                         
-265s 159ms/step - loss: 3.0760 - acc: 0.3717 - val_loss: 1.7518 - val_acc: 0.5425                                                                                     
-Epoch 3/50                                                                                                                                                                                                         
-265s 159ms/step - loss: 2.0036 - acc: 0.5808 - val_loss: 1.1483 - val_acc: 0.6958                                                                                     
-Epoch 4/50                                                                                                                                                                                                         
-264s 158ms/step - loss: 1.3548 - acc: 0.7090 - val_loss: 0.8581 - val_acc: 0.7461                                                                                     
-Epoch 5/50                                                                                                                                                                                                         
-263s 157ms/step - loss: 0.9638 - acc: 0.7867 - val_loss: 0.6582 - val_acc: 0.7940                                                                                     
-Epoch 6/50                                                                                                                                                                                                         
-264s 158ms/step - loss: 0.7056 - acc: 0.8491 - val_loss: 0.6143 - val_acc: 0.8036                                                                                     
-Epoch 7/50                                                                                                                                                                                                         
-262s 157ms/step - loss: 0.5121 - acc: 0.8930 - val_loss: 0.5670 - val_acc: 0.8120                                                                                     
-Epoch 8/50                                                                                                                                                                                                         
-263s 158ms/step - loss: 0.3942 - acc: 0.9214 - val_loss: 0.5004 - val_acc: 0.8287                                                                                     
-Epoch 9/50                                                                                                                                                                                                         
-262s 157ms/step - loss: 0.2876 - acc: 0.9494 - val_loss: 0.5043 - val_acc: 0.8347                                                                                     
-Epoch 10/50                                                                                                                                                                                                        
-261s 157ms/step - loss: 0.2134 - acc: 0.9675 - val_loss: 0.4845 - val_acc: 0.8371                                                                                     
-Epoch 11/50                                                                                                                                                                                                        
-261s 156ms/step - loss: 0.1581 - acc: 0.9787 - val_loss: 0.5210 - val_acc: 0.8431                                                                                     
-Epoch 12/50                                                                                                                                                                                                        
-259s 155ms/step - loss: 0.1245 - acc: 0.9837 - val_loss: 0.5383 - val_acc: 0.8455                                                                                     
-Epoch 13/50                                                                                                                                                                                                        
-259s 155ms/step - loss: 0.0966 - acc: 0.9891 - val_loss: 0.5775 - val_acc: 0.8216                                                                                     
-Epoch 14/50                                                                                                                                                                                                        
-259s 155ms/step - loss: 0.0768 - acc: 0.9937 - val_loss: 0.5472 - val_acc: 0.8479                                                                                     
-Epoch 15/50                                                                                                                                                                                                        
-259s 155ms/step - loss: 0.0631 - acc: 0.9958 - val_loss: 0.5706 - val_acc: 0.8323                                                                                     
-Epoch 16/50                                                                                                                                                                                                        
-258s 155ms/step - loss: 0.0512 - acc: 0.9955 - val_loss: 0.5518 - val_acc: 0.8383                                                                                     
-Epoch 17/50                                                                                                                                                                                                        
-259s 155ms/step - loss: 0.0420 - acc: 0.9972 - val_loss: 0.5768 - val_acc: 0.8479
-Epoch 18/50
-258s 154ms/step - loss: 0.0384 - acc: 0.9969 - val_loss: 0.5550 - val_acc: 0.8443
-Epoch 19/50
-257s 154ms/step - loss: 0.0331 - acc: 0.9981 - val_loss: 0.5396 - val_acc: 0.8479
-Epoch 20/50
-  17/1670 [..............................] - ETA: 3:59 - loss: 0.0201 - acc: 1.0000^C---------------------------------------------------------------------------
-```
+- [Unet Plus Plus with EfficientNet Encoder](https://www.kaggle.com/meaninglesslives/unet-plus-plus-with-efficientnet-encoder)
+- [mask-rcnn with augmentation and multiple masks](https://www.kaggle.com/abhishek/mask-rcnn-with-augmentation-and-multiple-masks)
+- [Xception, InceptionV3 Ensemble methods](https://www.kaggle.com/robhardwick/xception-inceptionv3-ensemble-methods)
+- [find rectangles in image, preferably with skimage](https://stackoverflow.com/questions/36635124/find-rectangles-in-image-preferably-with-skimage)
+- [How to detect simple geometric shapes using OpenCV](https://stackoverflow.com/questions/11424002/how-to-detect-simple-geometric-shapes-using-opencv)
+- [detect rectangle in image and crop](https://stackoverflow.com/questions/45767866/detect-rectangle-in-image-and-crop)
+- [python-opencv2利用cv2.findContours()函数来查找检测物体的轮廓](https://blog.csdn.net/hjxu2016/article/details/77833336)
