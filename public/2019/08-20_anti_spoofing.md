@@ -1809,121 +1809,122 @@ image_show(text > text_threshold);
 ***
 
 # 数据集处理
-```py
-from skimage.io import imread
-import glob2
+  ```py
+  from skimage.io import imread
+  import glob2
 
-read_pngs = lambda pp: np.array([imread(ii)[:, :, :3] for ii in glob2.glob('{}/*/*.png'.format(pp))])
-train_real_x = read_pngs('./REAL')
-train_fake_1_x = read_pngs('./FAKE_1')
-train_fake_2_x = read_pngs('./FAKE_2')
-train_fake_3_x = read_pngs('./FAKE_3')
-print(train_real_x.shape, train_fake_1_x.shape, train_fake_2_x.shape, train_fake_3_x.shape)
-# (1463, 112, 112, 3) (829, 112, 112, 3) (1795, 112, 112, 3) (1463, 112, 112, 3)
+  read_pngs = lambda pp: np.array([imread(ii)[:, :, :3] for ii in glob2.glob('{}/*/*.png'.format(pp))])
+  train_real_x = read_pngs('./REAL')
+  train_fake_1_x = read_pngs('./FAKE_1')
+  train_fake_2_x = read_pngs('./FAKE_2')
+  train_fake_3_x = read_pngs('./FAKE_3')
+  print(train_real_x.shape, train_fake_1_x.shape, train_fake_2_x.shape, train_fake_3_x.shape)
+  # (1463, 112, 112, 3) (829, 112, 112, 3) (1795, 112, 112, 3) (1463, 112, 112, 3)
 
-yy = np.array([0] * train_real_x.shape[0] + [1] * train_fake_1_x.shape[0] + [2] * train_fake_2_x.shape[0] + [3] * train_fake_3_x.shape[0])
-xx = np.vstack([train_real_x, train_fake_1_x, train_fake_2_x, train_fake_3_x])
-print(xx.shape, yy.shape)
-# (5550, 112, 112, 3) (5550,)
+  yy = np.array([0] * train_real_x.shape[0] + [1] * train_fake_1_x.shape[0] + [2] * train_fake_2_x.shape[0] + [3] * train_fake_3_x.shape[0])
+  xx = np.vstack([train_real_x, train_fake_1_x, train_fake_2_x, train_fake_3_x])
+  print(xx.shape, yy.shape)
+  # (5550, 112, 112, 3) (5550,)
 
-from sklearn.model_selection import train_test_split
-train_x, test_x, train_y, test_y = train_test_split(xx, yy, test_size=0.5, random_state=42)
-print(train_x.shape, test_x.shape, train_y.shape, test_y.shape)
-# (2775, 112, 112, 3) (2775,) (2775, 112, 112, 3) (2775,)
+  from sklearn.model_selection import train_test_split
+  train_x, test_x, train_y, test_y = train_test_split(xx, yy, test_size=0.5, random_state=42)
+  print(train_x.shape, test_x.shape, train_y.shape, test_y.shape)
+  # (2775, 112, 112, 3) (2775,) (2775, 112, 112, 3) (2775,)
 
-np.savez('train_test', train_x=train_x, train_y=train_y, test_x=test_x, test_y=test_y)
+  np.savez('train_test', train_x=train_x, train_y=train_y, test_x=test_x, test_y=test_y)
 
-tt = np.load("/media/uftp/images/PAD/train_test.npz")
-train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
-to_dummy = lambda a: np.array([ np.where(np.unique(a)==t, 1, 0) for t in a ])
-train_y_oh = to_dummy(train_y)
-test_y_oh = to_dummy(test_y)
-print(train_y_oh.shape, test_y_oh.shape)
-# (2775, 4) (2775, 4)
-```
+  tt = np.load("/media/uftp/images/PAD/train_test.npz")
+  train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
+  to_dummy = lambda a: np.array([ np.where(np.unique(a)==t, 1, 0) for t in a ])
+  train_y_oh = to_dummy(train_y)
+  test_y_oh = to_dummy(test_y)
+  print(train_y_oh.shape, test_y_oh.shape)
+  # (2775, 4) (2775, 4)
+  ```
 # ImageDataGenerator
-```py
-import numpy as np
-import matplotlib.pyplot as plt
-from keras.preprocessing.image import *
+  ```py
+  import numpy as np
+  import matplotlib.pyplot as plt
+  from keras.preprocessing.image import *
 
-img = np.random.rand(1, 500, 500, 3)
+  img = np.random.rand(1, 500, 500, 3)
 
-fig, ax = plt.subplots(1, 5, figsize=(20, 10))
-ax = ax.ravel()
-ax[0].imshow(img[0])
-ax[1].imshow(next(ImageDataGenerator().flow(img))[0])
-ax[2].imshow(next(ImageDataGenerator(brightness_range=(0., 0.)).flow(img))[0])
-ax[3].imshow(next(ImageDataGenerator(brightness_range=(1., 1.)).flow(img))[0])
-ax[4].imshow(next(ImageDataGenerator(brightness_range=(1., 1.)).flow(img))[0] / 255)
-```
-```py
-seed = 1
-from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
+  fig, ax = plt.subplots(1, 5, figsize=(20, 10))
+  ax = ax.ravel()
+  ax[0].imshow(img[0])
+  ax[1].imshow(next(ImageDataGenerator().flow(img))[0])
+  ax[2].imshow(next(ImageDataGenerator(brightness_range=(0., 0.)).flow(img))[0])
+  ax[3].imshow(next(ImageDataGenerator(brightness_range=(1., 1.)).flow(img))[0])
+  ax[4].imshow(next(ImageDataGenerator(brightness_range=(1., 1.)).flow(img))[0] / 255)
+  ```
+  ```py
+  seed = 1
+  from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
 
-data_gen = ImageDataGenerator(rescale=1./255, validation_split=0.1)
-
-
-img_gen = data_gen.flow_from_directory('segmentation_dataset/tumorImage/', target_size=(512, 512), batch_size=4,
-                                       class_mode=None, seed=seed, color_mode='grayscale')
-mask_gen = data_gen.flow_from_directory('segmentation_dataset/maskImage/', target_size=(512, 512), batch_size=4,
-                                       class_mode=None, seed=seed, color_mode='grayscale')
-
-train_gen = zip(img_gen, mask_gen)
-```
-The keras implementation in TF 1.14 and TF 2.0-RC seems to not recognize zip objects as generators or sequences. I created a bug for the TensorFlow project.
-
-Workaround for now: Create an inline generator
-train_gen = (pair for pair in zip(img_gen, mask_gen))
-```py
-data_gen_args = dict(rotation_range=0.2,
-                    width_shift_range=0.05,
-                    height_shift_range=0.05,
-                    shear_range=0.05,
-                    zoom_range=0.05,
-                    horizontal_flip=True,
-                    fill_mode='nearest',
-                    rescale=1./255)
-
-image_generator = tf.keras.preprocessing.image.ImageDataGenerator(data_gen_args)
-mask_generator = tf.keras.preprocessing.image.ImageDataGenerator(data_gen_args)
-
-imageGenerator = image_generator.flow_from_directory('membrane/train',color_mode="grayscale",classes=['image'],class_mode=None,batch_size=5)
-maskGenerator = mask_generator.flow_from_directory('membrane/train',color_mode="grayscale",classes=['label'],class_mode=None,batch_size=5)
-
-train_generator = zip(imageGenerator, maskGenerator)
+  data_gen = ImageDataGenerator(rescale=1./255, validation_split=0.1)
 
 
-history = model.fit_generator(train_generator,steps_per_epoch=100,epochs=3)
-```
-```py
-def my_input_fn(total_items, epochs):
-    dataset = tf.data.Dataset.from_generator(lambda: my_generator(total_items),
-                                             output_types=(tf.float64, tf.int64))
+  img_gen = data_gen.flow_from_directory('segmentation_dataset/tumorImage/', target_size=(512, 512), batch_size=4,
+                                         class_mode=None, seed=seed, color_mode='grayscale')
+  mask_gen = data_gen.flow_from_directory('segmentation_dataset/maskImage/', target_size=(512, 512), batch_size=4,
+                                         class_mode=None, seed=seed, color_mode='grayscale')
 
-    dataset = dataset.repeat(epochs)
-    dataset = dataset.batch(32)
-    return dataset
+  train_gen = zip(img_gen, mask_gen)
+  ```
+  The keras implementation in TF 1.14 and TF 2.0-RC seems to not recognize zip objects as generators or sequences. I created a bug for the TensorFlow project.
 
-if __name__ == "__main__":
-    tf.enable_eager_execution()
+  Workaround for now: Create an inline generator
+  train_gen = (pair for pair in zip(img_gen, mask_gen))
+  ```py
+  data_gen_args = dict(rotation_range=0.2,
+                      width_shift_range=0.05,
+                      height_shift_range=0.05,
+                      shear_range=0.05,
+                      zoom_range=0.05,
+                      horizontal_flip=True,
+                      fill_mode='nearest',
+                      rescale=1./255)
 
-    model = tf.keras.Sequential([tf.keras.layers.Flatten(input_shape=(4, 20, 1)),
-                                 tf.keras.layers.Dense(64, activation=tf.nn.relu),
-                                 tf.keras.layers.Dense(12, activation=tf.nn.softmax)])
+  image_generator = tf.keras.preprocessing.image.ImageDataGenerator(data_gen_args)
+  mask_generator = tf.keras.preprocessing.image.ImageDataGenerator(data_gen_args)
 
-    model.compile(optimizer='adam',
-                  loss='categorical_crossentropy',
-                  metrics=['accuracy'])
+  imageGenerator = image_generator.flow_from_directory('membrane/train',color_mode="grayscale",classes=['image'],class_mode=None,batch_size=5)
+  maskGenerator = mask_generator.flow_from_directory('membrane/train',color_mode="grayscale",classes=['label'],class_mode=None,batch_size=5)
 
-    total_items = 100
-    batch_size = 32
-    epochs = 10
-    num_batches = int(total_items/batch_size)
-    dataset = my_input_fn(total_items, epochs)
-    model.fit_generator(dataset, epochs=epochs, steps_per_epoch=num_batches)
-```
+  train_generator = zip(imageGenerator, maskGenerator)
+
+
+  history = model.fit_generator(train_generator,steps_per_epoch=100,epochs=3)
+  ```
+  ```py
+  def my_input_fn(total_items, epochs):
+      dataset = tf.data.Dataset.from_generator(lambda: my_generator(total_items),
+                                               output_types=(tf.float64, tf.int64))
+
+      dataset = dataset.repeat(epochs)
+      dataset = dataset.batch(32)
+      return dataset
+
+  if __name__ == "__main__":
+      tf.enable_eager_execution()
+
+      model = tf.keras.Sequential([tf.keras.layers.Flatten(input_shape=(4, 20, 1)),
+                                   tf.keras.layers.Dense(64, activation=tf.nn.relu),
+                                   tf.keras.layers.Dense(12, activation=tf.nn.softmax)])
+
+      model.compile(optimizer='adam',
+                    loss='categorical_crossentropy',
+                    metrics=['accuracy'])
+
+      total_items = 100
+      batch_size = 32
+      epochs = 10
+      num_batches = int(total_items/batch_size)
+      dataset = my_input_fn(total_items, epochs)
+      model.fit_generator(dataset, epochs=epochs, steps_per_epoch=num_batches)
+  ```
 # Dog Species Classifier
+## Tensorflow 1.14
   ```py
   import tensorflow as tf
   from tensorflow import keras
@@ -1975,6 +1976,12 @@ if __name__ == "__main__":
   from skimage.transform import resize
 
   model = tf.keras.models.load_model('keras_checkpoints')
+  index_2_name = {vv: kk for kk, vv in train_img_gen.class_indices.items()}
+  aa = resize(imread('./dogImages/1806687557.jpg'), (512, 512))
+  pp = model.predict(np.expand_dims(aa, 0))
+  print(index_2_name[pp.argmax()])
+  # 029.Border_collie
+
   imm = glob2.glob('./dogImages/test/*/*')
   xx = np.array([resize(imread(ii), (512, 512)) for ii in imm])
   yy = np.array([int(os.path.basename(os.path.dirname(ii)).split('.')[0]) -1 for ii in imm])
@@ -1986,12 +1993,78 @@ if __name__ == "__main__":
   top_3_err = [(np.sort(ii)[-3:], ii.argmax(), imm[id]) for id, (ii, jj) in enumerate(zip(pp, yy)) if jj not in ii.argsort()[-3:]]
   print(1 - len(top_3_err) / yy.shape[0])
   # 0.965311004784689
+  ```
+## Tensorflow 2.0
+  ```py
+  import tensorflow as tf
+  gpus = tf.config.experimental.list_physical_devices('GPU')
+  tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
+  tf.config.experimental.set_memory_growth(gpus[0], True)
+  tf.config.experimental.set_virtual_device_configuration(gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=10240)])
 
-  index_2_name = {vv: kk for kk, vv in train_img_gen.class_indices.items()}
-  aa = resize(imread('./dogImages/1806687557.jpg'), (512, 512))
-  pp = model.predict(np.expand_dims(aa, 0))
-  print(index_2_name[pp.argmax()])
-  # 029.Border_collie
+  from tensorflow import keras
+  from tensorflow.python.keras import layers
+  from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
+  from PIL import ImageFile
+
+  ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+  train_data_gen = ImageDataGenerator(rescale=1./255, rotation_range=20, zoom_range=0.15,
+      width_shift_range=0.2, height_shift_range=0.2, brightness_range=(0.1, 2),
+      shear_range=0.15, horizontal_flip=True, fill_mode="nearest")
+  train_img_gen = train_data_gen.flow_from_directory('./dogImages/train/', target_size=(512, 512), batch_size=4, seed=1)
+  val_data_gen = ImageDataGenerator(rescale=1./255)
+  val_img_gen = val_data_gen.flow_from_directory('./dogImages/valid/', target_size=(512, 512), batch_size=4, seed=1)                           
+
+  xx = keras.applications.ResNet50V2(include_top=False, weights='imagenet')
+  img_shape = (512, 512, 3)
+  xx.trainable = True
+  model = tf.keras.Sequential([
+      layers.Input(shape=img_shape),
+      xx,
+      layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)),                                                                                     
+      # layers.MaxPooling2D(2),
+      layers.Dropout(0.5),
+      # layers.AveragePooling2D(pool_size=512, strides=512, padding='same'),
+      layers.GlobalAveragePooling2D(),
+      layers.Flatten(),
+      layers.Dense(133, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001)),                                                                                                                 
+  ])
+  model.summary()
+  callbacks = [
+      keras.callbacks.TensorBoard(log_dir='./logs'),
+      keras.callbacks.ModelCheckpoint("./keras_checkpoints", monitor='val_loss', save_best_only=True),
+      keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
+  ]
+  model.compile(optimizer=keras.optimizers.Adadelta(0.1), loss='categorical_crossentropy', metrics=['accuracy'])
+  model.fit_generator(train_img_gen, validation_data=val_img_gen, epochs=50, callbacks=callbacks, verbose=1, workers=10)
+  ```
+  ```sh
+  toco --saved_model_dir ./keras_checkpoints --output_file foo.tflite
+  ```
+  ```py
+  from tensorflow_model_optimization.sparsity import keras as sparsity
+  batch_size = 4
+  end_step = np.ceil(train_img_gen.classes.shape[0] / batch_size).astype(np.int32) * 55
+  pruning_params = {
+      "pruning_schedule": sparsity.PolynomialDecay(
+          initial_sparsity=0.5,
+          final_sparsity=0.9,
+          begin_step=2000,
+          end_step=end_step,
+          frequency=100)
+  }
+
+  pruned_model = tf.keras.Sequential([
+      layers.Input(shape=img_shape),
+      # sparsity.prune_low_magnitude(keras.applications.ResNet50V2(include_top=False, weights='imagenet'), **pruning_params),
+      keras.applications.ResNet50V2(include_top=False, weights='imagenet'),
+      sparsity.prune_low_magnitude(layers.Conv2D(512, 1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)), **pruning_params),
+      layers.Dropout(0.5),
+      layers.GlobalAveragePooling2D(),
+      layers.Flatten(),
+      sparsity.prune_low_magnitude(layers.Dense(133, activation='softmax', kernel_regularizer=keras.regularizers.l2(0.00001)), **pruning_params)
+  ])
   ```
 ```py
 import os
@@ -2089,3 +2162,56 @@ model.fit(train_x, train_y, batch_size=4, epochs=50, callbacks=callbacks, valida
 - [How to detect simple geometric shapes using OpenCV](https://stackoverflow.com/questions/11424002/how-to-detect-simple-geometric-shapes-using-opencv)
 - [detect rectangle in image and crop](https://stackoverflow.com/questions/45767866/detect-rectangle-in-image-and-crop)
 - [python-opencv2利用cv2.findContours()函数来查找检测物体的轮廓](https://blog.csdn.net/hjxu2016/article/details/77833336)
+```c
+#include <cstdio>
+#include "tensorflow/lite/interpreter.h"
+#include "tensorflow/lite/kernels/register.h"
+#include "tensorflow/lite/model.h"
+#include "tensorflow/lite/optional_debug_tools.h"
+
+using namespace tflite;
+
+#define TFLITE_MINIMAL_CHECK(x)                              \
+  if (!(x)) {                                                \
+    fprintf(stderr, "Error at %s:%d\n", __FILE__, __LINE__); \
+    exit(1);                                                 \
+  }
+
+int main(int argc, char* argv[]) {
+  if (argc != 2) {
+    fprintf(stderr, "minimal <tflite model>\n");
+    return 1;
+  }
+  const char* filename = argv[1];
+
+  // Load model
+  std::unique_ptr<tflite::FlatBufferModel> model =
+      tflite::FlatBufferModel::BuildFromFile(filename);
+  TFLITE_MINIMAL_CHECK(model != nullptr);
+
+  // Build the interpreter
+  tflite::ops::builtin::BuiltinOpResolver resolver;
+  InterpreterBuilder builder(* model, resolver);
+  std::unique_ptr<Interpreter> interpreter;
+  builder(&interpreter);
+  TFLITE_MINIMAL_CHECK(interpreter != nullptr);
+
+  // Allocate tensor buffers.
+  TFLITE_MINIMAL_CHECK(interpreter->AllocateTensors() == kTfLiteOk);
+  printf("=== Pre-invoke Interpreter State ===\n");
+  tflite::PrintInterpreterState(interpreter.get());
+
+  // Fill input buffers
+  // TODO(user): Insert code to fill input tensors
+
+  // Run inference
+  TFLITE_MINIMAL_CHECK(interpreter->Invoke() == kTfLiteOk);
+  printf("\n\n=== Post-invoke Interpreter State ===\n");
+  tflite::PrintInterpreterState(interpreter.get());
+
+  // Read output buffers
+  // TODO(user): Insert getting data out code.
+
+  return 0;
+}
+```

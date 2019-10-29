@@ -6,7 +6,7 @@ EXCLUDE_FILE='./rsync_excludes_file_list'
 SYS_PATH_EXCLUDED='proc sys tmp mnt media cdrom media/cdrom0 snap'
 
 # Parsing arguments
-if [ $# -ge 5 ]; then
+if [ $# -ge 6 ]; then
     # Restore mode
     echo "Restore from a squashfs file."
     WORK_MODE="RESTORE"
@@ -24,7 +24,7 @@ if [ $# -ge 5 ]; then
     echo "DIST_SWAP_PATH = $DIST_SWAP_PATH"
     echo "DIST_GRUB = $DIST_GRUB"
     echo "HOST_NAME = $HOST_NAME"
-elif [ $# -eq 4 ]; then
+elif [ $# -eq 5 ]; then
     # Clone mode
     echo "Clone current system."
     WORK_MODE="CLONE"
@@ -79,6 +79,8 @@ function generate_exclude_list_base {
 `ls -1 /var/cache/apt/archives/partial/ 2>/dev/null`
 `ls -d1 /var/log/journal/* 2>/dev/null`
 `find /run/user/* -maxdepth 1 -name gvfs 2>/dev/null`
+`find /var -type s 2>/dev/null`
+`find /run -type s 2>/dev/null`
 " > $EXCLUDE_FILE
 
     # This may contain special characters for printf

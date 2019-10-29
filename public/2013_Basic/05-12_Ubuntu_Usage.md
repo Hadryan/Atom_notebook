@@ -364,6 +364,12 @@
     HOST 192.0.2.0:
         ProxyCommand /usr/bin/nc -X connect -x 192.0.2.0:8080 %h %p
     ```
+  - 将本地输出重定向到 SSH 远程文件
+    ```sh
+    echo "Hello world" | ssh tdtest@192.168.0.83 "sh -c 'cat > foo'"
+    ssh tdtest@192.168.0.83 "cat foo"
+    # Hello world
+    ```
 ## SSH Q / A
   - Q: ssh: connect to host 135.251.168.141 port 22: Connection refused
     ```shell
@@ -1248,6 +1254,31 @@
       background-position: center;
     }
     ```
+## Shadow socket 代理
+  - 安装 shadowsocks 客户端
+    ```sh
+    sudo apt install shadowsocks
+    sslocal -h
+    ```
+  - [免费上网账号](https://free-ss.site/) 获取 Address / Port / Password
+  - 启动 sslocal 本地映射
+    ```sh
+    sslocal -s [Address] -p [Port] -k [Password] -l [Local port] -t [Timeout] -m aes-256-cfb
+    ```
+  - Chrome 安装 [Proxy SwitchyOmega](https://chrome.google.com/webstore/detail/proxy-switchyomega/padekgcemlokbadohgkifijomclgjgif)
+  - 配置代理
+    ![](images/proxy.png)
+  - 命令行测试
+    ```sh
+    sudo apt install proxychains
+
+    # sudo vi /etc/proxychains.conf
+    [ProxyList]
+    socks5  127.0.0.1 1080
+
+    # curl 测试
+    proxychain curl www.google.com
+    ```
 ***
 
 # 软件
@@ -1873,3 +1904,47 @@
     - grub 配置背景图片 /boot/grub/back.png，grub 等待时间 /etc/default/grub
     - shutter edit
 ***
+
+```sh
+6 如何把当前使用的系统做成 Live 系统
+
+(1) 安装 lupin-casper： sudo apt-get install lupin-casper ；
+(2) 用 UCloner 备份当前系统，文件名后缀必须为 .squashfs （默认即是）；
+(3) 在任意 fat/ntfs/ext 分区根目录创建一个名为 casper 的目录（注意，其它分区不可再有同名目录）；
+(4) 将系统备份文件拷贝到 casper 目录；
+(5) 到 /boot 中将当前使用的内核和 initrd 文件也拷贝到 casper 目录（可用 echo initrd.img-`uname -r` vmlinuz-`uname -r` 来查看文件名）；
+(6) 建立启动项。以 grub4dos 为例：
+
+title Live Ubuntu
+find --set-root /casper/内核文件名
+kernel /casper/内核文件名 boot=casper ro ignore_uuid
+initrd /casper/initrd文件名
+
+ 将其中的 “内核文件名” 和 “initrd文件名” 用相应的文件名替换。
+```
+```sh
+# ubuntu-14.04.4-server-i386.iso 服务器版 制作过程
+unzip lub.zip
+
+./lub  -b
+apt-get install lupin-casper
+mkdir /home/jxg
+mkdir /home/jxg/mnt
+mount -o loop /home/uftp/ubuntu-14.04.4-server-i386.iso /home/jxg/mnt/
+mkdir /home/jxg/livecd
+rsync  --exclude= /home/jxg/mnt/install/filesystem.squashfs -a /home/jxg/mnt/ /home/jxg/livecd/
+cp /home/root/backup2016.05.03.squashfs /home/jxg/livecd/install/filesystem.squashfs
+dpkg -l | grep ii | awk '{print $2,$3}' > /home/jxg/livecd/casper/filesystem.manifest
+dpkg -l | grep ii | awk '{print $2,$3}' > /home/jxg/livecd/install/filesystem.manifest
+cd ../jxg/livecd/
+ls
+rm md5sum.txt
+find -type f -print0 | sudo xargs -0 md5sum | grep -v ./isolinux/ | grep -v ./md5sum.txt | sudo tee md5sum.txt
+apt-get install mkisofs
+mkisofs -D -r -V "$IMAGE_NAME" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ../ubuntu-jxg-test.iso .
+
+mkisofs -D -r -V "ubuntu-16.04.2-server-amd64.iso" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o "../RDCloudInstallOS.iso" .
+```
+```sh
+mkisofs -D -r -V "ubuntu-18.04-desktop-x86_64.iso" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -allow-limited-size -o "../test.iso" .
+```

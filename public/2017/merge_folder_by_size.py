@@ -5,13 +5,13 @@ import sys
 import argparse
 
 
-def merge_folder_by_size_2(aa, bb, thread=0):
+def merge_folder_by_size_2(aa, bb, threash=0):
     moved = []
     not_moved = []
     for ff in os.listdir(bb):
         ss = os.path.join(bb, ff)
         dd = os.path.join(aa, ff)
-        if os.path.exists(dd) and os.path.getsize(ss) - os.path.getsize(dd) < thread:
+        if os.path.exists(dd) and os.path.getsize(ss) - os.path.getsize(dd) < threash:
             not_moved.append(ff)
             print(
                 "File not move: {}, size in {}: {:.2f}, size in {}: {:.2f}".format(
@@ -27,13 +27,13 @@ def merge_folder_by_size_2(aa, bb, thread=0):
     return moved, not_moved
 
 
-def merge_folder_by_size_list(folder_list, thread):
+def merge_folder_by_size_list(folder_list, threash):
     print("Merge {} to {}\n".format(folder_list[1:], folder_list[0]))
     aa = folder_list[0]
     moved = {}
     not_moved = {}
     for bb in folder_list[1:]:
-        mm, nn = merge_folder_by_size_2(aa, bb, thread)
+        mm, nn = merge_folder_by_size_2(aa, bb, threash)
         moved[bb] = mm
         not_moved[bb] = nn
 
@@ -45,7 +45,7 @@ def parse_arguments(args):
     parser = argparse.ArgumentParser()
     parser.add_argument("folder_list", type=str, nargs="+", help="Folder list will be merged")
     parser.add_argument(
-        "--thread", type=int, default=0, help="File in dist is not <thread> bigger than source will not be merged"
+        "--threash", type=int, default=0, help="File in dist is not <threash> bigger than source will not be merged"
     )
 
     return parser.parse_args(args)
@@ -53,7 +53,7 @@ def parse_arguments(args):
 
 if __name__ == "__main__":
     args = parse_arguments(sys.argv[1:])
-    merge_folder_by_size_list(args.folder_list, args.thread)
+    merge_folder_by_size_list(args.folder_list, args.threash)
 
 '''
 mkdir -p test1 test2 test3
@@ -82,10 +82,10 @@ echo 'aabbccdd' > aa
 echo 'aabbccddeeffgghhiijj' > bb
 cd ../
 
-merge_folder_by_size.py test1 test2 test3 --thread 10
-merge_folder_by_size.py test1 test2 test3 --thread 5
-merge_folder_by_size.py test1 test2 test3 --thread -5
-merge_folder_by_size.py test1 test2 test3 --thread -10
+merge_folder_by_size.py test1 test2 test3 --threash 10
+merge_folder_by_size.py test1 test2 test3 --threash 5
+merge_folder_by_size.py test1 test2 test3 --threash -5
+merge_folder_by_size.py test1 test2 test3 --threash -10
 
 rm test1 test2 test3 -r
 '''

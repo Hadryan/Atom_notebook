@@ -2108,10 +2108,11 @@ nonzero / where / choose
     ```python
     直接创建空的DataFrame添加会报错
     df = DataFrame(columns=list('abc'))
-    df.ix[0] = [1, 2, 3]  # ValueError: cannot set by positional indexing with enlargement
-    可以创建时添加一行数据
-    df = DataFrame(np.ones([1, 3]), columns=list('abc'))
-    df.ix[1] = [1, 2 ,3]
+    df.iloc[0] = [1, 2, 3]  # ValueError: cannot set by positional indexing with enlargement
+
+    # 创建时需要指定数据形式
+    df = DataFrame(np.array([]).reshape(0, 3), columns=list('abc'))
+    df.iloc[1] = [1, 2 ,3]
     ```
   - 创建新列时的问题 [ ??? ]：
     ```python
