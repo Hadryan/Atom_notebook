@@ -11,6 +11,9 @@
 - [Aurora Guard 预测深度图 + 光验证码](https://zhuanlan.zhihu.com/p/61100492)
 - [基于双目摄像头的传统图像处理方法实现活体检测](https://blog.csdn.net/u011808673/article/details/83029198)
 - [AdaptivePooling与Max/AvgPooling相互转换](https://blog.csdn.net/xiaosongshine/article/details/89453037)
+- [NPU使用示例](http://ai.nationalchip.com/docs/gx8010/npukai-fa-zhi-nan/shi-li.html)
+- [TensorFlow C++ and Python Image Recognition Demo](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/examples/label_image)
+- [Github Tencent/ncnn](https://github.com/Tencent/ncnn)
 mplayer -tv driver=v4l2:width=352:height=288:device=/dev/video0 tv://
 mplayer -tv device=/dev/video0 tv://
 GAP - Global Average Pooling
@@ -2000,7 +2003,7 @@ image_show(text > text_threshold);
   gpus = tf.config.experimental.list_physical_devices('GPU')
   tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
   tf.config.experimental.set_memory_growth(gpus[0], True)
-  tf.config.experimental.set_virtual_device_configuration(gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=10240)])
+  # tf.config.experimental.set_virtual_device_configuration(gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=10240)])
 
   from tensorflow import keras
   from tensorflow.python.keras import layers
@@ -2009,20 +2012,21 @@ image_show(text > text_threshold);
 
   ImageFile.LOAD_TRUNCATED_IMAGES = True
 
+  img_shape = (224, 224, 3)
   train_data_gen = ImageDataGenerator(rescale=1./255, rotation_range=20, zoom_range=0.15,
       width_shift_range=0.2, height_shift_range=0.2, brightness_range=(0.1, 2),
       shear_range=0.15, horizontal_flip=True, fill_mode="nearest")
-  train_img_gen = train_data_gen.flow_from_directory('./dogImages/train/', target_size=(512, 512), batch_size=4, seed=1)
+  train_img_gen = train_data_gen.flow_from_directory('./dogImages/train/', target_size=img_shape[:2], batch_size=4, seed=1)
   val_data_gen = ImageDataGenerator(rescale=1./255)
-  val_img_gen = val_data_gen.flow_from_directory('./dogImages/valid/', target_size=(512, 512), batch_size=4, seed=1)                           
+  val_img_gen = val_data_gen.flow_from_directory('./dogImages/valid/', target_size=img_shape[:2], batch_size=4, seed=1)                           
 
   xx = keras.applications.ResNet50V2(include_top=False, weights='imagenet')
-  img_shape = (512, 512, 3)
+
   xx.trainable = True
   model = tf.keras.Sequential([
       layers.Input(shape=img_shape),
       xx,
-      layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)),                                                                                     
+      layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)),
       # layers.MaxPooling2D(2),
       layers.Dropout(0.5),
       # layers.AveragePooling2D(pool_size=512, strides=512, padding='same'),
@@ -2214,4 +2218,122 @@ int main(int argc, char* argv[]) {
 
   return 0;
 }
+```
+## inspect_checkpoint
+  ```py
+  检查某个检查点中的变量
+  我们可以使用 inspect_checkpoint 库快速检查某个检查点中的变量。
+
+  继续前面所示的保存/恢复示例：
+
+  # import the inspect_checkpoint library
+  from tensorflow.python.tools import inspect_checkpoint as chkp
+
+  # print all tensors in checkpoint file
+  chkp.print_tensors_in_checkpoint_file("/tmp/model.ckpt", tensor_name='', all_tensors=True)
+
+  # tensor_name:  v1
+  # [ 1.  1.  1.]
+  # tensor_name:  v2
+  # [-1. -1. -1. -1. -1.]
+
+  # print only tensor v1 in checkpoint file
+  chkp.print_tensors_in_checkpoint_file("/tmp/model.ckpt", tensor_name='v1', all_tensors=False)
+
+  # tensor_name:  v1
+  # [ 1.  1.  1.]
+
+  # print only tensor v2 in checkpoint file
+  chkp.print_tensors_in_checkpoint_file("/tmp/model.ckpt", tensor_name='v2', all_tensors=False)
+
+  # tensor_name:  v2
+  # [-1. -1. -1. -1. -1.]
+  ```
+## insightface
+  ```py
+  sess = tf.InteractiveSession()
+  meta_graph_def = tf.saved_model.loader.load(sess, ["serve"], "./")
+  print(meta_graph_def.signature_def)
+
+  x = sess.graph.get_tensor_by_name("data:0")
+  y = sess.graph.get_tensor_by_name("fc1/add_1:0")
+
+  from mtcnn.mtcnn import MTCNN
+  from skimage.transform import resize
+
+  img = plt.imread('./3.jpg')
+  detector = MTCNN(steps_threshold=[0.6, 0.7, 0.7])
+  ret = detector.detect_faces(img)
+
+  bb = ret[0]['box']
+  frame = img[bb[0]:bb[0] + bb[2], bb[1]:bb[1] + bb[3]]
+  frame = resize(frame, (112, 112))
+
+  frame = frame[np.newaxis, :, :, :]
+  rr = sess.run(y, feed_dict={x: frame})
+  ```
+## keras session
+  ```py
+  import keras.backend.tensorflow_backend as KTF
+  import tensorflow as tf
+  config = tf.ConfigProto()
+  config.gpu_options.allow_growth=True   
+  sess = tf.Session(config=config)
+
+  KTF.set_session(sess)
+  ```
+```py
+from skimage.io import imread
+import glob2
+
+iaa = glob2.glob('test_images/*')
+ibb = [ii.replace('test_images', 'test_results').replace('.jpg', '.png') for ii in iaa]
+icc = [imread(ii) for ii in iaa]
+idd = [imread(ii) for ii in ibb]
+iee = [((ii > 127) * 255).astype(uint8) for ii in idd]
+
+fig, axes = plt.subplots(3, 3)
+axes = axes.flatten()
+for ax, ii, cc in zip(axes, icc, iee):
+    ax.imshow(ii)
+    ax.contour(cc[:, :, 0], colors=['r'])
+    ax.set_axis_off()
+fig.tight_layout()
+```
+
+```sh
+cd local_bin/
+wget https://sdk.lunarg.com/sdk/download/1.1.126.0/linux/vulkansdk-linux-x86_64-1.1.126.0.tar.gz?Human=true -O vulkansdk-linux-x86_64-1.1.126.0.tar.gz
+tar xvf vulkansdk-linux-x86_64-1.1.126.0.tar.gz
+export VULKAN_SDK=`pwd`/1.1.126.0/x86_64
+cd workspace/ncnn
+
+cd build-android-armv7/
+rm ./* -rf
+cmake -DCMAKE_TOOLCHAIN_FILE=/home/leondgarse/Android/Sdk/ndk/20.0.5594570/build/cmake/android.toolchain.cmake -DANDROID_ABI="armeabi-v7a" -DANDROID_ARM_NEON=ON -DANDROID_PLATFORM=android-24 -DNCNN_VULKAN=ON ..
+make -j4
+make install
+
+cd ../build-android-aarch64/
+cmake -DCMAKE_TOOLCHAIN_FILE=/home/leondgarse/Android/Sdk/ndk/20.0.5594570/build/cmake/android.toolchain.cmake -DANDROID_ABI="arm64-v8a" -DANDROID_PLATFORM=android-24 -DNCNN_VULKAN=ON ..
+make -j4
+make install
+
+cd ../ncnn-android-vulkan-lib
+rm include/ arm64-v8a/libncnn.a armeabi-v7a/libncnn.a -rf
+cd ..
+
+cp build-android-aarch64/install/include/ ncnn-android-vulkan-lib/ -r
+cp build-android-armv7/install/lib/libncnn.a ncnn-android-vulkan-lib/armeabi-v7a/
+cp build-android-aarch64/install/lib/libncnn.a ncnn-android-vulkan-lib/arm64-v8a/
+rm ../ncnn-android-squeezenet/app/src/main/jni/ncnn-android-vulkan-lib -r
+cp ncnn-android-vulkan-lib/ ../ncnn-android-squeezenet/app/src/main/jni/ -r
+```
+```sh
+adb shell stop
+adb shell setprop log.redirect-stdio true
+adb shell start
+
+mv /dev/null /dev/null.bak
+touch /dev/null
 ```

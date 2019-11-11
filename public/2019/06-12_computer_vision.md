@@ -749,3 +749,22 @@ shift_demo(img)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
 ```
+## png to jpg
+  ```py
+  from skimage.io import imread, imsave
+  import glob2
+
+  for pp in glob2.glob('*.png'):
+      print(pp)
+      jj = os.path.basename(pp).split('.')[0] + '.jpg'
+      # jj = os.path.join('jpg', jj)
+      img = imread(pp)
+      if img.shape[2] == 4:
+          img[img[:, :, 3] == 0] = [255, 255, 255, 255]
+      imsave(jj, img[:, :, :3])
+  ```
+  ```sh
+  find ./* -iname '*.png'
+  grep -srinI '\.png)'
+  sed -i 's/\.png)$/.jpg)/' ./*.md
+  ```

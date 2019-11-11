@@ -1,35 +1,16 @@
 # ___2019 - 09 - 19 Model Optimization___
+***
+
+# 目录
+***
 
 # 链接
   - [TensorFlow model optimization](https://www.tensorflow.org/model_optimization/guide?hl=zh_cn)
-  - [针对常见移动和边缘用例的优化模型](https://www.tensorflow.org/lite/models?hl=zh_cn)
-  - [论文 - Learning both Weights and Connections for Efficient Neural Networks](https://xmfbit.github.io/2018/03/14/paper-network-prune-hansong/)
+  - [TensorFlow Lite guide](https://www.tensorflow.org/lite/guide)
+  - [Github tensorflow/model-optimization](https://github.com/tensorflow/model-optimization)
+  - [Optimized models for common mobile and edge use cases](https://www.tensorflow.org/lite/models?hl=zh_cn)
+  - [Hosted models](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/g3doc/guide/hosted_models.md)
   - [Github Network Slimming (Pytorch)](https://github.com/Eric-mingjie/network-slimming)
-  - [Distiller Documentation](https://nervanasystems.github.io/distiller/index.html)
-  - [NPU使用示例](http://ai.nationalchip.com/docs/gx8010/npukai-fa-zhi-nan/shi-li.html)
-  - [Github pruning_with_keras](https://github.com/tensorflow/model-optimization/blob/master/tensorflow_model_optimization/g3doc/guide/pruning/pruning_with_keras.ipynb)
-  - [](https://www.tensorflow.org/lite/models/segmentation/overview)
-  - [优化机器学习模型](https://www.tensorflow.org/model_optimization)
-  - [TensorFlow C++ and Python Image Recognition Demo](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/examples/label_image)
-  - [Issue with converting Keras .h5 files to .tflite files](https://github.com/tensorflow/tensorflow/issues/20878)
-  - [TensorFlow Lite converter](https://www.tensorflow.org/lite/convert)
-  - [Github Tencent/ncnn](https://github.com/Tencent/ncnn)
-
-过度参数化（over-parameterization）是深度神经网络的一个普遍属性，这会导致高计算成本和高内存占用。作为一种补救措施，网络剪枝（network pruning）已被证实是一种有效的改进技术，可以在计算预算有限的情况下提高深度网络的效率。
-
-网络剪枝的过程一般包括三个阶段：1）训练一个大型，过度参数化的模型，2）根据特定标准修剪训练好的大模型，以及3）微调（fine-tune）剪枝后的模型以重新获得丢失的性能。
-
-使用剪枝的方法，将模型中不重要的权重设置为0，将原来的dense model转变为sparse model，达到压缩的目的
-
-而本文的作者check了六种SOA的工作，发现：在剪枝算法得到的模型上进行finetune，只比相同结构，但是使用random初始化权重的网络performance好了一点点，甚至有的时候还不如。作者的结论是：
-  训练一个over parameter的model对最终得到一个efficient的小模型不是必要的
-  为了得到剪枝后的小模型，求取大模型中的important参数其实并不打紧
-  剪枝得到的结构，相比求得的weight，更重要。所以不如将剪枝算法看做是网络结构搜索的一种特例。
-作者立了两个论点来打：
-  要先训练一个over-parameter的大模型，然后在其基础上剪枝。因为大模型有更强大的表达能力。
-  剪枝之后的网络结构和权重都很重要，是剪枝模型finetune的基础。
-
-
 ***
 
 # 模型量化 Post-training quantization
@@ -38,11 +19,12 @@
     - **剪枝 pruning** 减少模型参数数量，简化模型
     - **量化 quantization** 降低表示精度
     - 将原始模型拓扑更新为参数更少 / 执行更快的结构，如张量分解与净化 tensor decomposition methods and distillation
-  - **量化 Quantization** 将模型参数替换为低精度的表示，如使用 8-bit 整数替换 32-bit 浮点数，对于提升特定硬件的执行效率，低精度是必须的
+  - **量化 Quantization**
+    - 将模型参数替换为低精度的表示，如使用 8-bit 整数替换 32-bit 浮点数，对于提升特定硬件的执行效率，低精度是必须的
+    - 在训练好的模型上经过 **权重量化 Quantizing weights**，可以减少 CPU 以及硬件的传输 / 计算 / 资源占用以及模型大小，但会略微牺牲准确度，量化可以应用在 float 类型的模型上，在 tflite 转化期间，将参数类型转化为 int
+    - 一般可以再 GPU 运算时使用 16-bit float，CPU 计算时使用 8-bit int
   - **稀疏与剪枝 Sparsity and pruning** 将某些张量置零，即将层间的连接剪枝，使模型更稀疏化
-## 模型的训练后量化 post training quantization
-  - **权重量化 Quantizing weights** 在训练好的模型上经过量化，可以减少 CPU 以及硬件的传输 / 计算 / 资源占用以及模型大小，但会略微牺牲准确度，量化可以应用在 float 类型的模型上，在 tflite 转化期间，将参数类型转化为 int
-  - 一般可以再 GPU 运算时使用 16-bit float，CPU 计算时使用 8-bit int
+## 模型量化方法
   - **模型量化示例** 前向过程的大部分计算使用 int 替换 float
     ```py
     import tensorflow as tf
@@ -50,7 +32,7 @@
     converter.optimizations = [tf.lite.Optimize.OPTIMIZE_FOR_SIZE]
     tflite_quant_model = converter.convert()    
     ```
-  - **权重和激活的全整数量化 Full integer quantization of weights and activations** 需要提供一个小的表示数据集 representative data set
+  - **权重和激活的全整数量化 Full integer quantization of weights and activations** 需要提供一个小的表示数据集 representative data set，模型的输入输出依然可以是浮点值
     ```py
     import tensorflow as tf
 
@@ -64,8 +46,7 @@
     converter.representative_dataset = representative_dataset_gen
     tflite_quant_model = converter.convert()    
     ```
-    模型的输入输出依然可以是浮点值
-## MNIST 示例
+## MNIST 权重量化
   - 训练 keras MNIST 模型[Keras MNIST](https://github.com/leondgarse/Atom_notebook/blob/master/public/2018/09-06_tensorflow_tutotials.md#keras-mnist)
   - **模型保存**
     ```py
@@ -85,7 +66,7 @@
   - **模型转化**
     ```py
     import tensorflow as tf
-    # Convert to a tflite file
+    # Convert to a tflite file, not quantized
     converter = tf.lite.TFLiteConverter.from_saved_model('./models/')
     tflite_model = converter.convert()
     open("converted_model.tflite", "wb").write(tflite_model)
@@ -161,7 +142,102 @@
     print(eval_model(interpreter_no_quant, mnist_ds))
     # 0.9797
     ```
-## Optimizing an existing model
+```py
+import glob2
+from skimage.io import imread
+from skimage.transform import resize
+imm = glob2.glob('./dogImages/test/*/*')
+xx = np.array([resize(imread(ii), (224, 224)) for ii in imm])
+ixx = tf.convert_to_tensor(xx, dtype='float32')
+# ixx = tf.convert_to_tensor(xx, dtype=tf.uint8)
+idd = tf.data.Dataset.from_tensor_slices((ixx)).batch(1)
+
+def representative_data_gen():
+    for ii in idd.take(100):
+        yield [ii]
+converter = tf.lite.TFLiteConverter.from_saved_model('./keras_checkpoints/')
+converter.optimizations = [tf.lite.Optimize.DEFAULT]
+converter.representative_dataset = representative_data_gen
+tflite_quant_all_model = converter.convert()
+```
+## MNIST 权重与激活全量化
+  - **权重与激活全量化 quantizes all weights and activations** 可以将模型大小压缩 4 倍，CPU 上的前向传播速度提升 3-4倍，需要提供一个表示数据集 representative dataset
+  - **定义表示数据集**
+    ```py
+    import tensorflow as tf
+
+    mnist_train, _ = tf.keras.datasets.mnist.load_data()
+    images = tf.cast(mnist_train[0], tf.float32)/255.0
+    mnist_ds = tf.data.Dataset.from_tensor_slices((images)).batch(1)
+    def representative_data_gen():
+        for input_value in mnist_ds.take(100):
+            yield [input_value]
+    ```
+  - **模型转化**
+    ```py
+    converter = tf.lite.TFLiteConverter.from_saved_model("./models")
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    converter.representative_dataset = representative_data_gen
+
+    tflite_quant_all_model = converter.convert()
+    open("converted_model_quant_all.tflite", "wb").write(tflite_quant_all_model)
+
+    !ls -lh converted_model_quant_all.tflite
+    # -rw-r--r-- 1 leondgarse leondgarse 401K 十月 29 11:08 converted_model_quant_all.tflite
+    ```
+  - **模型完全量化**
+    - 模型中如果包含 tflite 不能转化的操作，将会保持原来的 float 类型
+    - 而且转化后的模型依然可以使用 float 类型的输入输出
+    - 这样一些需要全整型的机器学习加速器可能不支持
+    - 通过指定在量化过程中，如果有不支持的操作类型则抛出错误，以及输入输出同样使用整型，将模型完全量化
+    ```py
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+    converter.inference_input_type = tf.uint8
+    converter.inference_output_type = tf.uint8
+
+    tflite_quant_io_model = converter.convert()
+    open("converted_model_quant_io.tflite", "wb").write(tflite_quant_io_model)
+    !ls -lh converted_model_quant_io.tflite
+    # -rw-r--r-- 1 leondgarse leondgarse 401K 十月 29 11:23 converted_model_quant_io.tflite
+    ```
+    **模型测试** [ ??? ]
+    ```py
+    _, mnist_test = tf.keras.datasets.mnist.load_data()
+    interpreter_quant = tf.lite.Interpreter(model_path='converted_model_quant_io.tflite')
+    interpreter_quant.allocate_tensors()
+    interpreter_quant.set_tensor(interpreter_quant.get_input_details()[0]['index'], tf.convert_to_tensor(mnist_test[0][:1], dtype='float32'))
+    interpreter_quant.invoke()
+    pp = interpreter_quant.get_tensor(interpreter_quant.get_output_details()[0]["index"])
+    print(pp.argmax(1), mnist_test[1][:1])
+    # [7] [7]
+    ```
+## 量化为 float16
+  - **量化为 16 位浮点型** 将模型大小压缩为原来的 1/2，在使用 **GPU** 计算时，可以加速前向过程
+  - **convert 定义**
+    ```py
+    converter = tf.lite.TFLiteConverter.from_saved_model("./models")
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    converter.target_spec.supported_types = [tf.lite.constants.FLOAT16]
+    ```
+  - **模型转化** 默认输入输出仍使用 float32
+    ```py
+    tflite_fp16_model = converter.convert()
+    open("converted_model_quant_f16.tflite", "wb").write(tflite_fp16_model)
+    !ls -lh converted_model_quant_f16.tflite
+    # -rw-r--r-- 1 leondgarse leondgarse 797K 十月 29 12:00 converted_model_quant_f16.tflite
+    ```
+  - **模型测试**
+    ```py
+    _, mnist_test = tf.keras.datasets.mnist.load_data()
+    interpreter_quant = tf.lite.Interpreter(model_path='converted_model_quant_f16.tflite')
+    interpreter_quant.allocate_tensors()
+    interpreter_quant.set_tensor(interpreter_quant.get_input_details()[0]['index'], tf.convert_to_tensor(mnist_test[0][:1], dtype='float32'))
+    interpreter_quant.invoke()
+    pp = interpreter_quant.get_tensor(interpreter_quant.get_output_details()[0]["index"])
+    print(pp.argmax(1), mnist_test[1][:1])
+    # [7] [7]
+    ```
+## Frozen Resnet 量化
   - resnet-v2 是带有预激活层 pre-activation layers 的 resnet，可以将训练好的 frozen graph resnet-v2-101 量化为 tflite 的 flatbuffer 格式
     ```py
     archive_path = tf.keras.utils.get_file("resnet_v2_101.tgz", "https://storage.googleapis.com/download.tensorflow.org/models/tflite_11_05_08/resnet_v2_101.tgz", extract=True)
@@ -191,7 +267,7 @@
     input_arrays = ["input"]
     output_arrays = ["output"]
     converter = tf.compat.v1.lite.TFLiteConverter.from_frozen_graph(
-      str(graph_def_file), input_arrays, output_arrays, input_shapes={"input":[1,299,299,3]})
+    str(graph_def_file), input_arrays, output_arrays, input_shapes={"input":[1,299,299,3]})
     converter.optimizations = [tf.lite.Optimize.OPTIMIZE_FOR_SIZE]
     resnet_tflite_file = graph_def_file.parent/"resnet_v2_101_quantized.tflite"
     resnet_tflite_file.write_bytes(converter.convert())
@@ -201,69 +277,18 @@
     ```
 ***
 
-# Post-training integer quantization
-  The optimized model top-1 accuracy is 76.8, the same as the floating point model.
-
-  Now, in order to create quantized values with an accurate dynamic range of activations, you need to provide a representative dataset:
-
-  ```py
-  mnist_train, _ = tf.keras.datasets.mnist.load_data()
-  images = tf.cast(mnist_train[0], tf.float32)/255.0
-  mnist_ds = tf.data.Dataset.from_tensor_slices((images)).batch(1)
-  def representative_data_gen():
-    for input_value in mnist_ds.take(100):
-      yield [input_value]
-
-  converter.representative_dataset = representative_data_gen
-  ```
-  Finally, convert the model to TensorFlow Lite format:
-  ```py
-  tflite_model_quant = converter.convert()
-  tflite_model_quant_file = tflite_models_dir/"mnist_model_quant.tflite"
-  tflite_model_quant_file.write_bytes(tflite_model_quant)
-  ```
-  Note how the resulting file is approximately 1/4 the size:
-
-  ```py
-  !ls -lh {tflite_models_dir}
-  ```
-  Your model should now be fully quantized. However, if you convert a model that includes any operations that TensorFlow Lite cannot quantize, those ops are left in floating point. This allows for conversion to complete so you have a smaller and more efficient model, but the model won't be compatible with some ML accelerators that require full integer quantization. Also, by default, the converted model still use float input and outputs, which also is not compatible with some accelerators.
-
-  So to ensure that the converted model is fully quantized (make the converter throw an error if it encounters an operation it cannot quantize), and to use integers for the model's input and output, you need to convert the model again using these additional configurations:
-
-  ```py
-  converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-  converter.inference_input_type = tf.uint8
-  converter.inference_output_type = tf.uint8
-
-  tflite_model_quant = converter.convert()
-  tflite_model_quant_file = tflite_models_dir/"mnist_model_quant_io.tflite"
-  tflite_model_quant_file.write_bytes(tflite_model_quant)
-  ```
-  In this example, the resulting model size remains the same because all operations successfully quantized to begin with. However, this new model now uses quantized input and output, making it compatible with more accelerators, such as the Coral Edge TPU.
-
-  In the following sections, notice that we are now handling two TensorFlow Lite models: tflite_model_file is the converted model that still uses floating-point parameters, and tflite_model_quant_file is the same model converted with full integer quantization, including uint8 input and output.
-## Post-training float16 quantization
-  To instead quantize the model to float16 on export, first set the optimizations flag to use default optimizations. Then specify that float16 is the supported type on the target platform:
-  ```py
-  tf.logging.set_verbosity(tf.logging.INFO)
-  converter.optimizations = [tf.lite.Optimize.DEFAULT]
-  converter.target_spec.supported_types = [tf.lite.constants.FLOAT16]
-  ```
-  Finally, convert the model like usual. Note, by default the converted model will still use float input and outputs for invocation convenience.
-  ```py
-  tflite_fp16_model = converter.convert()
-  tflite_model_fp16_file = tflite_models_dir/"mnist_model_quant_f16.tflite"
-  tflite_model_fp16_file.write_bytes(tflite_fp16_model)
-  ```
-  Note how the resulting file is approximately 1/2 the size.
-  ```py
-  !ls -lh {tflite_models_dir}
-  ```
-***
-
 # Magnitude-based weight pruning with Keras
-## Train a MNIST model without pruning
+## 模型剪枝
+  - **过度参数化 over-parameterization** 是深度神经网络的一个普遍属性，导致高计算成本和高内存占用
+  - **网络剪枝 network pruning** 作为一种补救措施，已被证实是一种有效的改进技术，可以在计算预算有限的情况下提高深度网络的效率
+  - 网络剪枝的过程一般包括三个阶段
+    - 训练一个大型，过度参数化的模型
+    - 根据特定标准修剪训练好的大模型
+    - 微调 fine-tune 剪枝后的模型以重新获得丢失的性能
+  - **权重剪枝 weight pruning** 将非必要的权重置零，从而减少层间的连接，将原来的 dense model 转变为 sparse model，达到压缩的目的
+  - 稀疏化的模型目前在压缩后可以减小体积，但在前向过程中的速度，需要后端支持
+  - **Keras 的模型剪枝 API** 使用了一种简单但广泛适用的基于重要性的 magnitude-based 剪枝算法，可以在训练期间根据重要程度，迭代删除连接
+## 训练未剪枝的 MNIST 模型
   ```py
   %load_ext tensorboard
   import tensorboard
@@ -344,316 +369,722 @@
   !ls -lh {keras_file}
   # -rw------- 1 leondgarse leondgarse 13M 十月 15 10:59 /tmp/tmpw_728hos.h5
   ```
-## Train a pruned MNIST
-  We provide a prune_low_magnitude() API to train models with removed connections. The Keras-based API can be applied at the level of individual layers, or the entire model. We will show you the usage of both in the following sections.
+  ![](images/tf_unpruned_train.png)
+## 训练剪枝的 MNIST 模型
+  - **prune_low_magnitude** 用于训练剪枝的模型，可以应用在单独的层上或整个模型上，通过指定稀疏的程度，迭代的移除模型层间的连接
+  - **pruning_schedule** 训练时的剪枝算法参数配置，典型的应用可以指定稀疏程度 75%，每 100 个训练步骤剪枝一次
+    ```py
+    pruning_params = {
+          'pruning_schedule': sparsity.PolynomialDecay(
+              initial_sparsity=0.50, final_sparsity=0.90,
+              begin_step=2000, end_step=end_step, frequency=100)
+    }
+    ```
+    - **Sparsity 稀疏程度** 在整个训练过程中应用 **多项式衰减 PolynomialDecay**，训练模型的稀疏程度从 50% 到最终的 90%
+    - **Schedule 流程** 剪枝从模型训练的 2000 步开始，每 100 个训练步骤剪枝一次，在剪枝之间训练模型的准确度
+    - **end_step** 一般根据训练数据集的大小 / batch size / epochs 计算出来
+  - **剪枝模型定义**
+    ```py
+    from tensorflow_model_optimization.sparsity import keras as sparsity
 
-  At a high level, the technique works by iteratively removing (i.e. zeroing out) connections between layers, given an schedule and a target sparsity.
+    epochs = 12
+    batch_size = 32
+    num_train_samples = x_train.shape[0]
+    end_step = np.ceil(num_train_samples / batch_size).astype(np.int32) * epochs
+    pruning_params = {
+        "pruning_schedule": sparsity.PolynomialDecay(
+            initial_sparsity=0.5, final_sparsity=0.9,
+            begin_step=2000, end_step=end_step, frequency=100)
+    }
 
-  For example, a typical configuration will target a 75% sparsity, by pruning connections every 100 steps (aka epochs), starting from step 2,000. For more details on the possible configurations, please refer to the github documentation.
+    l = tf.keras.layers
+    pruned_model = tf.keras.Sequential([
+        sparsity.prune_low_magnitude(l.Conv2D(32, 5, padding='same', activation='relu'), input_shape=(28, 28, 1), **pruning_params),
+        l.MaxPooling2D((2, 2), (2, 2), padding='same'),
+        l.BatchNormalization(),
+        sparsity.prune_low_magnitude(l.Conv2D(64, 5, padding='same', activation='relu'), **pruning_params),
+        l.MaxPooling2D((2, 2), (2, 2), padding='same'),
+        l.Flatten(),
+        sparsity.prune_low_magnitude(l.Dense(1024, activation='relu'), **pruning_params),
+        l.Dropout(0.4),
+        sparsity.prune_low_magnitude(l.Dense(10, activation='softmax'), **pruning_params)
+    ])
+    pruned_model.summary()
+    # Model: "sequential"
+    # _________________________________________________________________
+    # Layer (type)                 Output Shape              Param #   
+    # =================================================================
+    # prune_low_magnitude_conv2d ( (None, 28, 28, 32)        1634      
+    # _________________________________________________________________
+    # max_pooling2d (MaxPooling2D) (None, 14, 14, 32)        0         
+    # _________________________________________________________________
+    # batch_normalization (BatchNo (None, 14, 14, 32)        128       
+    # _________________________________________________________________
+    # prune_low_magnitude_conv2d_1 (None, 14, 14, 64)        102466    
+    # _________________________________________________________________
+    # max_pooling2d_1 (MaxPooling2 (None, 7, 7, 64)          0         
+    # _________________________________________________________________
+    # flatten (Flatten)            (None, 3136)              0         
+    # _________________________________________________________________
+    # prune_low_magnitude_dense (P (None, 1024)              6423554   
+    # _________________________________________________________________
+    # dropout (Dropout)            (None, 1024)              0         
+    # _________________________________________________________________
+    # prune_low_magnitude_dense_1  (None, 10)                20492     
+    # =================================================================
+    # Total params: 6,548,274
+    # Trainable params: 3,274,698
+    # Non-trainable params: 3,273,576
+    # _________________________________________________________________
+    ```
+  - **模型训练**
+    ```py
+    logdir = tempfile.mkdtemp()
+    print('Writing training logs to ' + logdir)
+    %tensorboard --logdir={logdir}
+    pruned_model.compile(loss=tf.keras.losses.categorical_crossentropy, optimizer='adam', metrics=['accuracy'])
+    callbacks = [
+        # Update the pruning step
+        sparsity.UpdatePruningStep(),
+        # Add summaries to keep track of the sparsity in different layers during training
+        sparsity.PruningSummaries(log_dir=logdir, profile_batch=0)
+    ]
+    pruned_model.fit(x_train, y_train, batch_size=32, epochs=10, verbose=1, callbacks=callbacks, validation_data=(x_test, y_test))
 
-  Build a pruned model layer by layer￼
-  In this example, we show how to use the API at the level of layers, and build a pruned MNIST solver model.
+    score = pruned_model.evaluate(x_test, y_test, verbose=0)
+    print('Test loss: %s, Test accuracy: %s' % (score[0], score[1]))
+    # Test loss: 0.024720210566235013, Test accuracy: 0.9925
+    ```
+    ![](images/tf_pruned_train.png)
+  - **模型保存与加载** 增加两轮训练
+    - 模型保存时需要指定 `include_optimizer=True`，加载后的模型才能正常用于训练
+    - 加载剪枝模型时，需要指定 `prune_scope` 用于并行化处理 deseriazliation
+    ```py
+    _, checkpoint_file = tempfile.mkstemp('.h5')
+    print('Saving pruned model to: ', checkpoint_file)
+    tf.keras.models.save_model(pruned_model, checkpoint_file, include_optimizer=True)
+    !ls -lh {checkpoint_file}
+    # -rw------- 1 leondgarse leondgarse 51M 十月 30 11:31 /tmp/tmp7v3pgmbn.h5
 
-  In this case, the prune_low_magnitude() receives as parameter the Keras layer whose weights we want pruned.
+    with sparsity.prune_scope():
+        restored_model = tf.keras.models.load_model(checkpoint_file)
+    restored_model.fit(x_train, y_train, batch_size=32, epochs=2, verbose=1, callbacks=callbacks, validation_data=(x_test, y_test))
+    score = restored_model.evaluate(x_test, y_test, verbose=0)
+    print('Test loss: %s, Test accuracy: %s' % (score[0], score[1]))
+    # Test loss: 0.030049306556587278, Test accuracy: 0.993
+    ```
+  - **移除剪枝参数用于部署**
+    ```py
+    final_model = sparsity.strip_pruning(pruned_model)
+    final_model.summary()
+    # Model: "sequential"
+    # _________________________________________________________________
+    # Layer (type)                 Output Shape              Param #   
+    # =================================================================
+    # conv2d (Conv2D)              (None, 28, 28, 32)        832       
+    # _________________________________________________________________
+    # max_pooling2d (MaxPooling2D) (None, 14, 14, 32)        0         
+    # _________________________________________________________________
+    # batch_normalization (BatchNo (None, 14, 14, 32)        128       
+    # _________________________________________________________________
+    # conv2d_1 (Conv2D)            (None, 14, 14, 64)        51264     
+    # _________________________________________________________________
+    # max_pooling2d_1 (MaxPooling2 (None, 7, 7, 64)          0         
+    # _________________________________________________________________
+    # flatten (Flatten)            (None, 3136)              0         
+    # _________________________________________________________________
+    # dense (Dense)                (None, 1024)              3212288   
+    # _________________________________________________________________
+    # dropout (Dropout)            (None, 1024)              0         
+    # _________________________________________________________________
+    # dense_1 (Dense)              (None, 10)                10250     
+    # =================================================================
+    # Total params: 3,274,762
+    # Trainable params: 3,274,698
+    # Non-trainable params: 64
+    # _________________________________________________________________
 
-  This function requires a pruning params which configures the pruning algorithm during training. Please refer to our github page for detailed documentation. The parameter used here means:
+    _, pruned_keras_file = tempfile.mkstemp('.h5')
+    print('Saving pruned model to: ', pruned_keras_file)
 
-  Sparsity. PolynomialDecay is used across the whole training process. We start at the sparsity level 50% and gradually train the model to reach 90% sparsity. X% sparsity means that X% of the weight tensor is going to be pruned away.
-  Schedule. Connections are pruned starting from step 2000 to the end of training, and runs every 100 steps. The reasoning behind this is that we want to train the model without pruning for a few epochs to reach a certain accuracy, to aid convergence. Furthermore, we give the model some time to recover after each pruning step, so pruning does not happen on every step. We set the pruning frequency to 100.
+    # No need to save the optimizer with the graph for serving.
+    tf.keras.models.save_model(final_model, pruned_keras_file, include_optimizer=False)
+    !ls -lh {pruned_keras_file}
+    # -rw------- 1 leondgarse leondgarse 13M 十月 30 11:39 /tmp/tmp77c9pbzl.h5
+    ```
+  - **压缩后模型大小对比**
+    ```py
+    _, zip1 = tempfile.mkstemp('.zip')
+    with zipfile.ZipFile(zip1, 'w', compression=zipfile.ZIP_DEFLATED) as f:
+        f.write(keras_file)
+    print("Unpruned model before compression: %.2f Mb" % (os.path.getsize(keras_file) / float(2**20)))
+    print("Unpruned model after compression: %.2f Mb" % (os.path.getsize(zip1) / float(2**20)))
 
-  To demonstrate how to save and restore a pruned keras model, in the following example we first train the model for 10 epochs, save it to disk, and finally restore and continue training for 2 epochs. With gradual sparsity, four important parameters are begin_sparsity, final_sparsity, begin_step and end_step. The first three are straight forward. Let's calculate the end step given the number of train example, batch size, and the total epochs to train.
-  ```py
-  from tensorflow_model_optimization.sparsity import keras as sparsity
-  np.ceil(x_train.shape[0] / 32).astype(np.int32) * 12
-  pruning_params = {
-      "pruning_schedule": sparsity.PolynomialDecay(initial_sparsity=0.5, final_sparsity=0.9, begin_step=2000, end_step=22500, frequency=100)
-  }
+    _, zip2 = tempfile.mkstemp('.zip')
+    with zipfile.ZipFile(zip2, 'w', compression=zipfile.ZIP_DEFLATED) as f:
+        f.write(pruned_keras_file)
+    print("Pruned model before compression: %.2f Mb" % (os.path.getsize(pruned_keras_file) / float(2**20)))
+    print("Pruned model after compression: %.2f Mb" % (os.path.getsize(zip2) / float(2**20)))
+    ```
+    ```py
+    Unpruned model before compression: 12.52 Mb
+    Unpruned model after compression: 11.63 Mb
+    Pruned model before compression: 12.52 Mb
+    Pruned model after compression: 2.44 Mb
+    ```
+## 剪枝整个模型
+  - **prune_low_magnitude** 可以应用在整个模型上，如果模型中有不支持的层，将会报错
+  - **模型加载与定义**
+    ```py
+    loaded_model = tf.keras.models.load_model(keras_file)
+    batch_size = 32
+    epochs = 4
+    end_step = np.ceil(x_train.shape[0] / batch_size).astype(np.int32) * epochs
+    new_pruning_params = {
+        "pruning_schedule": sparsity.PolynomialDecay(
+            initial_sparsity=0.5,
+            final_sparsity=0.9,
+            begin_step=0,
+            end_step=end_step,
+            frequency=100
+        )
+    }
+    new_pruned_model = sparsity.prune_low_magnitude(loaded_model, **new_pruning_params)
+    new_pruned_model.summary()
 
-  pruned_model = tf.keras.Sequential([
-      sparsity.prune_low_magnitude(l.Conv2D(32, 5, padding='same', activation='relu'), input_shape=(28, 28, 1), **pruning_params),
-      l.MaxPooling2D((2, 2), (2, 2), padding='same'),
-      l.BatchNormalization(),
-      sparsity.prune_low_magnitude(l.Conv2D(64, 5, padding='same', activation='relu'), **pruning_params),
-      l.MaxPooling2D((2, 2), (2, 2), padding='same'),
-      l.Flatten(),
-      sparsity.prune_low_magnitude(l.Dense(1024, activation='relu'), **pruning_params),
-      l.Dropout(0.4),
-      sparsity.prune_low_magnitude(l.Dense(10, activation='softmax'), **pruning_params)
-  ])
-  pruned_model.summary()
-  logdir = tempfile.mkdtemp()
-  print('Writing training logs to ' + logdir)
-  %tensorboard --logdir={logdir}
-  pruned_model.compile(loss=tf.keras.losses.categorical_crossentropy, optimizer='adam', metrics=['accuracy'])
-  callbacks = [
-      sparsity.UpdatePruningStep(),
-      sparsity.PruningSummaries(log_dir=logdir, profile_batch=0)
-  ]
-  pruned_model.fit(x_train, y_train, batch_size=32, epochs=10, verbose=1, callbacks=callbacks, validation_data=(x_test, y_test))
-  ```
-  ```py
-  _, checkpoint_file = tempfile.mkstemp('.h5')
-  print('Saving pruned model to: ', checkpoint_file)
-  tf.keras.models.save_model(pruned_model, checkpoint_file, include_optimizer=True)
-  !ls -lh {checkpoint_file}
-  with sparsity.prune_scope():
-      restored_model = tf.keras.models.load_model(checkpoint_file)
-  restored_model.fit(x_train, y_train, batch_size=32, epochs=2, verbose=1, callbacks=callbacks, validation_data=(x_test, y_test))
-  pruned_model.summary()
-  final_model = sparsity.strip_pruning(pruned_model)
-  final_model.summary()
-  _, pruned_keras_file = tempfile.mkstemp('.h5')
-  print('Saving pruned model to: ', pruned_keras_file)
+    new_pruned_model.compile(loss=tf.keras.losses.categorical_crossentropy, optimizer='adam', metrics=['accuracy'])
 
-  # No need to save the optimizer with the graph for serving.
-  tf.keras.models.save_model(final_model, pruned_keras_file, include_optimizer=False)
-  !ls -lh {pruned_keras_file}
-  _, zip1 = tempfile.mkstemp('.zip')
-  with zipfile.ZipFile(zip1, 'w', compression=zipfile.ZIP_DEFLATED) as f:
-    f.write(keras_file)
-  print("Size of the unpruned model before compression: %.2f Mb" %
-        (os.path.getsize(keras_file) / float(2**20)))
-  print("Size of the unpruned model after compression: %.2f Mb" %
-        (os.path.getsize(zip1) / float(2**20)))
+    logdir = tempfile.mkdtemp()
+    print('Writing training logs to ' + logdir)
+    %tensorboard --logdir={logdir}
+    ```
+  - **模型训练与导出**
+    ```py
+    # Add a pruning step callback to peg the pruning step to the optimizer's
+    # step. Also add a callback to add pruning summaries to tensorboard
+    callbacks = [
+        sparsity.UpdatePruningStep(),
+        sparsity.PruningSummaries(log_dir=logdir, profile_batch=0)
+    ]
+    new_pruned_model.fit(x_train, y_train,
+              batch_size=batch_size,
+              epochs=4,
+              verbose=1,
+              callbacks=callbacks,
+              validation_data=(x_test, y_test))
+    score = new_pruned_model.evaluate(x_test, y_test, verbose=0)
+    print('Test loss: %f, Test accuracy: %f' % (score[0], score[1]))
+    # Test loss: 0.021735, Test accuracy: 0.993600
 
-  _, zip2 = tempfile.mkstemp('.zip')
-  with zipfile.ZipFile(zip2, 'w', compression=zipfile.ZIP_DEFLATED) as f:
-    f.write(pruned_keras_file)
-  print("Size of the pruned model before compression: %.2f Mb" %
-        (os.path.getsize(pruned_keras_file) / float(2**20)))
-  print("Size of the pruned model after compression: %.2f Mb" %
-        (os.path.getsize(zip2) / float(2**20)))
-  ```
-## Prune a whole model
-  The prune_low_magnitude function can also be applied to the entire Keras model.
+    # Export the pruned model for serving
+    final_model = sparsity.strip_pruning(pruned_model)
+    final_model.summary()
 
-  In this case, the algorithm will be applied to all layers that are ameanable to weight pruning (that the API knows about). Layers that the API knows are not ameanable to weight pruning will be ignored, and unknown layers to the API will cause an error.
+    _, new_pruned_keras_file = tempfile.mkstemp('.h5')
+    print('Saving pruned model to: ', new_pruned_keras_file)
+    tf.keras.models.save_model(final_model, new_pruned_keras_file, include_optimizer=False)
+    ```
+  - **模型压缩**
+    ```py
+    _, zip3 = tempfile.mkstemp('.zip')
+    with zipfile.ZipFile(zip3, 'w', compression=zipfile.ZIP_DEFLATED) as f:
+        f.write(new_pruned_keras_file)
+    print("Pruned model before compression: %.2f Mb" % (os.path.getsize(new_pruned_keras_file) / float(2**20)))
+    # Pruned model before compression: 12.52 Mb
+    print("Pruned model after compression: %.2f Mb" % (os.path.getsize(zip3) / float(2**20)))
+    # Pruned model after compression: 2.44 Mb
+    ```
+## 转化为 TensorFlow Lite
+  - **模型转化**
+    ```py
+    converter = tf.lite.TFLiteConverter.from_keras_model(final_model)
+    tflite_model = converter.convert()
+    tflite_model_file = '/tmp/sparse_mnist.tflite'
+    open(tflite_model_file, 'wb').write(tflite_model)
+    ```
+  - **模型压缩对比**
+    ```py
+    _, zip_tflite = tempfile.mkstemp('.zip')
+    with zipfile.ZipFile(zip_tflite, 'w', compression=zipfile.ZIP_DEFLATED) as f:
+        f.write(tflite_model_file)
+    print("Tflite model before compression: %.2f Mb" % (os.path.getsize(tflite_model_file) / float(2**20)))
+    # Tflite model before compression: 12.49 Mb
+    print("Tflite model after compression: %.2f Mb" % (os.path.getsize(zip_tflite) / float(2**20)))
+    # Tflite model after compression: 2.34 Mb
+    ```
+  - **模型验证**
+    ```py
+    interpreter = tf.lite.Interpreter(model_path=str(tflite_model_file))
+    interpreter.allocate_tensors()
+    interpreter.get_input_details()[0]
+    input_index = interpreter.get_input_details()[0]['index']
+    output_index = interpreter.get_output_details()[0]['index']
 
-  If your model has layers that the API does not know how to prune their weights, but are perfectly fine to leave "un-pruned", then just apply the API in a per-layer basis.
+    def eval_model(interpreter, x_test, y_test):
+        total_seen = 0
+        num_correct = 0
 
-  Regarding pruning configuration, the same settings apply to all prunable layers in the model.
+        for img, label in zip(x_test, y_test):
+            inp = img.reshape((1, 28, 28, 1))
+            total_seen += 1
+            interpreter.set_tensor(input_index, inp)
+            interpreter.invoke()
+            predictions = interpreter.get_tensor(output_index)
+            if np.argmax(predictions) == np.argmax(label):
+              num_correct += 1
 
-  Also noteworthy is that pruning doesn't preserve the optimizer associated with the original model. As a result, it is necessary to re-compile the pruned model with a new optimizer.
+            if total_seen % 1000 == 0:
+                print("Accuracy after %i images: %f" % (total_seen, float(num_correct) / float(total_seen)))
+        return float(num_correct) / float(total_seen)
 
-  Before we move forward with the example, lets address the common use case where you may already have a serialized pre-trained Keras model, which you would like to apply weight pruning on. We will take the original MNIST model trained previously to show how this works. In this case, you start by loading the model into memory like this:
-  ```py
-  loaded_model = tf.keras.models.load_model(keras_file)
-  batch_size = 32
-  end_step = np.ceil(x_train.shape[0] / batch_size).astype(np.int32) * 4
-  new_pruning_params = {
-      "pruning_schedule": sparsity.PolynomialDecay(
-          initial_sparsity=0.5,
-          final_sparsity=0.9,
-          begin_step=0,
-          end_step=end_step,
-          frequency=100
-      )
-  }
-  new_pruned_model = sparsity.prune_low_magnitude(loaded_model, **new_pruning_params)
-  new_pruned_model.summary()
-  new_pruned_model.compile(loss=tf.keras.losses.categorical_crossentropy, optimizer='adam', metrics=['accuracy'])
+    print(eval_model(interpreter, x_test, y_test))
+    # 0.9925
+    ```
+  - **模型量化** 使用量化后的模型重新运行
+    ```py
+    converter = tf.lite.TFLiteConverter.from_keras_model(final_model)
+    converter.optimizations = [tf.lite.Optimize.OPTIMIZE_FOR_SIZE]
+    tflite_quant_model = converter.convert()
+    tflite_quant_model_file = '/tmp/sparse_mnist_quant.tflite'
+    open(tflite_quant_model_file, 'wb').write(tflite_model)
 
-  logdir = tempfile.mkdtemp()
-  print('Writing training logs to ' + logdir)
-  %tensorboard --logdir={logdir}
+    _, zip_tflite = tempfile.mkstemp('.zip')
+    with zipfile.ZipFile(zip_tflite, 'w', compression=zipfile.ZIP_DEFLATED) as f:
+        f.write(tflite_quant_model_file)
+    print("Tflite model before compression: %.2f Mb" % (os.path.getsize(tflite_quant_model_file) / float(2**20)))
+    # Tflite model before compression: 3.13 Mb
+    print("Tflite model after compression: %.2f Mb" % (os.path.getsize(zip_tflite) / float(2**20)))
+    # Tflite model after compression: 0.60 Mb
 
-  callbacks = [
-      sparsity.UpdatePruningStep(),
-      sparsity.PruningSummaries(log_dir=logdir, profile_batch=0)
-  ]
-  new_pruned_model.fit(x_train, y_train,
-            batch_size=batch_size,
-            epochs=4,
-            verbose=1,
-            callbacks=callbacks,
-            validation_data=(x_test, y_test))
-  score = new_pruned_model.evaluate(x_test, y_test, verbose=0)
-  print('Test loss: %f, Test accuracy: %f' % (score[0], score[1]))
+    interpreter = tf.lite.Interpreter(model_path=str(tflite_quant_model_file))
+    interpreter.allocate_tensors()
+    input_index = interpreter.get_input_details()[0]["index"]
+    output_index = interpreter.get_output_details()[0]["index"]
 
-  final_model = sparsity.strip_pruning(pruned_model)
-  final_model.summary()
-
-  _, new_pruned_keras_file = tempfile.mkstemp('.h5')
-  print('Saving pruned model to: ', new_pruned_keras_file)
-  tf.keras.models.save_model(final_model, new_pruned_keras_file, include_optimizer=False)
-
-  _, zip3 = tempfile.mkstemp('.zip')
-  with zipfile.ZipFile(zip3, 'w', compression=zipfile.ZIP_DEFLATED) as f:
-      f.write(new_pruned_keras_file)
-  print("Size of the pruned model before compression: %.2f Mb"
-        % (os.path.getsize(new_pruned_keras_file) / float(2**20)))
-  print("Size of the pruned model after compression: %.2f Mb"
-        % (os.path.getsize(zip3) / float(2**20)))
-  ```
-## Convert to TensorFlow Lite
-  ```py
-  converter = tf.lite.TFLiteConverter.from_keras_model(final_model)
-  tflite_model = converter.convert()
-  tflite_model_file = '/tmp/sparse_mnist.tflite'
-  with open(tflite_model_file, 'wb') as f:
-      f.write(tflite_model)
-  ! ls -lh {tflite_model_file}
-
-  _, zip_tflite = tempfile.mkstemp('.zip')
-  with zipfile.ZipFile(zip_tflite, 'w', compression=zipfile.ZIP_DEFLATED) as f:
-    f.write(tflite_model_file)
-  print("Size of the tflite model before compression: %.2f Mb"
-        % (os.path.getsize(tflite_model_file) / float(2**20)))
-  print("Size of the tflite model after compression: %.2f Mb"
-        % (os.path.getsize(zip_tflite) / float(2**20)))
-
-  interpreter = tf.lite.Interpreter(model_path=str(tflite_model_file))
-  interpreter.allocate_tensors()
-  interpreter.get_input_details()[0]
-  input_index = interpreter.get_input_details()[0]['index']
-  output_index = interpreter.get_output_details[0]['index']
-  output_index = interpreter.get_output_details()[0]['index']
-
-  def eval_model(interpreter, x_test, y_test):
-      total_seen = 0
-      num_correct = 0
-
-      for img, label in zip(x_test, y_test):
-          inp = img.reshape((1, 28, 28, 1))
-          total_seen += 1
-          interpreter.set_tensor(input_index, inp)
-          interpreter.invoke()
-          predictions = interpreter.get_tensor(output_index)
-          if np.argmax(predictions) == np.argmax(label):
-            num_correct += 1
-
-          if total_seen % 1000 == 0:
-              print("Accuracy after %i images: %f" % (total_seen, float(num_correct) / float(total_seen)))
-
-      return float(num_correct) / float(total_seen)
-
-  print(eval_model(interpreter, x_test, y_test))
-  ```
-  ```py
-  converter = tf.lite.TFLiteConverter.from_keras_model(final_model)
-  converter.optimizations = [tf.lite.Optimize.OPTIMIZE_FOR_SIZE]
-
-  tflite_quant_model = converter.convert()
-
-  tflite_quant_model_file = '/tmp/sparse_mnist_quant.tflite'
-  with open(tflite_quant_model_file, 'wb') as f:
-      f.write(tflite_quant_model)
-
-  _, zip_tflite = tempfile.mkstemp('.zip')
-  with zipfile.ZipFile(zip_tflite, 'w', compression=zipfile.ZIP_DEFLATED) as f:
-      f.write(tflite_quant_model_file)
-  print("Size of the tflite model before compression: %.2f Mb"
-        % (os.path.getsize(tflite_quant_model_file) / float(2**20)))
-  print("Size of the tflite model after compression: %.2f Mb"
-        % (os.path.getsize(zip_tflite) / float(2**20)))
-
-  interpreter = tf.lite.Interpreter(model_path=str(tflite_quant_model_file))
-  interpreter.allocate_tensors()
-  input_index = interpreter.get_input_details()[0]["index"]
-  output_index = interpreter.get_output_details()[0]["index"]
-
-  print(eval_model(interpreter, x_test, y_test))
-  ```
+    print(eval_model(interpreter, x_test, y_test))
+    # 0.9925
+    ```
 ***
 
-# Train sparse TensorFlow models with Keras
-Yes, the current TensorFlow Lite op kernels are optimized for ARM processor (using NEON instruction set). If SSE is available, it will try to use NEON_2_SSE to adapt NEON calls to SSE, so it should be still running with some sort of SIMD. However we didn't put much effort to optimize this code path.
+## Flowers 使用 MobileNet fine tune 与 模型量化
+  - [colab flowers_tf_lite](https://colab.research.google.com/github/tensorflow/examples/blob/master/community/en/flowers_tf_lite.ipynb)
+  - [Recognize Flowers with TensorFlow on Android](https://codelabs.developers.google.com/codelabs/recognize-flowers-with-tensorflow-on-android/#0)
+  - **加载数据集**
+    ```py
+    import tensorflow as tf
+    import os
+    import numpy as np
+    import matplotlib.pyplot as plt
 
-Regarding number of threads. There is a SetNumThreads function in C++ API, but it's not exposed in Python API (yet). When it's not set, the underlying implementation may try to probe number of available cores. If you build the code by yourself, you can try to change the value and see if it affects the result.
+    tf.__version__  # '2.0.0'
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
+    tf.config.experimental.set_memory_growth(gpus[0], True)
 
-Hope these helps.
-```sh
-toco
---input_file=mobilenet_v1_1.0_224/teste/sfrozen_inference_graph.pb
---input_format=TENSORFLOW_GRAPHDEF
---output_file=/tmp/mobilenet_v1_1.0_224.tflite
---input_shape=-1,-1,-1,3
---input_array=image_tensor
---output_array=detection_boxes,detection_scores,detection_classes,detection_nums \
+    _URL = "https://storage.googleapis.com/download.tensorflow.org/example_images/flower_photos.tgz"
+    zip_file = tf.keras.utils.get_file(origin=_URL, fname=os.path.basename(_URL), extract=True)
+    base_dir = os.path.join(os.path.dirname(zip_file), os.path.basename(zip_file).split('.')[0])
 
-bazel run -c opt tensorflow/contrib/lite/toco:toco --
---input_file=$OUTPUT_DIR/tflite_graph.pb
---output_file=$OUTPUT_DIR/detect.tflite
---input_shapes=1,300,300,3
---input_arrays=normalized_input_image_tensor
---output_arrays='TFLite_Detection_PostProcess','TFLite_Detection_PostProcess:1','TFLite_Detection_PostProcess:2','TFLite_Detection_PostProcess:3'
---inference_type=QUANTIZED_UINT8
---mean_values=128
---std_values=128
---change_concat_input_ranges=false
---allow_custom_ops
-```
-```sh
-toco --graph_def_file=mtcnn.pb --output_file=mtcnn.tflite --input_shape=-1,-1,3:None:3:None --input_array=input,min_size,thresholds,factor --output_array=prob,landmarks,box
-```
+    IMG_SHAPE = (224, 224, 3)
+    datagen = tf.keras.preprocessing.image.ImageDataGenerator( rescale=1./255, validation_split=0.2)
+    train_generator = datagen.flow_from_directory(base_dir, target_size=IMG_SHAPE[:2], batch_size=64, subset='training')
+    val_generator = datagen.flow_from_directory(base_dir, target_size=IMG_SHAPE[:2], batch_size=64, subset='validation')
+
+    print (train_generator.class_indices, train_generator.classes.shape, val_generator.classes.shape)
+    # {'daisy': 0, 'dandelion': 1, 'roses': 2, 'sunflowers': 3, 'tulips': 4} (2939,) (731,)
+    image_batch, label_batch = train_generator.next()
+    print(image_batch.shape, label_batch.shape)
+    # (64, 224, 224, 3) (64, 5)
+
+    """Save the labels in a file"""
+    labels = '\n'.join(sorted(train_generator.class_indices.keys()))
+    open('labels.txt', 'w').write(labels)
+    ```
+  - **模型定义** 使用预训练的 `MobileNet V2`，只使用瓶颈层 bottleneck layer 提取特征，指定 MobileNet 的 `trainable = False`
+    ```py
+    base_model = tf.keras.applications.MobileNetV2(input_shape=IMG_SHAPE, include_top=False, weights='imagenet')
+
+    """Freeze the convolutional base created from the previous step and use that as a feature extractor"""
+    base_model.trainable = False
+
+    """Add a classification head"""
+    model = tf.keras.Sequential([
+        base_model,
+        tf.keras.layers.Conv2D(32, 3, activation='relu'),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.GlobalAveragePooling2D(),
+        tf.keras.layers.Dense(5, activation='softmax')
+    ])
+
+    model.compile(optimizer=tf.keras.optimizers.Adam(), loss='categorical_crossentropy', metrics=['accuracy'])
+    model.summary()
+
+    print('Number of trainable variables = {}'.format(len(model.trainable_variables)))
+    # Number of trainable variables = 4
+    ```
+  - **模型训练**
+    ```py
+    epochs = 10
+    history = model.fit_generator(train_generator, epochs=epochs, validation_data=val_generator)
+
+    """Learning curves"""
+    def plot_history(history):
+        hh = history.history
+        plt.figure(figsize=(8, 8))
+        plt.subplot(2, 1, 1)
+        plt.plot(hh['accuracy'], label='Training Accuracy')
+        plt.plot(hh['val_accuracy'], label='Validation Accuracy')
+        plt.legend(loc='lower right')
+        plt.ylabel('Accuracy')
+        plt.ylim([min(plt.ylim()), 1])
+        plt.title('Training and Validation Accuracy')
+
+        plt.subplot(2, 1, 2)
+        plt.plot(hh['loss'], label='Training Loss')
+        plt.plot(hh['val_loss'], label='Validation Loss')
+        plt.legend(loc='upper right')
+        plt.ylabel('Cross Entropy')
+        plt.ylim([0, 1.5])
+        plt.title('Training and Validation Loss')
+        plt.xlabel('epoch')
+    plot_history(history)
+    ```
+    ![](images/tf_mp_learning_curves.png)
+  - **模型微调 fine-tune** unfreeze `base_model`，只将模型的底层设置为 `un-trainable.`
+    ```py
+    base_model.trainable = True
+    print("Number of layers in the base model: ", len(base_model.layers))
+    # Number of layers in the base model:  155
+
+    # Fine tune from this layer onwards
+    fine_tune_at = 100
+
+    # Freeze all the layers before the `fine_tune_at` layer
+    for layer in base_model.layers[:fine_tune_at]:
+        layer.trainable =  False
+
+    """Define a new model"""
+    model = tf.keras.Sequential([
+        base_model,
+        tf.keras.layers.Conv2D(32, 3, activation='relu'),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.GlobalAveragePooling2D(),
+        tf.keras.layers.Dense(5, activation='softmax')
+    ])
+    print('Number of trainable variables = {}'.format(len(model.trainable_variables)))
+    # Number of trainable variables = 60
+
+    model.compile(loss='categorical_crossentropy', optimizer = tf.keras.optimizers.Adam(1e-5), metrics=['accuracy'])
+    model.summary()
+    history_fine = model.fit_generator(train_generator, epochs=10, validation_data=val_generator)
+    plot_history(history_fine)
+    ```
+    ![](images/tf_mp_learning_curves_fine_tune.png)
+  - **模型转化** 转化为 TFLite 模型
+    ```py
+    saved_model_dir = 'save/fine_tuning'
+    tf.saved_model.save(model, saved_model_dir)
+
+    converter = tf.lite.TFLiteConverter.from_saved_model(saved_model_dir)
+    tflite_model = converter.convert()
+
+    with open('model.tflite', 'wb') as f:
+        f.write(tflite_model)
+    ```
+## IMDB LSTM 模型剪枝
+  - **数据加载**
+    ```py
+    from tensorflow import keras
+    from tensorflow.python import keras
+    from tensorflow.python.keras import backend as K
+    import tensorflow_model_optimization.sparsity.keras as sparsity
+
+    max_features = 20000
+    maxlen = 100  # cut texts after this number of words
+    batch_size = 32
+    (x_train, y_train), (x_test, y_test) = keras.datasets.imdb.load_data(num_words=max_features)
+    aa = np.array([len(ii) for ii in x_train])
+    bb = np.array([len(ii) for ii in x_test])
+    print(aa.max(), aa.min(), bb.max(), bb.min())
+    # 2494 11 2315 7
+
+    x_train = keras.preprocessing.sequence.pad_sequences(x_train, maxlen=100)
+    x_test = keras.preprocessing.sequence.pad_sequences(x_test, maxlen=100)
+    print(x_train.shape, y_train.shape, x_test.shape, y_test.shape)
+    # (25000, 100) (25000,) (25000, 100) (25000,)
+    ```
+  - **模型定义**
+    ```py
+    model = keras.models.Sequential()
+    model.add(keras.layers.Embedding(max_features, 128, input_length=100))
+    model.add(keras.layers.GRU(128))
+    model.add(keras.layers.Dropout(0.5))
+    model.add(keras.layers.Dense(1))
+    model.add(keras.layers.Activation('sigmoid'))
+
+    # end_step = np.ceil(25000 / 32).astype(np.int32) * 3
+    # end_step is 2346
+    model = sparsity.prune_low_magnitude(model, sparsity.PolynomialDecay(initial_sparsity=0.3, final_sparsity=0.7, begin_step=1000, end_step=3000))
+    # from tensorflow_model_optimization.python.core.sparsity.keras import prune
+    # from tensorflow_model_optimization.python.core.sparsity.keras import pruning_schedule
+    # model = prune.prune_low_magnitude(model, pruning_schedule.PolynomialDecay(initial_sparsity=0.3, final_sparsity=0.7, begin_step=1000, end_step=3000))
+    ```
+  - **打印当前的稀疏程度**
+    ```py
+    def print_model_sparsity(pruned_model):
+        def _get_sparsity(weights):
+            return 1.0 - np.count_nonzero(weights) / float(weights.size)
+
+        print("Model Sparsity Summary ({})".format(pruned_model.name))
+        print("--")
+        for layer in pruned_model.layers:
+            if isinstance(layer, sparsity.pruning_wrapper.PruneLowMagnitude):
+                prunable_weights = layer.layer.get_prunable_weights()
+                if prunable_weights:
+                    vv = [", ".join([ww.name, str(_get_sparsity(K.get_value(ww)))]) for ww in prunable_weights]
+                    print("{}: {}".format(layer.name, "; ".join(vv)))
+        print("\n")
+
+    print_model_sparsity(model)
+    # Model Sparsity Summary (sequential)
+    # --
+    # prune_low_magnitude_embedding: embedding/embeddings:0, 0.0
+    # prune_low_magnitude_gru: gru/kernel:0, 0.0; gru/recurrent_kernel:0, 0.0
+    # prune_low_magnitude_dense: dense/kernel:0, 0.0
+    ```
+  - **模型训练与测试**
+    ```py
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.fit(x_train, y_train, batch_size=batch_size, epochs=3, callbacks=[sparsity.UpdatePruningStep()], validation_data=(x_test, y_test))
+    score, acc = model.evaluate(x_test, y_test, batch_size=batch_size)
+    print("Test score: %s, Test accuracy: %s" % (score, acc))
+    # Test score: 0.420061532831192, Test accuracy: 0.84476
+
+    print_model_sparsity(model)
+    # Model Sparsity Summary (sequential)
+    # --
+    # prune_low_magnitude_embedding: embedding/embeddings:0,0.68285
+    # prune_low_magnitude_gru: gru/kernel:0,0.6828409830729167, gru/recurrent_kernel:0,0.6828409830729167
+    # prune_low_magnitude_dense: dense/kernel:0,0.6796875
+    ```
+***
+
+# TensorFlow Lite Inference
+
+***
+
+# MTCNN
+## TFlite 测试 MTCNN
+  Yes, the current TensorFlow Lite op kernels are optimized for ARM processor (using NEON instruction set). If SSE is available, it will try to use NEON_2_SSE to adapt NEON calls to SSE, so it should be still running with some sort of SIMD. However we didn't put much effort to optimize this code path.
+
+  Regarding number of threads. There is a SetNumThreads function in C++ API, but it's not exposed in Python API (yet). When it's not set, the underlying implementation may try to probe number of available cores. If you build the code by yourself, you can try to change the value and see if it affects the result.
+
+  Hope these helps.
+  ```sh
+  toco
+  --input_file=mobilenet_v1_1.0_224/teste/sfrozen_inference_graph.pb
+  --input_format=TENSORFLOW_GRAPHDEF
+  --output_file=/tmp/mobilenet_v1_1.0_224.tflite
+  --input_shape=-1,-1,-1,3
+  --input_array=image_tensor
+  --output_array=detection_boxes,detection_scores,detection_classes,detection_nums \
+
+  bazel run -c opt tensorflow/contrib/lite/toco:toco --
+  --input_file=$OUTPUT_DIR/tflite_graph.pb
+  --output_file=$OUTPUT_DIR/detect.tflite
+  --input_shapes=1,300,300,3
+  --input_arrays=normalized_input_image_tensor
+  --output_arrays='TFLite_Detection_PostProcess','TFLite_Detection_PostProcess:1','TFLite_Detection_PostProcess:2','TFLite_Detection_PostProcess:3'
+  --inference_type=QUANTIZED_UINT8
+  --mean_values=128
+  --std_values=128
+  --change_concat_input_ranges=false
+  --allow_custom_ops
+  ```
+  ```sh
+  toco --graph_def_file=mtcnn.pb --output_file=mtcnn.tflite --input_shape=-1,-1,3:None:3:None --input_array=input,min_size,thresholds,factor --output_array=prob,landmarks,box
+  ```
+  ```py
+  import tensorflow as tf
+  from tensorflow.python.saved_model import signature_constants
+  from tensorflow.python.saved_model import tag_constants
+
+  export_dir = './saved'
+  builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(export_dir)
+
+  model_path = './mtcnn.pb'
+  graph = tf.Graph()
+  with graph.as_default():
+      with open(model_path, 'rb') as f:
+          graph_def = tf.compat.v1.GraphDef.FromString(f.read())
+
+  sigs = {}
+
+  with tf.compat.v1.Session(graph=tf.Graph()) as sess:
+      # name="" is important to ensure we don't get spurious prefixing
+      tf.import_graph_def(graph_def, name="")
+      graph = tf.compat.v1.get_default_graph()
+      feeds = {
+        'input': graph.get_tensor_by_name('input:0'),
+        'min_size': graph.get_tensor_by_name('min_size:0'),
+        'thresholds': graph.get_tensor_by_name('thresholds:0'),
+        'factor': graph.get_tensor_by_name('factor:0'),
+      }
+      fetches = {
+        'prob': graph.get_tensor_by_name('prob:0'),
+        'landmarks': graph.get_tensor_by_name('landmarks:0'),
+        'box': graph.get_tensor_by_name('box:0'),
+      }
+
+      sigs[signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY] = \
+          tf.compat.v1.saved_model.signature_def_utils.predict_signature_def(feeds, fetches)
+
+      builder.add_meta_graph_and_variables(sess, [tag_constants.SERVING], signature_def_map=sigs)
+
+  builder.save()
+  ```
+## TF 2.0 加载 frozen MTCNN
 ```py
-model_path = './mtcnn.pb'
-graph = tf.Graph()
-with graph.as_default():
-  with open(model_path, 'rb') as f:
-      graph_def = tf.compat.v1.GraphDef.FromString(f.read())
-      tf.import_graph_def(graph_def, name='')
-config = tf.compat.v1.ConfigProto(
-  gpu_options = tf.compat.v1.GPUOptions(allow_growth=True),
-  allow_soft_placement=True,
-  intra_op_parallelism_threads=4,
-  inter_op_parallelism_threads=4)
-config.gpu_options.allow_growth = True
-sess = tf.compat.v1.Session(graph=graph, config=config)
+graph_def = tf.compat.v1.GraphDef()
+loaded = graph_def.ParseFromString(open('./mtcnn.pb', 'rb').read())
+def _imports_graph_def():
+    tf.compat.v1.import_graph_def(graph_def, name="")
+wrapped_import = tf.compat.v1.wrap_function(_imports_graph_def, [])
+import_graph = wrapped_import.graph
+fe = tf.nest.map_structure(import_graph.as_graph_element, ['input:0', 'min_size:0', 'thresholds:0', 'factor:0'])
+ft = tf.nest.map_structure(import_graph.as_graph_element, ['prob:0', 'landmarks:0', 'box:0'])
+inception_func = wrapped_import.prune(fe, ft)
+input_img = tf.ones([1,224,224,3], dtype=tf.float32)
+out = inception_func(input_img, tf.constant(20.0), tf.constant([0.6, 0.6, 0.6]), tf.constant(0.7))
+```
+***
 
+- Reset/Reinitialize model weights/parameters
+```py
+def reset_weights(model):
+    for layer in model.layers:
+        if isinstance(layer, tf.keras.Model): #if you're using a model as a layer
+            reset_weights(layer) #apply function recursively
+            continue
+
+        #where are the initializers?
+        if hasattr(layer, 'cell'):
+            init_container = layer.cell
+        else:
+            init_container = layer
+
+        for key, initializer in init_container.__dict__.items():
+            if "initializer" not in key: #is this item an initializer?
+                  continue #if no, skip it
+
+            # find the corresponding variable, like the kernel or the bias
+            if key == 'recurrent_initializer': #special case check
+                var = getattr(init_container, 'recurrent_kernel')
+            else:
+                var = getattr(init_container, key.replace("_initializer", ""))
+
+            var.assign(initializer(var.shape, var.dtype))
+            #use the initializer
+```
+# Checkpoints to SavedModel
+```py
+tf.__version__  # '1.14.0'
+import yaml
+from model import get_embd
+
+''' 加载模型 '''
+config = yaml.load(open('./configs/config_ms1m_100.yaml'))
+images = tf.placeholder(dtype=tf.float32, shape=[None, 112, 112, 3], name='input_image')
+train_phase_dropout = tf.placeholder(dtype=tf.bool, shape=None, name='train_phase')
+train_phase_bn = tf.placeholder(dtype=tf.bool, shape=None, name='train_phase_last')
+embds, _ = get_embd(images, train_phase_dropout, train_phase_bn, config)
+
+sess = tf.InteractiveSession()
+tf.global_variables_initializer().run()
+saver = tf.train.Saver()
+saver.restore(sess, '/home/leondgarse/Downloads/config_ms1m_100_334k/best-m-334000')
+
+''' 从 graph 中获取输入 / 输出 tensor '''
+gg = sess.graph
+oo = gg.get_operations()
+print(len(oo))
+# 4046
+
+''' 输入 tensor，必须包括所有的 Placeholder '''
+oo[:5]
+# [<tf.Operation 'input_image' type=Placeholder>,
+#  <tf.Operation 'train_phase' type=Placeholder>,
+#  <tf.Operation 'train_phase_last' type=Placeholder>,
+#  <tf.Operation 'embd_extractor/resnet_v2_50/conv1/weights/Initializer/truncated_normal/shape' type=Const>,
+#  <tf.Operation 'embd_extractor/resnet_v2_50/conv1/weights/Initializer/truncated_normal/mean' type=Const>]
+[ii for ii in oo if ii.type == 'Placeholder']
+# [<tf.Operation 'input_image' type=Placeholder>,
+#  <tf.Operation 'train_phase' type=Placeholder>,
+#  <tf.Operation 'train_phase_last' type=Placeholder>]
 feeds = {
-  'input': graph.get_tensor_by_name('input:0'),
-  'min_size': graph.get_tensor_by_name('min_size:0'),
-  'thresholds': graph.get_tensor_by_name('thresholds:0'),
-  'factor': graph.get_tensor_by_name('factor:0'),
+  'input_image': gg.get_tensor_by_name('input_image:0'),
+  'train_phase': gg.get_tensor_by_name('train_phase:0'),
+  'train_phase_last': gg.get_tensor_by_name('train_phase_last:0')
 }
+feeds = {ii.name: ii.outputs[0]  for ii in oo if ii.type == 'Placeholder'}
+
+''' 输出 tensor，首先获取到名称 [ ??? ] '''
+oo[-5:] # NOT these
+# [<tf.Operation 'save/Assign_277' type=Assign>,
+#  <tf.Operation 'save/Assign_278' type=Assign>,
+#  <tf.Operation 'save/Assign_279' type=Assign>,
+#  <tf.Operation 'save/Assign_280' type=Assign>,
+#  <tf.Operation 'save/restore_all' type=NoOp>]
+[(id, ii) for id, ii in enumerate(oo) if len(ii.outputs) != 0 and
+          ii.outputs[0].shape.dims != None and ii.outputs[0].shape.as_list() == [None, 512]]
+# [(3693, <tf.Operation 'embd_extractor/fully_connected/MatMul' type=MatMul>),
+#  (3694, <tf.Operation 'embd_extractor/fully_connected/BiasAdd' type=BiasAdd>),
+#  (3752, <tf.Operation 'embd_extractor/BatchNorm_1/Reshape_1' type=Reshape>)]
+oo[3750:3756]
+# [<tf.Operation 'embd_extractor/BatchNorm_1/cond_1/Merge_1' type=Merge>,
+#  <tf.Operation 'embd_extractor/BatchNorm_1/Shape' type=Shape>,
+#  <tf.Operation 'embd_extractor/BatchNorm_1/Reshape_1' type=Reshape>,
+#  <tf.Operation 'init' type=NoOp>,
+#  <tf.Operation 'save/filename/input' type=Const>,
+#  <tf.Operation 'save/filename' type=PlaceholderWithDefault>]
 fetches = {
-  'prob': graph.get_tensor_by_name('prob:0'),
-  'landmarks': graph.get_tensor_by_name('landmarks:0'),
-  'box': graph.get_tensor_by_name('box:0'),
+  'output': gg.get_tensor_by_name('embd_extractor/BatchNorm_1/Reshape_1:0')
 }
-tf.compat.v1.saved_model.simple_save(sess,
-  "./1",
-  inputs=feeds,
-  outputs=fetches)
+
+tf.saved_model.simple_save(sess, './1', inputs=feeds, outputs=fetches)
+
+tf.__version__  # '2.0.0'
+gpus = tf.config.experimental.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(gpus[0], True)
+gg = tf.saved_model.load('./1')
+tt = gg.signatures['serving_default']
+tt(input_image=tf.ones([1, 112, 112, 3]), train_phase_last=tf.constant(False), train_phase=tf.constant(False))
 ```
 ```py
-import tensorflow as tf
-from tensorflow.python.saved_model import signature_constants
-from tensorflow.python.saved_model import tag_constants
+In [21]: %timeit aa = tt(input_image=tf.ones([1, 112, 112, 3]), train_phase_last=tf.constant(False), trai
+    ...: n_phase=tf.constant(False))                                                                     
+20.8 ms ± 346 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
 
-export_dir = './saved'
-builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(export_dir)
+In [22]: %timeit aa = tt(input_image=tf.ones([1, 112, 112, 3]), train_phase_last=tf.constant(False), trai
+    ...: n_phase=tf.constant(False))                                                                     
+20.4 ms ± 424 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
 
-model_path = './mtcnn.pb'
-graph = tf.Graph()
-with graph.as_default():
-  with open(model_path, 'rb') as f:
-      graph_def = tf.compat.v1.GraphDef.FromString(f.read())
+In [23]: %timeit aa = tt(input_image=tf.ones([1, 112, 112, 3]), train_phase_last=tf.constant(False), trai
+    ...: n_phase=tf.constant(False))                                                                     
+20.7 ms ± 690 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
+```
+```py
+cc = bb['output'].numpy()
+cc.shape
+(cc ** 2).sum()
+%hist
 
-sigs = {}
+In [19]: %timeit bb = tt(tf.ones([1, 112, 112, 3]))                                                      
+44.2 ms ± 994 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
 
-with tf.compat.v1.Session(graph=tf.Graph()) as sess:
-    # name="" is important to ensure we don't get spurious prefixing
-    tf.import_graph_def(graph_def, name="")
-    graph = tf.compat.v1.get_default_graph()
-    feeds = {
-      'input': graph.get_tensor_by_name('input:0'),
-      'thresholds': graph.get_tensor_by_name('thresholds:0'),
-    }
-    fetches = {
-      'prob': graph.get_tensor_by_name('prob:0'),
-      'landmarks': graph.get_tensor_by_name('landmarks:0'),
-      'box': graph.get_tensor_by_name('box:0'),
-    }
+In [20]: %timeit bb = tt(tf.ones([1, 112, 112, 3]))                                                      
+44.2 ms ± 1.01 ms per loop (mean ± std. dev. of 7 runs, 10 loops each)
 
-    sigs[signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY] = \
-        tf.compat.v1.saved_model.signature_def_utils.predict_signature_def(
-            feeds, fetches)
-
-    builder.add_meta_graph_and_variables(sess,
-                                         [tag_constants.SERVING],
-                                         signature_def_map=sigs)
-
-builder.save()
+In [21]: %timeit bb = tt(tf.ones([1, 112, 112, 3]))                                                      
+44.1 ms ± 834 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
 ```
