@@ -1088,3 +1088,32 @@ In [20]: %timeit bb = tt(tf.ones([1, 112, 112, 3]))
 In [21]: %timeit bb = tt(tf.ones([1, 112, 112, 3]))                                                      
 44.1 ms ± 834 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
 ```
+```py
+saver = tf.train.import_meta_graph(/path/to/meta/graph)
+sess = tf.Session()
+saver.restore(sess, /path/to/checkpoints)
+graph = sess.graph
+print([node.name for node in graph.as_graph_def().node])
+```
+```py
+('{fc7_acc}', 366000, 0.33333334)
+lr-batch-epoch: 0.0001 14259 10
+testing verification..
+(12000, 256)
+infer time 5.25035
+[lfw][366000]XNorm: 16.261008
+[lfw][366000]Accuracy-Flip: 0.99433+-0.00343
+testing verification..
+(14000, 256)
+infer time 6.030406
+[cfp_fp][366000]XNorm: 13.543931
+[cfp_fp][366000]Accuracy-Flip: 0.89614+-0.01629
+testing verification..
+(12000, 256)
+infer time 5.152523
+[agedb_30][366000]XNorm: 15.793682
+[agedb_30][366000]Accuracy-Flip: 0.95417+-0.01265
+saving 1
+INFO:root:Saved checkpoint to "./models/m1-arcface-emore/model-0001.params"
+[366000]Accuracy-Highest: 0.95417
+```

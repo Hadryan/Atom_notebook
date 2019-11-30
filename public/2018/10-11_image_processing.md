@@ -218,6 +218,34 @@
     ```py
     cv2.imencode('.jpg', rgb_face_frame)
     ```
+## 渐变
+  ```py
+  import math
+  import numpy as np
+
+  def make_gradient_v1(width, height, h, k, a, b, theta):
+      '''
+      width, height: image width and height
+      h, k: center coordinate height and width
+      a, b: two radius of eclipse
+      theta: rotation angle
+      '''
+      # Precalculate constants
+      st, ct =  math.sin(theta), math.cos(theta)
+      aa, bb = a**2, b**2
+
+      weights = np.zeros((height, width), np.float64)    
+      for y in range(height):
+          for x in range(width):
+              weights[y,x] = ((((x-h) * ct + (y-k) * st) ** 2) / aa
+                  + (((x-h) * st - (y-k) * ct) ** 2) / bb)
+
+      return np.clip(1.0 - weights, 0, 1)
+
+  aa = make_gradient_v1(300, 200, 150, 100, 100, 50, 1.8)
+  plt.imshow(aa, cmap="gray")
+  ```
+  ![](images/skimage_gradient_eclipse.jpg)
 ***
 
 # 图像处理算法
@@ -810,6 +838,18 @@
     io.imshow(np.concatenate([img, inverted_img], 1))
     ```
     ![](images/skimage_invert.jpg)
+  - **色相调整** HSV 颜色空间 H 表示色调，S 表示饱和度，V 表示 明度，因此调整 H 通道可以改变图像色相 hue
+    ```py
+    from skimage.color import hsv2rgb, rgb2hsvimm = skimage.data.coffee()
+    imm = skimage.data.coffee()
+    ihh = rgb2hsv(imm)
+    igg = hsv2rgb(np.concatenate([1 - ihh[:, :, :1], ihh[:, :, 1:]], 2))
+    iyy = hsv2rgb(np.concatenate([ihh[:, :, :1] + 0.5, ihh[:, :, 1:]], 2))
+    plt.imshow(np.hstack([imm / 255, igg, iyy]))
+    plt.tight_layout()
+    plt.axis('off')
+    ```
+    ![](images/skimage_hue_addjust.jpg)
 ## exposure 与像素分布直方图 histogram
   - **plt.hist** 可以直接绘制图像的像素分布直方图
     ```py

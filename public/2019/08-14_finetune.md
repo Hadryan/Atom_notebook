@@ -129,3 +129,326 @@ Have to discard the weight of fc7 layer, as the number of output is not the same
 @myfighterforever Use deploy/model_slim.py. As is named, this script can slim model.
 Just in case you need it still.
 ```
+```py
+Hi, I also encountered the same problem. And I find solution here #569 .
+
+Check config.ckpt_embedding in your config.py, it's True as default.
+If config.ckpt_embedding is set to True, the checkpoint only save the model until embedding layer. The other weights are lost such as fc7_weight. This led to the low accuracy when fine-tuning.
+
+The conclusion is, if I want to train A model from scratch and take A as a pretrained model for training B model, config.ckpt_embedding should be set to False while training A and be set to True while training B. (If B model is final model I need.)
+```
+```sh
+export MXNET_ENABLE_GPU_P2P=0
+CUDA_VISIBLE_DEVICES='0,1' python -u train_parall.py --network m1 --loss arcface --dataset emore --per-batch-size 96
+CUDA_VISIBLE_DEVICES='0,1' python -u train.py --network m1 --loss arcface --dataset emore --per-batch-size 96 --pretrained ./models/m1-arcface-emore/model --lr 0.0001
+CUDA_VISIBLE_DEVICES='' python -u train.py --network m1 --loss triplet --dataset emore --per-batch-size 120 --pretrained ~/workspace/samba/m1-arcface-emore/model --lr 0.0001 --verbose 400 --lr-steps '10000,16000,22000'
+CUDA_VISIBLE_DEVICES='1' python -u train.py --network m1 --loss triplet --dataset emore --per-batch-size 150 --pretrained ./models/m1-triplet-emore_97083/model --lr 0.0001 --lr-steps '1000,100000,160000,220000,280000,340000'
+CUDA_VISIBLE_DEVICES='0' python -u train.py --network m1 --loss triplet --dataset glint --per-batch-size 150 --pretrained ./models/m1-triplet-emore_290445/model --pretrained-epoch 602 --lr 0.0001 --lr-steps '1000,100000,160000,220000,280000,340000'
+
+CUDA_VISIBLE_DEVICES='0,1' python3 -u train_parall.py --network vargfacenet --loss softmax --dataset emore --per-batch-size 96
+CUDA_VISIBLE_DEVICES='1' python3 -u train.py --network vargfacenet --loss arcface --dataset glint --per-batch-size 150 --pretrained ./model
+s/vargfacenet-softmax-emore/model --pretrained-epoch 166 --lr 0.0001 --lr-steps '100000,160000,220000,280000,340000'
+
+```
+# save and restore Tensorflow models
+  - [A quick complete tutorial to save and restore Tensorflow models](https://cv-tricks.com/tensorflow-tutorial/save-restore-tensorflow-models-quick-complete-tutorial/)
+  ```py
+  oring model and retraining with your own dataPython
+
+  import tensorflow as tf
+
+  sess=tf.Session()    
+  #First let's load meta graph and restore weights
+  saver = tf.train.import_meta_graph('my_test_model-1000.meta')
+  saver.restore(sess,tf.train.latest_checkpoint('./'))
+
+
+  # Now, let's access and create placeholders variables and
+  # create feed-dict to feed new data
+
+  graph = tf.get_default_graph()
+  w1 = graph.get_tensor_by_name("w1:0")
+  w2 = graph.get_tensor_by_name("w2:0")
+  feed_dict ={w1:13.0,w2:17.0}
+
+  #Now, access the op that you want to run.
+  op_to_restore = graph.get_tensor_by_name("op_to_restore:0")
+
+  print sess.run(op_to_restore,feed_dict)
+  #This will print 60 which is calculated
+  #using new values of w1 and w2 and saved value of b1.
+  ```
+  ```py
+  import tensorflow as tf
+
+  sess=tf.Session()    
+  #First let's load meta graph and restore weights
+  saver = tf.train.import_meta_graph('my_test_model-1000.meta')
+  saver.restore(sess,tf.train.latest_checkpoint('./'))
+
+
+  # Now, let's access and create placeholders variables and
+  # create feed-dict to feed new data
+
+  graph = tf.get_default_graph()
+  w1 = graph.get_tensor_by_name("w1:0")
+  w2 = graph.get_tensor_by_name("w2:0")
+  feed_dict ={w1:13.0,w2:17.0}
+
+  #Now, access the op that you want to run.
+  op_to_restore = graph.get_tensor_by_name("op_to_restore:0")
+
+  #Add more to the current graph
+  add_on_op = tf.multiply(op_to_restore,2)
+
+  print sess.run(add_on_op,feed_dict)
+  #This will print 120.
+  ```
+  ```py
+  ......
+  ......
+  saver = tf.train.import_meta_graph('vgg.meta')
+  # Access the graph
+  graph = tf.get_default_graph()
+  ## Prepare the feed_dict for feeding data for fine-tuning
+
+  #Access the appropriate output for fine-tuning
+  fc7= graph.get_tensor_by_name('fc7:0')
+
+  #use this if you only want to change gradients of the last layer
+  fc7 = tf.stop_gradient(fc7) # It's an identity function
+  fc7_shape= fc7.get_shape().as_list()
+
+  new_outputs=2
+  weights = tf.Variable(tf.truncated_normal([fc7_shape[3], num_outputs], stddev=0.05))
+  biases = tf.Variable(tf.constant(0.05, shape=[num_outputs]))
+  output = tf.matmul(fc7, weights) + biases
+  pred = tf.nn.softmax(output)
+
+  # Now, you run this with fine-tuning data in sess.run()
+  ```
+# 人脸识别损失函数
+  - 人脸识别模型训练的损失函数主要分为 **基于分类 softmax 的损失函数** 和 **基于 triplet loss 的损失函数** 两大类
+    - **基于分类 softmax 的损失函数** 因为是否对 embedding 或分类权重 W 做归一化以及是否增加额外的间隔 margin 等产生了多种变体
+    - **基于 triplet loss 的损失函数** 则分为基于欧氏距离和基于角度距离两种
+  - **基于分类 softmax 的损失函数**
+    - **基本的 softmax 分类** 通过将 embedding 输入一层全连接层以及 softmax 函数得到分类概率，由于 softmax 的分母对 embedding 在各个类别上的结果进行了求和，因此最小化这一损失一定程度上能够使类间距离变大，类内距离变小
+      - N 表示样本数量
+      - n 表示类别总数
+      - yi 表示样本 xi 的真实类别
+    - **Sphereface Loss** 在 softmax 的基础上进一步引入了显式的角度间隔 angular margin，从而训练时能够进一步缩小类内距离，扩大类间距离
+    - **CosineFace Loss** 进一步对人脸表示 embedding 进行了归一化，从而使分类结果仅取决于夹角余弦，并进一步引入了余弦间隔 m，用于扩大类间距离，缩小类内距离。由于余弦的取值范围较小，为了使类别间差别更显著，进一步引入一个超参数 s 用于放大余弦值
+    - **Arcface Loss** 为了使人脸表示 embedding 的学习更符合超球体流形假设，Arcface 进一步将 Cosineface 中的余弦间隔修改为角度间隔，得到如下损失
+
+    | 损失函数   | 分类边界                      |
+    | ---------- | ----------------------------- |
+    | Softmax    | (W1 - W2) * x + b1 - b2 = 0   |
+    | SphereFace | ∥x∥ * (cosmθ1 - cosθ2) = 0    |
+    | CosineFace | s * (cosθ1 - m - cosθ2) = 0   |
+    | ArcFace    | s * (cos(θ1 + m) - cosθ2) = 0 |
+
+  - **基于 triplet loss 的损失函数** 与通过 softmax 优化使类内距离缩小，类间距离扩大不同，Triplet Loss 直接对样本间的距离进行优化，使不同类样本间的距离比同类样本间的距离大出一个间隔，因此计算 Triplet Loss 每次需要采样三个样本 anchor / positive / negative，其中，anchor 与 positive 样本属于同一类别，与 negative 样本属于不同类别
+
+    - x代表人脸表示 embedding
+    - 上标 a,p,n 分别表示 anchor，positive 和 negative
+    - dist(x,y) 表示 x,y 的距离函数
+    - m 则表示不同类样本间距离比同类样本间距离大出的间隔，这里的距离函数和间隔既可以是欧氏距离也可以是角度距离等形式
+  - **softmax 损失与 Triplet Loss 结合**
+    - Triplet Loss 直接对样本表示间的距离进行优化，在训练数据足够多，模型表示能力足够强的情况下，能够学得很好的结果
+    - 其缺点是，一方面训练时模型收敛速度较慢，另一方面在构造triplet时需要选择合适的正样本对和负样本对，因此需要设计 triplet 的构造选择机制，这一过程通常比较复杂
+    - 较好的训练方式是先用分类损失训练模型，然后再用 Triplet Loss 对模型进行 finetune 以进一步提升模型性能
+# 计算点集中的矩形面积
+  ```py
+  def cal_rectangle_areas(aa):
+      ''' 每个 x 坐标对应的所有 y 值 '''
+      xxs = {}
+      for ixx, iyy in aa:
+          tt = xxs.get(ixx, set())
+          tt.add(iyy)
+          xxs[ixx] = tt
+      print(xxs)
+      # {1: [1, 3], 4: [1], 2: [2, 3], 3: [2, 3], 5: [2, 3]}
+
+      ''' 遍历 xxs，对于每个 x 值，在所有其他 x 值对应的 y 值集合上，查找交集 '''
+      rect = []
+      areas = []
+      while len(xxs) != 0:
+          xa, ya = xxs.popitem()
+          if len(ya) < 2:
+              continue
+          for xb, yb in xxs.items():
+              width = abs(xb - xa)
+              tt = list(ya.intersection(yb))
+              while len(tt) > 1:
+                  rect.extend([((xa, xb), (tt[0], ii)) for ii in tt[1:]])
+                  areas.extend([width * abs(tt[0] - ii) for ii in tt[1:]])
+                  tt = tt[1:]
+
+      print(rect, areas)
+      # [((5, 2), (2, 3)), ((5, 3), (2, 3)), ((3, 2), (2, 3))] [3, 2, 1]
+      return rect, areas
+
+  def draw_rectangles(dots, coords, labels, alpha=0.3):
+      colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w'] * 8
+      fig, axes = plt.subplots(1, 1)
+      axes.scatter(dots[:, 0], dots[:, 1])
+      for (xx, yy), label, cc in zip(coords, labels, colors):
+          axes.plot([xx[0], xx[1], xx[1], xx[0], xx[0]], [yy[0], yy[0], yy[1], yy[1], yy[0]], color=cc, label=label)
+          rect = plt.Rectangle((xx[0], yy[0]), xx[1] - xx[0], yy[1] - yy[0], color=cc, alpha=alpha)
+          axes.add_patch(rect)
+      axes.legend()
+      fig.tight_layout()
+
+  aa = np.array([[1, 1], [4, 1], [2, 2], [3, 2], [5, 2], [1, 3], [2, 3], [3, 3], [5, 3]])
+  plt.scatter(aa[:, 0], aa[:, 1])
+  rect, areas = cal_rectangle_areas(aa)
+  draw_rectangles(aa, rect, areas)
+
+  bb = aa[:, ::-1]
+  rect, areas = cal_rectangle_areas(bb)
+  draw_rectangles(bb, rect, areas)
+
+  xx = np.random.randint(1, 50, 100)
+  yy = np.random.randint(1, 50, 100)
+  aa = np.array(list(zip(xx, yy)))
+  rect, areas = cal_rectangle_areas(aa)
+  draw_rectangles(aa, rect, areas)
+  ```
+  ![](images/calc_rectangle_area.png)
+***
+后台管理系统 http://47.103.82.71:38838/admin/login
+人脸注册 http://47.103.82.71:38838/faceRecognize/registerFace
+人脸检测 http://47.103.82.71:38838/faceRecognize/detectFace
+人脸删除 http://47.103.82.71:38838/faceRecognize/deleteFace
+
+```py
+loaded = tf.saved_model.load('models_resnet')
+interf = loaded.signatures['serving_default']
+teacher_model_interf = lambda images: interf(images)['output'].numpy()
+
+def image_generator(teacher_model_interf, input_shape=[112, 112, 3], batch_size=64):
+    while True:
+        batch_x = tf.random.uniform([batch_size] + input_shape, minval=0, maxval=255, dtype=tf.float32)
+        batch_y = teacher_model_interf(batch_x)
+        yield (batch_x, batch_y)
+train_gen = image_generator(teacher_model_interf)
+ixx, iyy = next(train_gen)
+
+xx = tf.keras.applications.MobileNetV2(input_shape=[112, 112, 3], include_top=False, weights=None)
+xx.trainable = True
+model = tf.keras.models.Sequential([
+    xx,
+    tf.keras.layers.GlobalAveragePooling2D(),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.1),
+    tf.keras.layers.Dense(512)
+])
+model.compile(optimizer='adam', loss='mse', metrics=["mae",'accuracy'])
+model.summary()
+
+model.fit_generator(train_gen, epochs=20, steps_per_epoch=10, use_multiprocessing=True)
+```
+```py
+import glob2
+from skimage.io import imread
+def data_gen(path, batch_size=64, shuffle=True, base_path_replace=[]):
+    while True:
+        image_path_files = glob2.glob(os.path.join(path, '*_img.foo'))
+        emb_files = [ii.replace('_img.foo', '_emb.npy') for ii in image_path_files]
+        for ipps, iees in zip(image_path_files, emb_files):
+            with open(ipps, 'r') as ff:
+                image_paths = np.array([ii.strip() for ii in ff.readlines()])
+            image_embs = np.load(iees)
+            total = len(image_paths)
+            if shuffle:
+                indexes = np.random.permutation(total)
+            else:
+                indexes = np.arange(total)
+            print("image_path_files = %s, emb_files = %s, total = %d" % (ipps, iees, total))
+            for id in range(0, total, batch_size):
+                cc = indexes[id: id + batch_size]
+                # print("id start = %d, end = %d, cc = %s" % (id, id + batch_size, cc))
+                image_batch_data = image_paths[cc]
+                if len(image_batch_data) < batch_size:
+                    continue
+                if len(base_path_replace) != 0:
+                    image_batch_data = [ii.replace(base_path_replace[0], base_path_replace[1]) for ii in image_batch_data]
+                images = (np.array([imread(ii) for ii in image_batch_data]) / 255).astype('float32')
+                embs = image_embs[cc]
+
+                yield (images, embs)
+
+gpus = tf.config.experimental.list_physical_devices('GPU')
+tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
+tf.config.experimental.set_memory_growth(gpus[0], True)
+
+BATCH_SIZE = 50
+DATA_PATH = './'
+# train_gen = data_gen(DATA_PATH, batch_size=BATCH_SIZE, shuffle=True, base_path_replace=['/media/uftp/images', '/home/leondgarse/workspace/images'])
+train_gen = data_gen(DATA_PATH, batch_size=BATCH_SIZE, shuffle=True)
+steps_per_epoch = int(np.floor(100000 / BATCH_SIZE) * len(os.listdir(DATA_PATH)) / 2)
+
+hist = model.fit_generator(train_gen, epochs=50, steps_per_epoch=steps_per_epoch, verbose=1)
+```
+```py
+from skimage.io import imread
+gpus = tf.config.experimental.list_physical_devices('GPU')
+tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
+tf.config.experimental.set_memory_growth(gpus[0], True)
+
+pp = '/media/uftp/images/faces_emore_112x112_folders/'
+with open('faces_emore_img.foo', 'w') as ff:
+    for dd in os.listdir(pp):
+        dd = os.path.join(pp, dd)
+        for ii in os.listdir(dd):
+            ff.write(os.path.join(dd, ii) + '\n')
+# 5822653
+with open('faces_emore_img.foo', 'r') as ff:
+    tt = [ii.strip() for ii in ff.readlines()]
+
+for ii in range(59):
+    print(ii * 100000, (ii+1) * 100000)
+    with open('./{}_img.foo'.format(ii), 'w') as ff:
+        ff.write('\n'.join(tt[ii * 100000: (ii+1) * 100000]))
+
+loaded = tf.saved_model.load('./models_resnet')
+_interp = loaded.signatures["serving_default"]
+interp = lambda ii: _interp(tf.convert_to_tensor(ii, dtype="float32"))["output"].numpy()
+
+with open('0_img.foo', 'r') as ff:
+    tt = [ii.strip() for ii in ff.readlines()]
+print(len(tt))
+
+ees = []
+for id, ii in enumerate(tt):
+    ii = ii.replace('/media/uftp', '/home/leondgarse/workspace')
+    imm = imread(ii)
+    ees.append(interp([imm])[0])
+    if id % 10 == 0:
+        print("Processing %d..." % id)
+
+from skimage.io import ImageCollection
+icc = ImageCollection(tt)
+for id, (iff, imm) in enumerate(zip(icc.files, icc)):
+    if id % 10 == 0:
+        print("Processing %d..." % id)
+    ees.append(interp([imm])[0])
+
+import glob2
+for fn in glob2.glob('./*_img.foo'):
+    with open(fn, 'r') as ff:
+        tt = [ii.strip() for ii in ff.readlines()]
+    target_file = fn.replace('_img.foo', '_emb')
+    print(fn, len(tt), target_file)
+
+    ees = []
+    for id, ii in enumerate(tt):
+        # ii = ii.replace('/media/uftp', '/home/leondgarse/workspace')
+        imm = imread(ii)
+        ees.append(interp([imm])[0])
+        if id % 100 == 0:
+            print("Processing %d..." % id)
+    ees = np.array(ees)
+    print(ees.shape)
+    np.save(target_file, ees)
+```

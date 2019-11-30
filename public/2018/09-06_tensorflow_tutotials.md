@@ -1679,6 +1679,7 @@
       ```py
       import zipfile
       from sklearn import model_selection
+      import pandas as pd
 
       SENTIMENT_LABELS = ["negative", "somewhat negative", "neutral", "somewhat positive", "positive"]
 
