@@ -335,6 +335,7 @@ train_gen = image_generator(teacher_model_interf)
 ixx, iyy = next(train_gen)
 
 xx = tf.keras.applications.MobileNetV2(input_shape=[112, 112, 3], include_top=False, weights=None)
+# xx = tf.keras.applications.NASNetMobile(input_shape=[112, 112, 3], include_top=False, weights=None)
 xx.trainable = True
 model = tf.keras.models.Sequential([
     xx,
@@ -354,7 +355,9 @@ from skimage.io import imread
 def data_gen(path, batch_size=64, shuffle=True, base_path_replace=[]):
     while True:
         image_path_files = glob2.glob(os.path.join(path, '*_img.foo'))
+        image_path_files = np.random.permutation(image_path_files)
         emb_files = [ii.replace('_img.foo', '_emb.npy') for ii in image_path_files]
+        print("This should be the epoch start, total files = %d" % (image_path_files.shape[0]))
         for ipps, iees in zip(image_path_files, emb_files):
             with open(ipps, 'r') as ff:
                 image_paths = np.array([ii.strip() for ii in ff.readlines()])
@@ -364,7 +367,7 @@ def data_gen(path, batch_size=64, shuffle=True, base_path_replace=[]):
                 indexes = np.random.permutation(total)
             else:
                 indexes = np.arange(total)
-            print("image_path_files = %s, emb_files = %s, total = %d" % (ipps, iees, total))
+            print("\nimage_path_files = %s, emb_files = %s, total = %d" % (ipps, iees, total))
             for id in range(0, total, batch_size):
                 cc = indexes[id: id + batch_size]
                 # print("id start = %d, end = %d, cc = %s" % (id, id + batch_size, cc))
@@ -377,12 +380,13 @@ def data_gen(path, batch_size=64, shuffle=True, base_path_replace=[]):
                 embs = image_embs[cc]
 
                 yield (images, embs)
+            print("Processed Id: %d - %d" % (id, id + batch_size))
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
 tf.config.experimental.set_memory_growth(gpus[0], True)
 
-BATCH_SIZE = 50
+BATCH_SIZE = 100
 DATA_PATH = './'
 # train_gen = data_gen(DATA_PATH, batch_size=BATCH_SIZE, shuffle=True, base_path_replace=['/media/uftp/images', '/home/leondgarse/workspace/images'])
 train_gen = data_gen(DATA_PATH, batch_size=BATCH_SIZE, shuffle=True)
@@ -411,7 +415,7 @@ for ii in range(59):
     with open('./{}_img.foo'.format(ii), 'w') as ff:
         ff.write('\n'.join(tt[ii * 100000: (ii+1) * 100000]))
 
-loaded = tf.saved_model.load('./models_resnet')
+loaded = tf.saved_model.load('./model_resnet')
 _interp = loaded.signatures["serving_default"]
 interp = lambda ii: _interp(tf.convert_to_tensor(ii, dtype="float32"))["output"].numpy()
 
@@ -452,3 +456,398 @@ for fn in glob2.glob('./*_img.foo'):
     print(ees.shape)
     np.save(target_file, ees)
 ```
+```py
+from skimage.io import imread
+from sklearn.preprocessing import normalize
+
+def model_test(image_paths, model_path, scale=1.0):
+    loaded = tf.saved_model.load(model_path)
+    interf = loaded.signatures['serving_default']
+    images = [imread(ipp) * scale for ipp in image_paths]
+
+    preds = interf(tf.convert_to_tensor(images, dtype='float32'))['output'].numpy()
+    return np.dot(normalize(preds), normalize(preds).T), preds
+
+images = ['/home/leondgarse/workspace/samba/1770064353.jpg', '/home/leondgarse/workspace/samba/541812715.jpg']
+model_test(images, 'model_mobilefacenet/')
+```
+```sh
+My 2-stage pipeline:
+
+Train softmax with lr=0.1 for 120K iterations.
+LRSTEPS='240000,360000,440000'
+CUDA_VISIBLE_DEVICES='0,1,2,3' python -u train_softmax.py --data-dir $DATA_DIR --network "$NETWORK" --loss-type 0 --prefix "$PREFIX" --per-batch-size 128 --lr-steps "$LRSTEPS" --margin-s 32.0 --margin-m 0.1 --ckpt 2 --emb-size 128 --fc7-wd-mult 10.0 --wd 0.00004 --max-steps 140002
+Switch to ArcFace loss to do normal training with '100K,140K,160K' iterations.
+LRSTEPS='100000,140000,160000'
+CUDA_VISIBLE_DEVICES='0,1,2,3' python -u train_softmax.py --data-dir $DATA_DIR --network "$NETWORK" --loss-type 4 --prefix "$PREFIX" --per-batch-size 128 --lr-steps "$LRSTEPS" --margin-s 64.0 --margin-m 0.5 --ckpt 1 --emb-size 128 --fc7-wd-mult 10.0 --wd 0.00004 --pretrained '../models2/model-y1-test/model,70'
+Pretrained model: baiduyun
+training dataset: ms1m
+LFW: 99.50, CFP_FP: 88.94, AgeDB30: 95.91
+```
+```py
+import glob2
+from keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras import layers
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+
+path = '/home/tdtest/workspace/insightface-master/faces_emore_img/emb_done'
+image_path_files = glob2.glob(os.path.join(path, '*_img.foo'))
+emb_files = [ii.replace('_img.foo', '_emb.npy') for ii in image_path_files]
+image_names = []
+image_embs = []
+for ii, ee in zip(image_path_files, emb_files):
+    with open(ii, 'r') as ff:
+        image_names.extend([ii.strip() for ii in ff.readlines()])
+    image_embs.append(np.load(ee))
+image_embs = np.concatenate(image_embs)
+image_classes = [int(os.path.basename(os.path.dirname(ii))) for ii in image_names]
+print(len(image_names), len(image_classes), image_embs.shape)
+
+np.savez('faces_emore_class_emb', image_names=np.array(image_names), image_classes=np.array(image_classes), image_embs=image_embs)
+aa = np.load('faces_emore_class_emb.npz')
+image_names, image_classes, image_embs = aa['image_names'], aa['image_classes'], aa['image_embs']
+classes = np.max(image_classes) + 1
+print(image_names.shape, image_classes.shape, image_embs.shape, classes)
+# (5822653,) (5822653,) (5822653, 512) 85742
+
+data_df = pd.DataFrame({"image_names": image_names, "image_classes": image_classes, "image_embs": list(image_embs)})
+image_gen = ImageDataGenerator(rescale=1./255, validation_split=0.1)
+train_data_gen = image_gen.flow_from_dataframe(data_df, directory=None, x_col='image_names', y_col=["image_classes", "image_embs"], class_mode='multi_output', target_size=(112, 112), batch_size=128, seed=1, subset='training', validate_filenames=False)
+# Found 5240388 non-validated image filenames.
+val_data_gen = image_gen.flow_from_dataframe(data_df, directory=None, x_col='image_names', y_col=["image_classes", "image_embs"], class_mode='multi_output', target_size=(112, 112), batch_size=128, seed=1, subset='validation', validate_filenames=False)
+# Found 582265 non-validated image filenames.
+
+xx = tf.keras.applications.MobileNetV2(include_top=False, weights=None)
+xx.trainable = True
+inputs = layers.Input(shape=(112, 112, 3))
+nn = xx(inputs)
+nn = layers.GlobalAveragePooling2D()(nn)
+nn = layers.BatchNormalization()(nn)
+nn = layers.Dropout(0.1)(nn)
+embedding = layers.Dense(512)(nn)
+logits = layers.Dense(classes, activation='softmax')(embedding)
+
+model = keras.models.Model(inputs, [logits, embedding])
+model.compile(optimizer='adam', loss=[keras.losses.sparse_categorical_crossentropy, keras.losses.mse])
+# model.compile(optimizer='adam', loss=[keras.losses.sparse_categorical_crossentropy, keras.losses.mse], metrics=['accuracy', 'mae'])
+model.summary()
+
+reduce_lr = ReduceLROnPlateau('val_loss', factor=0.1, patience=5, verbose=1)
+model_checkpoint = ModelCheckpoint("./keras_checkpoints", 'val_loss', verbose=1, save_best_only=True)
+callbacks = [model_checkpoint, reduce_lr]
+hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=200, verbose=1, callbacks=callbacks)
+```
+## Loading data and basic model
+  ```py
+  ''' flow_from_directory '''
+  import glob2
+  from keras.preprocessing.image import ImageDataGenerator
+  from tensorflow.keras import layers
+  from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+
+  path = '/datasets/faces_emore_112x112_folders/'
+  image_gen = ImageDataGenerator(rescale=1./255, validation_split=0.1)
+  train_data_gen = image_gen.flow_from_directory(path, class_mode='categorical', target_size=(112, 112), batch_size=96, seed=1, subset='training')
+  val_data_gen = image_gen.flow_from_directory(path, class_mode='categorical', target_size=(112, 112), batch_size=96, seed=1, subset='validation')
+  classes = train_data_gen.num_classes
+
+  ''' flow_from_dataframe '''
+  path = '/home/tdtest/workspace/insightface-master/faces_emore_img/faces_emore_img.foo'
+  with open(path, 'r') as ff:
+      image_names = np.array([ii.strip() for ii in ff.readlines()])
+  image_classes = np.array([os.path.basename(os.path.dirname(ii)) for ii in image_names])
+  print(image_names.shape, image_classes.shape)
+
+  data_df = pd.DataFrame({"image_names": image_names, "image_classes": image_classes})
+  image_gen = ImageDataGenerator(rescale=1./255, validation_split=0.1)
+  train_data_gen = image_gen.flow_from_dataframe(data_df, directory=None, x_col='image_names', y_col="image_classes", class_mode='categorical', target_size=(112, 112), batch_size=128, seed=1, subset='training', validate_filenames=False)
+  # Found 5240388 non-validated image filenames belonging to 85742 classes.
+  val_data_gen = image_gen.flow_from_dataframe(data_df, directory=None, x_col='image_names', y_col="image_classes", class_mode='categorical', target_size=(112, 112), batch_size=128, seed=1, subset='validation', validate_filenames=False)
+  # Found 582265 non-validated image filenames belonging to 85742 classes.
+
+  classes = data_df.image_classes.unique().shape[0]
+
+  ''' Basic model '''
+  # xx = tf.keras.applications.MobileNetV2(include_top=False, weights=None)
+  xx = tf.keras.applications.ResNet50V2(input_shape=(112, 112, 3), include_top=False, weights='imagenet')
+  xx.trainable = True
+  inputs = layers.Input(shape=(112, 112, 3))
+  nn = xx(inputs)
+  nn = layers.GlobalAveragePooling2D()(nn)
+  nn = layers.BatchNormalization()(nn)
+  nn = layers.Dropout(0.1)(nn)
+  embedding = layers.Dense(512, name='embedding')(nn)
+  # logits = layers.Dense(classes, activation='softmax', name='logits')(embedding)
+  logits = layers.Dense(classes, name='logits')(embedding)
+  norm_logits = layers.BatchNormalization(name='norm_logits')(logits)
+  ```
+## Softmax train
+  ```py
+  model = keras.models.Model(inputs, norm_logits)
+  model.compile(optimizer='adam', loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
+  model.summary()
+
+  reduce_lr = ReduceLROnPlateau('val_loss', factor=0.1, patience=5, verbose=1)
+  model_checkpoint = ModelCheckpoint("./keras_checkpoints_res_soft", 'val_loss', verbose=1, save_best_only=True)
+  callbacks = [model_checkpoint, reduce_lr]
+  hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=200, verbose=1, callbacks=callbacks)
+  ```
+## Arcface loss train
+  ```py
+  # arc_loss = arcface_loss(labels, embedding, norm_logits)
+  def arcface_loss(labels, embedding, norm_logits, margin1=1.0, margin2=0.2, margin3=0.3, scale=64.0):
+      # embedding = prediction[:, :512]
+      # norm_logits = prediction[:, 512:]
+      norm_x = tf.norm(embedding, axis=1, keepdims=True)
+      cos_theta = norm_logits / norm_x
+      theta = tf.acos(cos_theta)
+      zeros = tf.zeros_like(labels)
+      cond = tf.where(tf.greater(theta * margin1 + margin3, np.pi), zeros, labels)
+      cond = tf.cast(cond, dtype=tf.bool)
+      m1_theta_plus_m3 = tf.where(cond, theta * margin1 + margin3, theta)
+      cos_m1_theta_plus_m3 = tf.cos(m1_theta_plus_m3)
+      arcface_logits = tf.where(cond, cos_m1_theta_plus_m3 - margin2, cos_m1_theta_plus_m3) * scale
+      labels = tf.argmax(labels, 1)
+      # print(">>>> labels", labels)
+      # print(">>>> arcface_logits", arcface_logits)
+      return tf.keras.losses.sparse_categorical_crossentropy(labels, arcface_logits, from_logits=True)
+
+  def single_arcface_loss(labels, prediction, center_loss_factor=1.0):
+      embedding = prediction[:, :512]
+      norm_logits = prediction[:, 512:]
+      return arcface_loss(labels, embedding, norm_logits)
+
+  def logits_accuracy(y_true, y_pred):
+      norm_logits = y_pred[:, 512:]
+      return keras.metrics.categorical_accuracy(y_true, norm_logits)
+
+  concate = layers.concatenate([embedding, norm_logits], name='concate')
+  model = keras.models.Model(inputs, concate)
+  model.compile(optimizer='adam', loss=single_arcface_loss, metrics=[logits_accuracy])
+  model.summary()
+
+  reduce_lr = ReduceLROnPlateau('val_loss', factor=0.1, patience=5, verbose=1)
+  model_checkpoint = ModelCheckpoint("./keras_checkpoints_res_arcface", 'val_loss', verbose=1, save_best_only=True)
+  callbacks = [model_checkpoint, reduce_lr]
+  hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=200, verbose=1, callbacks=callbacks)
+  ```
+## Center loss
+  ```py
+  import functools
+
+  def _center_loss_func(labels, features, alpha, num_classes, centers, feature_dim):      
+      # assert feature_dim == features.get_shape()[1]    
+      # labels = K.reshape(labels, [-1])
+      # labels = tf.to_int32(labels)
+      # centers_batch = tf.gather(centers, labels)
+      # global centers
+      # print("centers: %s, sum: %s" % (centers, tf.reduce_sum(centers)))
+      # labels = tf.cast(labels, tf.int32)
+      labels = tf.argmax(labels, axis=1)
+      centers_batch = tf.gather(centers, labels)
+      diff = (1 - alpha) * (centers_batch - features)
+      # print(centers_batch.shape, centers.shape, labels.shape, diff.shape)
+      # centers = tf.compat.v1.scatter_sub(centers, labels, diff)
+      centers.assign(tf.tensor_scatter_nd_sub(centers, tf.expand_dims(labels, 1), diff))
+      # centers_batch = tf.gather(centers, labels)
+      loss = tf.reduce_mean(tf.square(features - centers_batch))
+      return loss
+
+  def get_center_loss(num_classes, feature_dim=512, alpha=0.9):
+      """Center loss based on the paper "A Discriminative
+         Feature Learning Approach for Deep Face Recognition"
+         (http://ydwen.github.io/papers/WenECCV16.pdf)
+      """
+      # Each output layer use one independed center: scope/centers
+      centers = tf.Variable(tf.zeros([num_classes, feature_dim]))
+      @functools.wraps(_center_loss_func)
+      def center_loss(y_true, y_pred):
+          return _center_loss_func(y_true, y_pred, alpha, num_classes, centers, feature_dim)
+      return center_loss
+
+  center_loss = get_center_loss(num_classes=classes)
+  def center_arcface_loss(labels, prediction, center_loss_factor=1.0):
+      embedding = prediction[:, :512]
+      norm_logits = prediction[:, 512:]
+      arc_loss = arcface_loss(labels, embedding, norm_logits)
+      if center_loss_factor > 0:
+          cent_loss = center_loss(labels, embedding)
+          print("arcface_loss = %s, cent_loss = %s" % (arc_loss, cent_loss))
+          return arc_loss + cent_loss * center_loss_factor
+      else:
+          return arc_loss
+
+  def single_center_loss(labels, prediction, center_loss_factor=1.0):
+      embedding = prediction[:, :512]
+      norm_logits = prediction[:, 512:]
+      return center_loss(labels, embedding)
+
+  concate = layers.concatenate([embedding, norm_logits], name='concate')
+  model = keras.models.Model(inputs, concate)
+  # model.compile(optimizer='adam', loss=single_center_loss)
+  model.compile(optimizer='adam', loss=center_arcface_loss, metrics=[logits_accuracy])
+  model.summary()
+
+  reduce_lr = ReduceLROnPlateau('val_loss', factor=0.1, patience=5, verbose=1)
+  model_checkpoint = ModelCheckpoint("./keras_checkpoints_res_arcface", 'val_loss', verbose=1, save_best_only=True)
+  callbacks = [model_checkpoint, reduce_lr]
+  hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=200, verbose=1, callbacks=callbacks)
+  ```
+## Triplet loss train
+```py
+
+```
+## FUNC
+- **tf.compat.v1.scatter_sub** 将 `ref` 中 `indices` 指定位置的值减去 `updates`，会同步更新 `ref`
+  ```py
+  scatter_sub(ref, indices, updates, use_locking=False, name=None)
+  ```
+  ```py
+
+  ref = tf.Variable([1, 2, 3, 4, 5, 6, 7, 8],dtype = tf.int32)
+  indices = tf.constant([4, 3, 1, 7],dtype = tf.int32)
+  updates = tf.constant([9, 10, 11, 12],dtype = tf.int32)
+  print(tf.compat.v1.scatter_sub(ref, indices, updates).numpy())
+  # [ 1 -9  3 -6 -4  6  7 -4]
+  print(ref.numpy())
+  [ 1 -9  3 -6 -4  6  7 -4]
+  ```
+- **tf.tensor_scatter_nd_sub** 多维数据的 `tf.compat.v1.scatter_sub`
+  ```py
+  tensor = tf.ones([8], dtype=tf.int32)
+  indices = tf.constant([[4], [3], [1] ,[7]])
+  updates = tf.constant([9, 10, 11, 12])
+  print(tf.tensor_scatter_nd_sub(tensor, indices, updates).numpy())
+  # [ 1 -9  3 -6 -4  6  7 -4]
+  ```
+***
+
+# PLATE MASK
+## skimage 角点检测
+  ```py
+  def plate_mask_corner(polygon_points, image_shape=(128, 384), plot_image=True):
+      mask = polygon2mask(image_shape, polygon_points)
+      cc = corner_peaks(corner_harris(mask, method='eps'), min_distance=1, num_peaks=4, exclude_border=False)
+      if plot_image:
+          fig = plt.figure()
+          plt.imshow(mask)
+          plt.scatter(cc[:, 1], cc[:, 0])
+      return cc
+  ```
+## 取巻积后所有最小值点
+  ```py
+  def plate_mask_to_scatter(polygon_points, conv_kernel_size=[9, 9], corner_min=None, corner_max=None, min_dist=100, image_shape=(128, 384), plot_image=True):
+      if corner_min == None:
+          corner_min = conv_kernel_size[0]
+      if corner_max == None:
+          corner_max = (conv_kernel_size[0] * conv_kernel_size[1]) // 2
+      mask = polygon2mask(image_shape, polygon_points)
+      cc = convolve2d(mask, np.ones(conv_kernel_size), mode='same')
+      bb = np.where(mask, cc, np.zeros_like(cc))
+      # print(pd.value_counts(bb.flatten()).sort_index())
+      # print(np.logical_and(bb <corner_ max, bb > corner_min).sum())
+      tt = np.where(np.logical_and(bb < corner_max, bb > corner_min))
+
+      ''' Group by dists '''
+      tt_coor = np.array(list(zip(tt[0].tolist(), tt[1].tolist())))
+      dd = [np.expand_dims(tt_coor[0], 0)]
+      base = [tt_coor[0]]
+      for ii in tt_coor[1:]:
+          dists = ((ii - base) ** 2).sum(-1)
+          if np.any(dists < 100):
+              id = dists.argmin()
+              dd[id] = np.vstack([dd[id], ii])
+          else:
+              base.append(ii)
+              dd.append(np.expand_dims(ii, 0))
+
+      ''' Return min conv value of each group '''
+      rr = [ii[np.argmin([bb[ixx, iyy] for ixx, iyy in ii])] for ii in dd]
+      rr = np.vstack(rr)
+      if plot_image:
+          fig = plt.figure()
+          plt.imshow(mask)
+          plt.scatter(rr[:, 1], rr[:, 0])
+      return rr
+  ```
+## 巻积后按区域划分后的四个最小值点
+  ```py
+  def plate_mask_to_scatter_2(polygon_points, conv_kernel_size=[9, 9], image_shape=(128, 384), plot_image=True):
+      mask = polygon2mask(image_shape, polygon_points)
+      cc = convolve2d(mask, np.ones(conv_kernel_size), mode='same')
+      bb = np.where(mask, cc, np.zeros_like(cc))
+      # print(pd.value_counts(bb.flatten()))
+
+      half_x = image_shape[1] // 2 + 1
+      half_y = image_shape[0] // 2 + 1
+      rr = []
+      for ixx in [0, half_x]:
+          for iyy in [0, half_y]:
+              # print("ixx = %d, iyy = %d" % (ixx, iyy))
+              sub_bb = bb[iyy : iyy + half_y, ixx : ixx + half_x]
+              sub_bb = np.where(sub_bb == 0, np.ones_like(sub_bb) * 255, sub_bb)
+              tt_y, tt_x = np.where(sub_bb == sub_bb.min())
+              point = [tt_y.mean() + iyy, tt_x.mean() + ixx]
+              print("point = %s, sub_bb.min = %d" % (point, sub_bb.min()))
+              rr.append(point)
+      rr = np.array(rr)
+      if plot_image:
+          fig = plt.figure()
+          plt.imshow(mask)
+          plt.scatter(rr[:, 1], rr[:, 0])
+      return rr
+  ```
+## 测试
+  ```py
+  def coord_sort(coord):
+      coord_sort_1 = sorted(coord.tolist(), key=lambda ii: ii[0] + ii[1])
+      coord_sort_2 = sorted(coord_sort_1[:2], key=lambda ii: ii[0])
+      coord_sort_2.extend(sorted(coord_sort_1[2:], key=lambda ii: ii[0]))
+      return np.array(coord_sort_2)
+
+  def test_with_masks(path, test_func, test_num=None):
+      dists = []
+      pps = []
+      ccs = []
+      tests = os.listdir(path)
+      if test_num:
+          tests = tests[:test_num]
+      for ii in tests:
+          pp = np.array(os.path.splitext(ii)[0].split('_')[1:]).astype('float').reshape(-1, 2)[:, ::-1]
+          rr = test_func(pp)
+          pps.append(pp)
+          ccs.append(rr)
+
+          pp_sort = coord_sort(pp)
+          rr_sort = coord_sort(rr)
+          dd = ((pp_sort - rr_sort) ** 2).sum()
+          dists.append(dd)
+          print('pp = %s, rr = %s, dist = %.2f' % (pp.tolist(), rr.tolist(), dd))
+      dda = np.array(dists)
+      ppa = np.array(pps)
+      cca = np.array(ccs)
+
+      print("Max 10 dist: %s" % (np.sort(dda)[-10:]))
+      return ppa, cca, dda
+
+  test_func = lambda pp: plate_mask_to_scatter(pp, plot_image=False)
+  path = './mask_128_384/'
+  ppa, cca, dda = test_with_masks(path, test_func)
+  # Max 10 dist: [13.36 13.36 14.02 14.02 14.64 14.7  15.4  16.08 16.08 16.14]
+
+  dda.max()
+  np.sort(dda)[-10:]
+  np.sort(dda)[-50:]
+  print(ppa[np.argsort(dda)[-10:]])
+  # [[[13.2, 90.2], [59.8, 30.6], [114.8, 293.8], [68.2, 353.4]],
+  #  [[13.2, 90.2], [59.8, 30.6], [114.8, 293.8], [68.2, 353.4]],
+  #  [[15.1, 88.1], [56.8, 37.5], [112.9, 295.9], [71.2, 346.5]],
+  #  [[15.1, 88.1], [56.8, 37.5], [112.9, 295.9], [71.2, 346.5]],
+  #  [[10.9, 85.4], [60.8, 25.9], [117.1, 298.6], [67.2, 358.1]],
+  #  [[11.9, 80.3], [58.9, 26.8], [116.1, 303.7], [69.1, 357.2]],
+  #  [[14.1, 74.1], [53.8, 30.2], [113.9, 309.9], [74.2, 353.8]],
+  #  [[12.9, 32.1], [67.6, 83.6], [115.1, 351.9], [60.4, 300.4]],
+  #  [[12.9, 32.1], [67.6, 83.6], [115.1, 351.9], [60.4, 300.4]],
+  #  [[14.1, 85.1], [60.8, 32.1], [113.9, 298.9], [67.2, 351.9]]]
+  ```
+***

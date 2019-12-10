@@ -210,3 +210,12 @@ for bb in boxes:
 bb = boxes[np.argmax(areas)]
 plt.plot(np.hstack([bb[:, 0], bb[0, 0]]), np.hstack([bb[:, 1], bb[0, 1]]))
 ```
+```py
+from skimage.draw import polygon
+aa = '1575270218.2943406_46.5&28.6_48.8&71.4_253.5&71.4_251.2&28.6.jpg'
+pp = np.array([[float(jj) for jj in ii.split('&')] for ii in os.path.splitext(aa)[0].split('_')[1:]])
+img = np.ones((100, 300), dtype=np.uint8)
+rr, cc = polygon(pp[:, 0], pp[:, 1])
+img[cc, rr] = 255
+plt.imshow(img)
+```
