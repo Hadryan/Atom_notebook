@@ -1169,10 +1169,10 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
           pos names: stack_pos_name[valid_pos] --> ['b', 'c', 'd', 'd']
           '''
           anchors, poses, negs = [], [], []
-          for label in tqdm(np.unique(labels), "Minning"):
+          for label in tqdm(np.unique(labels), "Mining triplet pairs"):
           # for label in np.unique(labels):
               pos_idx = np.where(labels == label)[0]
-              pose_imgs = img_names[pos_idx]
+              pos_imgs = img_names[pos_idx]
               total = pos_idx.shape[0]
               pos_embs = embs[pos_idx[:-1]]
               dists = np.dot(pos_embs, embs.T)
@@ -1180,8 +1180,8 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
               stack_pos_dists = np.expand_dims(np.hstack(pos_dists), -1)
 
               elem_repeats = np.arange(1, total)[::-1]
-              stack_anchor_name = pose_imgs[:-1].repeat(elem_repeats, 0)
-              stack_pos_name = np.hstack([pose_imgs[ii:] for ii in range(1, total)])
+              stack_anchor_name = pos_imgs[:-1].repeat(elem_repeats, 0)
+              stack_pos_name = np.hstack([pos_imgs[ii:] for ii in range(1, total)])
               stack_dists = dists.repeat(elem_repeats, 0)
 
               neg_pos_dists = stack_pos_dists - stack_dists - self.alpha
@@ -1194,23 +1194,19 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
                   anchors.extend(stack_anchor_name[valid_pos])
                   poses.extend(stack_pos_name[valid_pos])
                   negs.extend(img_names[valid_neg])
-                  # self.minning_print_func(pose_imgs, valid_pos, valid_neg, stack_anchor_name, stack_pos_name, labels, stack_dists)
+                  # self.minning_print_func(pos_imgs, valid_pos, valid_neg, stack_anchor_name, stack_pos_name, labels, stack_dists)
+          print(">>>> %d triplets found." % (len(anchors)))
           return anchors, poses, negs
 
       def gen_triplet_train_dataset(self, anchors, poses, negs):
-          self.num_triplets = len(anchors)
-          if self.num_triplets == 0:
-              print(">>>> None triplet found!!!")
-              return None, 0
-          else:
-              print(">>>> %d triplet found." % (self.num_triplets))
-              train_dataset = tf.data.Dataset.from_tensor_slices((anchors, poses, negs))
-              train_dataset = train_dataset.shuffle(self.num_triplets)
-              train_dataset = train_dataset.batch(self.batch_size)
-              train_dataset = train_dataset.map(self.batch_triplet_image_process, num_parallel_calls=self.AUTOTUNE)
-              train_dataset = train_dataset.prefetch(buffer_size=self.AUTOTUNE)
-              steps_per_epoch = np.ceil(self.num_triplets / self.batch_size)
-              return train_dataset, steps_per_epoch
+          num_triplets = len(anchors)
+          train_dataset = tf.data.Dataset.from_tensor_slices((anchors, poses, negs))
+          train_dataset = train_dataset.shuffle(num_triplets + 1)
+          train_dataset = train_dataset.batch(self.batch_size)
+          train_dataset = train_dataset.map(self.batch_triplet_image_process, num_parallel_calls=self.AUTOTUNE)
+          train_dataset = train_dataset.prefetch(buffer_size=self.AUTOTUNE)
+          steps_per_epoch = np.ceil(num_triplets / self.batch_size)
+          return train_dataset, steps_per_epoch
 
       def minning_print_func(self, pose_imgs, valid_pos, valid_neg, stack_anchor_name, stack_pos_name, labels, stack_dists):
           img2idx = dict(zip(pose_imgs, range(len(pose_imgs))))
@@ -1226,9 +1222,6 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
   def triplet_loss(labels, embeddings, alpha=0.2):
       labels = tf.squeeze(labels)
       labels.set_shape([None])
-      # anchors = tf.boolean_mask(embeddings, labels == 0)
-      # poses = tf.boolean_mask(embeddings, labels == 1)
-      # negs = tf.boolean_mask(embeddings, labels == 2)
       anchor_emb = tf.nn.l2_normalize(embeddings[labels == 0], 1)
       pos_emb = tf.nn.l2_normalize(embeddings[labels == 1], 1)
       neg_emb = tf.nn.l2_normalize(embeddings[labels == 2], 1)
@@ -1239,7 +1232,7 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
 
   basic_model.compile(optimizer='adamax', loss=triplet_loss)
   triplet_datasets = Triplet_datasets(image_names, image_classes, image_per_class=5, max_class=10000)
-  for epoch in range(epochs):
+  for epoch in range(100):
       train_dataset, steps_per_epoch = triplet_datasets.update_triplet_datasets()
       basic_model.fit(train_dataset, epochs=1, verbose=1, callbacks=callbacks, steps_per_epoch=steps_per_epoch, initial_epoch=epoch, use_multiprocessing=True, workers=4)
   ```
@@ -1264,37 +1257,6 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
               negs.append(img_names[neg_random])
               print("label: %d, pos: %d, %f, neg: %d, %f" % (label, labels[pos], dist[pos], labels[neg_random], dist[neg_random]))
       return anchors, poses, negs
-  ```
-  ```py
-  def dataframe_group_func(df):
-      total = df.shape[0]
-      pose_imgs = df.img_name.values
-      pos_embs = np.array(df.embedding.to_list())[:-1]
-      label = df.label.values[0]
-      pos_idx = np.where(labels == label)[0]
-      dists = np.dot(pos_embs, embs.T)
-      pos_dists = [dists[id, pos_idx[id + 1:]] for id in range(total - 1)]
-      stack_pos_dists = np.expand_dims(np.hstack(pos_dists), -1)
-
-      elem_repeats = np.arange(1, total)[::-1]
-      stack_anchor_name = pose_imgs[:-1].repeat(elem_repeats, 0)
-      stack_pos_name = np.hstack([pose_imgs[ii:] for ii in range(1, total)])
-      stack_dists = dists.repeat(elem_repeats, 0)
-
-      neg_pos_dists = stack_pos_dists - stack_dists - alpha
-      neg_pos_dists[:, pos_idx] = 1
-      neg_valid_x, neg_valid_y = np.where(neg_pos_dists < 0)
-      if len(neg_valid_x) > 0:
-          valid_pos = np.unique(neg_valid_x)
-          valid_neg = [np.random.choice(neg_valid_y[neg_valid_x == ii]) for ii in valid_pos]
-          return [stack_anchor_name[valid_pos], stack_pos_name[valid_pos], img_names[valid_neg]]
-      else:
-          return [[], [], []]
-
-  dd = pd.DataFrame({'embedding': embs.tolist(), 'label': labels, 'img_name': img_names})
-  df = dd[dd.label == 12356]
-  dataframe_group_func(df)
-  aa = dd.groupby('label').apply(dataframe_group_func)
   ```
 ## tf-insightface train
   - Arcface loss
