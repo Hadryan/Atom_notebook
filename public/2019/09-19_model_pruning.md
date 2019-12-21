@@ -142,24 +142,6 @@
     print(eval_model(interpreter_no_quant, mnist_ds))
     # 0.9797
     ```
-```py
-import glob2
-from skimage.io import imread
-from skimage.transform import resize
-imm = glob2.glob('./dogImages/test/*/*')
-xx = np.array([resize(imread(ii), (224, 224)) for ii in imm])
-ixx = tf.convert_to_tensor(xx, dtype='float32')
-# ixx = tf.convert_to_tensor(xx, dtype=tf.uint8)
-idd = tf.data.Dataset.from_tensor_slices((ixx)).batch(1)
-
-def representative_data_gen():
-    for ii in idd.take(100):
-        yield [ii]
-converter = tf.lite.TFLiteConverter.from_saved_model('./keras_checkpoints/')
-converter.optimizations = [tf.lite.Optimize.DEFAULT]
-converter.representative_dataset = representative_data_gen
-tflite_quant_all_model = converter.convert()
-```
 ## MNIST 权重与激活全量化
   - **权重与激活全量化 quantizes all weights and activations** 可以将模型大小压缩 4 倍，CPU 上的前向传播速度提升 3-4倍，需要提供一个表示数据集 representative dataset
   - **定义表示数据集**
@@ -1116,4 +1098,22 @@ infer time 5.152523
 saving 1
 INFO:root:Saved checkpoint to "./models/m1-arcface-emore/model-0001.params"
 [366000]Accuracy-Highest: 0.95417
+```
+```py
+import glob2
+from skimage.io import imread
+from skimage.transform import resize
+imm = glob2.glob('./dogImages/test/*/*')
+xx = np.array([resize(imread(ii), (224, 224)) for ii in imm])
+ixx = tf.convert_to_tensor(xx, dtype='float32')
+# ixx = tf.convert_to_tensor(xx, dtype=tf.uint8)
+idd = tf.data.Dataset.from_tensor_slices((ixx)).batch(1)
+
+def representative_data_gen():
+    for ii in idd.take(100):
+        yield [ii]
+converter = tf.lite.TFLiteConverter.from_saved_model('./keras_checkpoints/')
+converter.optimizations = [tf.lite.Optimize.DEFAULT]
+converter.representative_dataset = representative_data_gen
+tflite_quant_all_model = converter.convert()
 ```

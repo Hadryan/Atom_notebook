@@ -751,6 +751,13 @@
     print('characters 1 to 3 is', name[1:3])
     # characters 1 to 3 is wa
     ```
+  - **\*** 解包操作
+    ```py
+    aa = [1, 2, 3]
+    bb = [4, * aa, 5]
+    print(bb)
+    # [4, 1, 2, 3, 5]
+    ```
 ## 序列的 in 判断与运算符
   - **in / not in** 判断元素是否存在
     ```python

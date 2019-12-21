@@ -3039,14 +3039,14 @@
 ***
 
 # 图像数据处理
-  - TFRecord 文件中的数据都是通过 tf.train.Example Protocol Buffer 的格式存储的
 ## 图像读取 与 编解码
+  - TFRecord 文件中的数据都是通过 tf.train.Example Protocol Buffer 的格式存储的
   - **tf.image.decode_jpeg** / **tf.image.encode_jpeg** 图片读取 / 显示 / 保存
     ```python
-    import skimage
+    from skimage.io import imread, imsave
     import skimage.data
 
-    skimage.io.imsave('./coffee.jpg', skimage.data.coffee())
+    imsave('./coffee.jpg', skimage.data.coffee())
 
     ''' 读取 '''
     image_raw_data = tf.gfile.FastGFile('./coffee.jpg', 'rb').read()
