@@ -2070,6 +2070,25 @@ image_show(text > text_threshold);
       sparsity.prune_low_magnitude(layers.Dense(133, activation='softmax', kernel_regularizer=keras.regularizers.l2(0.00001)), **pruning_params)
   ])
   ```
+  ```py
+  import glob2
+  from skimage.io import imread
+  from skimage.transform import resize
+  imm = glob2.glob('./dogImages/test/*/*')
+  xx = np.array([resize(imread(ii), (224, 224)) for ii in imm])
+  ixx = tf.convert_to_tensor(xx, dtype='float32')
+  # ixx = tf.convert_to_tensor(xx, dtype=tf.uint8)
+  idd = tf.data.Dataset.from_tensor_slices((ixx)).batch(1)
+
+  def representative_data_gen():
+      for ii in idd.take(100):
+          yield [ii]
+  converter = tf.lite.TFLiteConverter.from_saved_model('./keras_checkpoints/')
+  converter.optimizations = [tf.lite.Optimize.DEFAULT]
+  converter.representative_dataset = representative_data_gen
+  tflite_quant_all_model = converter.convert()
+  ```
+
 ```py
 import os
 import skimage

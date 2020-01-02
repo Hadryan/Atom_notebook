@@ -1,6 +1,36 @@
 # ___2019 - 07 - 19 Insightface___
 ***
 
+# 目录
+  <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
+
+  - [___2019 - 07 - 19 Insightface___](#2019-07-19-insightface)
+  - [目录](#目录)
+  - [Related projects](#related-projects)
+  - [Insightface MXNet 模型使用](#insightface-mxnet-模型使用)
+  	- [MXNet](#mxnet)
+  	- [模型加载与特征提取](#模型加载与特征提取)
+  - [MTCNN](#mtcnn)
+  	- [Testing function](#testing-function)
+  	- [facenet mtcnn](#facenet-mtcnn)
+  	- [insightface mtcnn](#insightface-mtcnn)
+  	- [MTCNN-Tensorflow](#mtcnn-tensorflow)
+  	- [mtcnn.MTCNN](#mtcnnmtcnn)
+  	- [caffe MTCNN](#caffe-mtcnn)
+  	- [TensorFlow mtcnn pb](#tensorflow-mtcnn-pb)
+  - [MMDNN 转化](#mmdnn-转化)
+  	- [Insightface caffe MTCNN model to TensorFlow](#insightface-caffe-mtcnn-model-to-tensorflow)
+  	- [Insightface MXNET model to TensorFlow pb model](#insightface-mxnet-model-to-tensorflow-pb-model)
+  	- [TensorFlow 加载 PB 模型](#tensorflow-加载-pb-模型)
+  	- [人脸对齐](#人脸对齐)
+  - [Tensorflow Serving server](#tensorflow-serving-server)
+  - [Docker 封装](#docker-封装)
+  - [视频中识别人脸保存](#视频中识别人脸保存)
+  - [人脸跟踪](#人脸跟踪)
+
+  <!-- /TOC -->
+***
+
 # Related projects
   - [deepinsight/insightface](https://github.com/deepinsight/insightface)
   - [AITTSMD/MTCNN-Tensorflow](https://github.com/AITTSMD/MTCNN-Tensorflow)
@@ -84,6 +114,7 @@
           ax.add_patch(rr)
       return bb, pp
   ```
+  ![](images/mtcnn_test_image.jpg)
 ## facenet mtcnn
   - Q: ValueError: Object arrays cannot be loaded when allow_pickle=False
     ```py
@@ -285,14 +316,9 @@
   ```
 ***
 
-# Insightface caffe MTCNN model to TensorFlow
-## caffe
-  - [BVLC/caffe/docker](https://github.com/BVLC/caffe/tree/master/docker)
-  ```sh
-  docker run --rm -u $(id -u):$(id -g) -v $(pwd):$(pwd) -w $(pwd) bvlc/caffe:cpu caffe train --solver=example_solver.prototxt
-  ```
-## MMDNN 转化
-  - [microsoft/MMdnn](https://github.com/microsoft/MMdnn)
+# MMDNN 转化
+## Insightface caffe MTCNN model to TensorFlow
+  - [Github microsoft/MMdnn](https://github.com/microsoft/MMdnn)
   ```sh
   pip install mmdnn
   python -m mmdnn.conversion._script.convertToIR -f mxnet -n det1-symbol.json -w det1-0001.params -d det1 --inputShape 3,112,112
@@ -313,218 +339,7 @@
 
   cp *.npy ~/workspace/face_recognition_collection/facenet/src/align/
   ```
-## 参数调整
-  ```py
-  aa = np.load('align/det1.npy', allow_pickle=True).item()
-  bb = np.load('align_bak/det1.npy', allow_pickle=True, encoding='latin1').item()
-
-  for kk, vv in aa.items():
-      print(kk, vv.keys())
-  print()
-
-  for kk, vv in bb.items():
-      print(kk, vv.keys())
-  print()
-
-  for ii in ['conv1', 'conv2', 'conv3', 'conv4-1', 'conv4-2']:
-      aa[ii]['biases'] = aa[ii]['bias']
-      aa[ii].pop('bias')
-
-  for ii in ['PReLU1', 'PReLU2', 'PReLU3']:
-      aa[ii]['alpha'] = aa[ii]['gamma']
-      aa[ii].pop('gamma')
-
-  for ii in ['conv1', 'conv2', 'conv3', 'conv4-1', 'conv4-2']:
-      aa[ii]['biases'] = np.squeeze(aa[ii]['biases'])
-
-  np.save('align_2/det1', aa)
-
-  aa = np.load('align_2/det1.npy', allow_pickle=True).item()
-  for kk, vv in aa.items():
-      print(kk, vv.keys())
-  ```
-  ```py
-  aa = np.load('align/det2.npy', allow_pickle=True).item()
-  bb = np.load('align_bak/det2.npy', allow_pickle=True, encoding='latin1').item()
-
-  for kk, vv in aa.items():
-      print(kk, vv.keys())
-  print()
-
-  for kk, vv in bb.items():
-      print(kk, vv.keys())
-  print()
-
-  for ii in ['conv1', 'conv2', 'conv3', 'conv4_1', 'conv5-1_1', 'conv5-2_1']:
-      aa[ii]['biases'] = aa[ii]['bias']
-      aa[ii].pop('bias')
-
-  for ii in ['prelu1', 'prelu2', 'prelu3', 'prelu4']:
-      aa[ii]['alpha'] = aa[ii]['gamma']
-      aa[ii].pop('gamma')
-
-  aa['conv4'] = aa['conv4_1']
-  aa.pop('conv4_1')
-  aa['conv5-1'] = aa['conv5-1_1']
-  aa.pop('conv5-1_1')
-  aa['conv5-2'] = aa['conv5-2_1']
-  aa.pop('conv5-2_1')
-
-  for ii in ['conv1', 'conv2', 'conv3']:
-      aa[ii]['biases'] = np.squeeze(aa[ii]['biases'])
-
-  np.save('align_2/det2', aa)
-
-  aa = np.load('align_2/det2.npy', allow_pickle=True).item()
-  for kk, vv in aa.items():
-      print(kk, vv.keys())
-  ```
-  ```py
-  aa = np.load('align/det3.npy', allow_pickle=True).item()
-  bb = np.load('align_bak/det3.npy', allow_pickle=True, encoding='latin1').item()
-
-  for kk, vv in aa.items():
-      print(kk, vv.keys())
-  print()
-
-  for kk, vv in bb.items():
-      print(kk, vv.keys())
-  print()
-
-  for ii in ['conv1', 'conv2', 'conv3', 'conv4', 'conv5_1', 'conv6-1_1', 'conv6-2_1', 'conv6-3_1']:
-      aa[ii]['biases'] = aa[ii]['bias']
-      aa[ii].pop('bias')
-
-  for ii in ['prelu1', 'prelu2', 'prelu3', 'prelu4', 'prelu5']:
-      aa[ii]['alpha'] = aa[ii]['gamma']
-      aa[ii].pop('gamma')
-
-  aa['conv5'] = aa['conv5_1']
-  aa.pop('conv5_1')
-  aa['conv6-1'] = aa['conv6-1_1']
-  aa.pop('conv6-1_1')
-  aa['conv6-2'] = aa['conv6-2_1']
-  aa.pop('conv6-2_1')
-  aa['conv6-3'] = aa['conv6-3_1']
-  aa.pop('conv6-3_1')
-
-  for ii in ['conv1', 'conv2', 'conv3', 'conv4']:
-      aa[ii]['biases'] = np.squeeze(aa[ii]['biases'])
-
-  np.save('align_2/det3', aa)
-
-  aa = np.load('align_2/det3.npy', allow_pickle=True).item()
-  for kk, vv in aa.items():
-      print(kk, vv.keys())
-  ```
-## TensorFlow MTCNN model to MTCNN package model
-  ```py
-  aa = np.load('/opt/anaconda3/lib/python3.7/site-packages/mtcnn/data/mtcnn_weights.npy', allow_pickle=True).item()
-  bb_1 = np.load('det1.npy', allow_pickle=True, encoding='latin1').item()
-
-  for kk, vv in aa['PNet'].items():
-      print(kk, vv.keys())
-  print()
-
-  for kk, vv in bb_1.items():
-      print(kk, vv.keys())
-  print()
-
-  for ss, dd in zip(['PReLU1', 'PReLU2', 'PReLU3'], ['prelu1', 'prelu2', 'prelu3']):
-      bb_1[dd] = bb_1[ss]
-      bb_1.pop(ss)
-
-  bb_2 = np.load('det2.npy', allow_pickle=True, encoding='latin1').item()
-
-  for kk, vv in aa['ONet'].items():
-      print(kk, vv.keys())
-  print()
-
-  for kk, vv in bb_2.items():
-      print(kk, vv.keys())
-  print()
-  np.save('align_2/det1', aa)
-
-  aa = np.load('align_2/det1.npy', allow_pickle=True).item()
-  for kk, vv in aa.items():
-      print(kk, vv.keys())
-  ```
-  ```py
-  bb = np.load('det2.npy', allow_pickle=True, encoding='latin1').item()
-
-  for kk, vv in aa['ONet'].items():
-      print(kk, vv.keys())
-  print()
-
-  for kk, vv in bb.items():
-      print(kk, vv.keys())
-  print()
-
-  for ii in ['conv1', 'conv2', 'conv3', 'conv4_1', 'conv5-1_1', 'conv5-2_1']:
-      aa[ii]['biases'] = aa[ii]['bias']
-      aa[ii].pop('bias')
-
-  for ii in ['prelu1', 'prelu2', 'prelu3', 'prelu4']:
-      aa[ii]['alpha'] = aa[ii]['gamma']
-      aa[ii].pop('gamma')
-
-  aa['conv4'] = aa['conv4_1']
-  aa.pop('conv4_1')
-  aa['conv5-1'] = aa['conv5-1_1']
-  aa.pop('conv5-1_1')
-  aa['conv5-2'] = aa['conv5-2_1']
-  aa.pop('conv5-2_1')
-
-  for ii in ['conv1', 'conv2', 'conv3']:
-      aa[ii]['biases'] = np.squeeze(aa[ii]['biases'])
-
-  np.save('align_2/det2', aa)
-
-  aa = np.load('align_2/det2.npy', allow_pickle=True).item()
-  for kk, vv in aa.items():
-      print(kk, vv.keys())
-  ```
-  ```py
-  bb_3 = np.load('det3.npy', allow_pickle=True, encoding='latin1').item()
-
-  for kk, vv in aa['RNet'].items():
-      print(kk, vv.keys())
-  print()
-
-  for kk, vv in bb_3.items():
-      print(kk, vv.keys())
-  print()
-
-  for ii in ['conv1', 'conv2', 'conv3', 'conv4', 'conv5_1', 'conv6-1_1', 'conv6-2_1', 'conv6-3_1']:
-      aa[ii]['biases'] = aa[ii]['bias']
-      aa[ii].pop('bias')
-
-  for ii in ['prelu1', 'prelu2', 'prelu3', 'prelu4', 'prelu5']:
-      aa[ii]['alpha'] = aa[ii]['gamma']
-      aa[ii].pop('gamma')
-
-  aa['conv5'] = aa['conv5_1']
-  aa.pop('conv5_1')
-  aa['conv6-1'] = aa['conv6-1_1']
-  aa.pop('conv6-1_1')
-  aa['conv6-2'] = aa['conv6-2_1']
-  aa.pop('conv6-2_1')
-  aa['conv6-3'] = aa['conv6-3_1']
-  aa.pop('conv6-3_1')
-
-  for ii in ['conv1', 'conv2', 'conv3', 'conv4']:
-      aa[ii]['biases'] = np.squeeze(aa[ii]['biases'])
-
-  np.save('align_2/det3', aa)
-
-  aa = np.load('align_2/det3.npy', allow_pickle=True).item()
-  for kk, vv in aa.items():
-      print(kk, vv.keys())
-  ```
-***
-
-# Insightface MXNET model to TensorFlow pb model
-## MMDNN 转化模型
+## Insightface MXNET model to TensorFlow pb model
   ```sh
   cd model-r100-ii/
 
@@ -593,7 +408,9 @@
   plt.tight_layout()
   ```
   ![](images/tf_pb_align_faces.jpg)
-## Tensorflow Serving server
+***
+
+# Tensorflow Serving server
   - `saved_model_cli` 显示模型 signature_def 信息
     ```sh
     cd /home/leondgarse/workspace/models/insightface_mxnet_model/model-r100-ii/tf_resnet100
@@ -673,61 +490,7 @@
     ```
 ***
 
-# Test commands
-## timeit test
-  - mxnet, threads = 1, 1:18.42
-  - mxnet, threads = 20, 0:56.99
-  - TensorFlow, threads = 1, 1:27.22
-  - TensorFlow, threads = 20, 0:45.21
-  ```py
-  In [13]: %timeit np.savez('1', feature=bb['feature'], lab=bb['lab'])
-  1 loop, best of 5: 11.1 s per loop
-
-  In [14]: %timeit with open('1.pkl', 'wb') as ff: pickle.dump(bb, ff)
-  1 loop, best of 5: 9.77 s per loop
-
-  In [15]: %timeit np.save('1', bb)
-  1 loop, best of 5: 37.6 s per loop
-
-  In [25]: %timeit with open('1.pkl', 'rb') as ff: dd = pickle.load(ff)
-  1 loop, best of 5: 3.7 s per loop
-
-  %timeit bb = np.load('1.npz')['feature']
-  1 loop, best of 5: 4.75 s per loop
-  ```
-  ```py
-  In [23]: %timeit mtcnn.detect(img)
-  16.7 ms ± 383 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-
-  In [24]: %timeit mtcnn.detect(img)
-  16.9 ms ± 369 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-
-  In [25]: %timeit detector.detectface(img)
-  30.5 ms ± 107 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
-
-  In [26]: %timeit detector.detectface(img)
-  30.3 ms ± 114 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
-
-  In [27]: %timeit detector.detectface(img)
-  29.7 ms ± 385 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
-  ```
-  ```py
-  In [22]: %timeit -n 100 det_tfo.detect_faces(imr)
-  73.5 ms ± 607 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-
-  In [23]: %timeit -n 100 det_caffe.detectface(imb)
-  30.9 ms ± 650 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-
-  In [24]: %timeit -n 100 det_tfp.detect(imb)
-  17.1 ms ± 488 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-
-  os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-  In [9]: %timeit -n 100 det_tfp.detect(imb)
-  35.6 ms ± 316 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-  ```
-***
-
-# Docker
+# Docker 封装
   ```sh
   sudo apt-get install -y nvidia-docker2
   docker run --runtime=nvidia -v /home/tdtest/workspace/:/home/tdtest/workspace -it tensorflow/tensorflow:latest-gpu-py3 bash

@@ -2,6 +2,29 @@
 ***
 
 # 目录
+  <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
+
+  - [___2019 - 09 - 19 Model Optimization___](#2019-09-19-model-optimization)
+  - [目录](#目录)
+  - [链接](#链接)
+  - [模型量化 Post-training quantization](#模型量化-post-training-quantization)
+  	- [量化 Optimization techniques](#量化-optimization-techniques)
+  	- [模型量化方法](#模型量化方法)
+  	- [MNIST 权重量化](#mnist-权重量化)
+  	- [MNIST 权重与激活全量化](#mnist-权重与激活全量化)
+  	- [量化为 float16](#量化为-float16)
+  	- [Frozen Resnet 量化](#frozen-resnet-量化)
+  - [Magnitude-based weight pruning with Keras](#magnitude-based-weight-pruning-with-keras)
+  	- [模型剪枝](#模型剪枝)
+  	- [训练未剪枝的 MNIST 模型](#训练未剪枝的-mnist-模型)
+  	- [训练剪枝的 MNIST 模型](#训练剪枝的-mnist-模型)
+  	- [剪枝整个模型](#剪枝整个模型)
+  	- [转化为 TensorFlow Lite](#转化为-tensorflow-lite)
+  - [Examples](#examples)
+  	- [Flowers 使用 MobileNet fine tune 与 模型量化](#flowers-使用-mobilenet-fine-tune-与-模型量化)
+  	- [IMDB LSTM 模型剪枝](#imdb-lstm-模型剪枝)
+
+  <!-- /TOC -->
 ***
 
 # 链接
@@ -648,6 +671,7 @@
     ```
 ***
 
+# Examples
 ## Flowers 使用 MobileNet fine tune 与 模型量化
   - [colab flowers_tf_lite](https://colab.research.google.com/github/tensorflow/examples/blob/master/community/en/flowers_tf_lite.ipynb)
   - [Recognize Flowers with TensorFlow on Android](https://codelabs.developers.google.com/codelabs/recognize-flowers-with-tensorflow-on-android/#0)
@@ -849,271 +873,38 @@
     # prune_low_magnitude_gru: gru/kernel:0,0.6828409830729167, gru/recurrent_kernel:0,0.6828409830729167
     # prune_low_magnitude_dense: dense/kernel:0,0.6796875
     ```
-***
-
-# TensorFlow Lite Inference
-
-***
-
-# MTCNN
 ## TFlite 测试 MTCNN
-  Yes, the current TensorFlow Lite op kernels are optimized for ARM processor (using NEON instruction set). If SSE is available, it will try to use NEON_2_SSE to adapt NEON calls to SSE, so it should be still running with some sort of SIMD. However we didn't put much effort to optimize this code path.
+  - 当前 TFlite 针对 ARM 处理器作了优化
+    ```
+    Yes, the current TensorFlow Lite op kernels are optimized for ARM processor (using NEON instruction set). If SSE is available, it will try to use NEON_2_SSE to adapt NEON calls to SSE, so it should be still running with some sort of SIMD. However we didn't put much effort to optimize this code path.
 
-  Regarding number of threads. There is a SetNumThreads function in C++ API, but it's not exposed in Python API (yet). When it's not set, the underlying implementation may try to probe number of available cores. If you build the code by yourself, you can try to change the value and see if it affects the result.
+    Regarding number of threads. There is a SetNumThreads function in C++ API, but it's not exposed in Python API (yet). When it's not set, the underlying implementation may try to probe number of available cores. If you build the code by yourself, you can try to change the value and see if it affects the result.
 
-  Hope these helps.
-  ```sh
-  toco
-  --input_file=mobilenet_v1_1.0_224/teste/sfrozen_inference_graph.pb
-  --input_format=TENSORFLOW_GRAPHDEF
-  --output_file=/tmp/mobilenet_v1_1.0_224.tflite
-  --input_shape=-1,-1,-1,3
-  --input_array=image_tensor
-  --output_array=detection_boxes,detection_scores,detection_classes,detection_nums \
+    Hope these helps.
+    ```
+  - toco 转化模型
+    ```sh
+    toco
+    --input_file=mobilenet_v1_1.0_224/teste/sfrozen_inference_graph.pb
+    --input_format=TENSORFLOW_GRAPHDEF
+    --output_file=/tmp/mobilenet_v1_1.0_224.tflite
+    --input_shape=-1,-1,-1,3
+    --input_array=image_tensor
+    --output_array=detection_boxes,detection_scores,detection_classes,detection_nums \
 
-  bazel run -c opt tensorflow/contrib/lite/toco:toco --
-  --input_file=$OUTPUT_DIR/tflite_graph.pb
-  --output_file=$OUTPUT_DIR/detect.tflite
-  --input_shapes=1,300,300,3
-  --input_arrays=normalized_input_image_tensor
-  --output_arrays='TFLite_Detection_PostProcess','TFLite_Detection_PostProcess:1','TFLite_Detection_PostProcess:2','TFLite_Detection_PostProcess:3'
-  --inference_type=QUANTIZED_UINT8
-  --mean_values=128
-  --std_values=128
-  --change_concat_input_ranges=false
-  --allow_custom_ops
-  ```
-  ```sh
-  toco --graph_def_file=mtcnn.pb --output_file=mtcnn.tflite --input_shape=-1,-1,3:None:3:None --input_array=input,min_size,thresholds,factor --output_array=prob,landmarks,box
-  ```
-  ```py
-  import tensorflow as tf
-  from tensorflow.python.saved_model import signature_constants
-  from tensorflow.python.saved_model import tag_constants
-
-  export_dir = './saved'
-  builder = tf.compat.v1.saved_model.builder.SavedModelBuilder(export_dir)
-
-  model_path = './mtcnn.pb'
-  graph = tf.Graph()
-  with graph.as_default():
-      with open(model_path, 'rb') as f:
-          graph_def = tf.compat.v1.GraphDef.FromString(f.read())
-
-  sigs = {}
-
-  with tf.compat.v1.Session(graph=tf.Graph()) as sess:
-      # name="" is important to ensure we don't get spurious prefixing
-      tf.import_graph_def(graph_def, name="")
-      graph = tf.compat.v1.get_default_graph()
-      feeds = {
-        'input': graph.get_tensor_by_name('input:0'),
-        'min_size': graph.get_tensor_by_name('min_size:0'),
-        'thresholds': graph.get_tensor_by_name('thresholds:0'),
-        'factor': graph.get_tensor_by_name('factor:0'),
-      }
-      fetches = {
-        'prob': graph.get_tensor_by_name('prob:0'),
-        'landmarks': graph.get_tensor_by_name('landmarks:0'),
-        'box': graph.get_tensor_by_name('box:0'),
-      }
-
-      sigs[signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY] = \
-          tf.compat.v1.saved_model.signature_def_utils.predict_signature_def(feeds, fetches)
-
-      builder.add_meta_graph_and_variables(sess, [tag_constants.SERVING], signature_def_map=sigs)
-
-  builder.save()
-  ```
-## TF 2.0 加载 frozen MTCNN
-```py
-graph_def = tf.compat.v1.GraphDef()
-loaded = graph_def.ParseFromString(open('./mtcnn.pb', 'rb').read())
-def _imports_graph_def():
-    tf.compat.v1.import_graph_def(graph_def, name="")
-wrapped_import = tf.compat.v1.wrap_function(_imports_graph_def, [])
-import_graph = wrapped_import.graph
-fe = tf.nest.map_structure(import_graph.as_graph_element, ['input:0', 'min_size:0', 'thresholds:0', 'factor:0'])
-ft = tf.nest.map_structure(import_graph.as_graph_element, ['prob:0', 'landmarks:0', 'box:0'])
-inception_func = wrapped_import.prune(fe, ft)
-input_img = tf.ones([1,224,224,3], dtype=tf.float32)
-out = inception_func(input_img, tf.constant(20.0), tf.constant([0.6, 0.6, 0.6]), tf.constant(0.7))
-```
+    bazel run -c opt tensorflow/contrib/lite/toco:toco --
+    --input_file=$OUTPUT_DIR/tflite_graph.pb
+    --output_file=$OUTPUT_DIR/detect.tflite
+    --input_shapes=1,300,300,3
+    --input_arrays=normalized_input_image_tensor
+    --output_arrays='TFLite_Detection_PostProcess','TFLite_Detection_PostProcess:1','TFLite_Detection_PostProcess:2','TFLite_Detection_PostProcess:3'
+    --inference_type=QUANTIZED_UINT8
+    --mean_values=128
+    --std_values=128
+    --change_concat_input_ranges=false
+    --allow_custom_ops
+    ```
+    ```sh
+    toco --graph_def_file=mtcnn.pb --output_file=mtcnn.tflite --input_shape=-1,-1,3:None:3:None --input_array=input,min_size,thresholds,factor --output_array=prob,landmarks,box
+    ```
 ***
-
-- Reset/Reinitialize model weights/parameters
-```py
-def reset_weights(model):
-    for layer in model.layers:
-        if isinstance(layer, tf.keras.Model): #if you're using a model as a layer
-            reset_weights(layer) #apply function recursively
-            continue
-
-        #where are the initializers?
-        if hasattr(layer, 'cell'):
-            init_container = layer.cell
-        else:
-            init_container = layer
-
-        for key, initializer in init_container.__dict__.items():
-            if "initializer" not in key: #is this item an initializer?
-                  continue #if no, skip it
-
-            # find the corresponding variable, like the kernel or the bias
-            if key == 'recurrent_initializer': #special case check
-                var = getattr(init_container, 'recurrent_kernel')
-            else:
-                var = getattr(init_container, key.replace("_initializer", ""))
-
-            var.assign(initializer(var.shape, var.dtype))
-            #use the initializer
-```
-# Checkpoints to SavedModel
-```py
-tf.__version__  # '1.14.0'
-import yaml
-from model import get_embd
-
-''' 加载模型 '''
-config = yaml.load(open('./configs/config_ms1m_100.yaml'))
-images = tf.placeholder(dtype=tf.float32, shape=[None, 112, 112, 3], name='input_image')
-train_phase_dropout = tf.placeholder(dtype=tf.bool, shape=None, name='train_phase')
-train_phase_bn = tf.placeholder(dtype=tf.bool, shape=None, name='train_phase_last')
-embds, _ = get_embd(images, train_phase_dropout, train_phase_bn, config)
-
-sess = tf.InteractiveSession()
-tf.global_variables_initializer().run()
-saver = tf.train.Saver()
-saver.restore(sess, '/home/leondgarse/Downloads/config_ms1m_100_334k/best-m-334000')
-
-''' 从 graph 中获取输入 / 输出 tensor '''
-gg = sess.graph
-oo = gg.get_operations()
-print(len(oo))
-# 4046
-
-''' 输入 tensor，必须包括所有的 Placeholder '''
-oo[:5]
-# [<tf.Operation 'input_image' type=Placeholder>,
-#  <tf.Operation 'train_phase' type=Placeholder>,
-#  <tf.Operation 'train_phase_last' type=Placeholder>,
-#  <tf.Operation 'embd_extractor/resnet_v2_50/conv1/weights/Initializer/truncated_normal/shape' type=Const>,
-#  <tf.Operation 'embd_extractor/resnet_v2_50/conv1/weights/Initializer/truncated_normal/mean' type=Const>]
-[ii for ii in oo if ii.type == 'Placeholder']
-# [<tf.Operation 'input_image' type=Placeholder>,
-#  <tf.Operation 'train_phase' type=Placeholder>,
-#  <tf.Operation 'train_phase_last' type=Placeholder>]
-feeds = {
-  'input_image': gg.get_tensor_by_name('input_image:0'),
-  'train_phase': gg.get_tensor_by_name('train_phase:0'),
-  'train_phase_last': gg.get_tensor_by_name('train_phase_last:0')
-}
-feeds = {ii.name: ii.outputs[0]  for ii in oo if ii.type == 'Placeholder'}
-
-''' 输出 tensor，首先获取到名称 [ ??? ] '''
-oo[-5:] # NOT these
-# [<tf.Operation 'save/Assign_277' type=Assign>,
-#  <tf.Operation 'save/Assign_278' type=Assign>,
-#  <tf.Operation 'save/Assign_279' type=Assign>,
-#  <tf.Operation 'save/Assign_280' type=Assign>,
-#  <tf.Operation 'save/restore_all' type=NoOp>]
-[(id, ii) for id, ii in enumerate(oo) if len(ii.outputs) != 0 and
-          ii.outputs[0].shape.dims != None and ii.outputs[0].shape.as_list() == [None, 512]]
-# [(3693, <tf.Operation 'embd_extractor/fully_connected/MatMul' type=MatMul>),
-#  (3694, <tf.Operation 'embd_extractor/fully_connected/BiasAdd' type=BiasAdd>),
-#  (3752, <tf.Operation 'embd_extractor/BatchNorm_1/Reshape_1' type=Reshape>)]
-oo[3750:3756]
-# [<tf.Operation 'embd_extractor/BatchNorm_1/cond_1/Merge_1' type=Merge>,
-#  <tf.Operation 'embd_extractor/BatchNorm_1/Shape' type=Shape>,
-#  <tf.Operation 'embd_extractor/BatchNorm_1/Reshape_1' type=Reshape>,
-#  <tf.Operation 'init' type=NoOp>,
-#  <tf.Operation 'save/filename/input' type=Const>,
-#  <tf.Operation 'save/filename' type=PlaceholderWithDefault>]
-fetches = {
-  'output': gg.get_tensor_by_name('embd_extractor/BatchNorm_1/Reshape_1:0')
-}
-
-tf.saved_model.simple_save(sess, './1', inputs=feeds, outputs=fetches)
-
-tf.__version__  # '2.0.0'
-gpus = tf.config.experimental.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(gpus[0], True)
-gg = tf.saved_model.load('./1')
-tt = gg.signatures['serving_default']
-tt(input_image=tf.ones([1, 112, 112, 3]), train_phase_last=tf.constant(False), train_phase=tf.constant(False))
-```
-```py
-In [21]: %timeit aa = tt(input_image=tf.ones([1, 112, 112, 3]), train_phase_last=tf.constant(False), trai
-    ...: n_phase=tf.constant(False))                                                                     
-20.8 ms ± 346 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
-
-In [22]: %timeit aa = tt(input_image=tf.ones([1, 112, 112, 3]), train_phase_last=tf.constant(False), trai
-    ...: n_phase=tf.constant(False))                                                                     
-20.4 ms ± 424 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
-
-In [23]: %timeit aa = tt(input_image=tf.ones([1, 112, 112, 3]), train_phase_last=tf.constant(False), trai
-    ...: n_phase=tf.constant(False))                                                                     
-20.7 ms ± 690 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
-```
-```py
-cc = bb['output'].numpy()
-cc.shape
-(cc ** 2).sum()
-%hist
-
-In [19]: %timeit bb = tt(tf.ones([1, 112, 112, 3]))                                                      
-44.2 ms ± 994 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
-
-In [20]: %timeit bb = tt(tf.ones([1, 112, 112, 3]))                                                      
-44.2 ms ± 1.01 ms per loop (mean ± std. dev. of 7 runs, 10 loops each)
-
-In [21]: %timeit bb = tt(tf.ones([1, 112, 112, 3]))                                                      
-44.1 ms ± 834 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
-```
-```py
-saver = tf.train.import_meta_graph(/path/to/meta/graph)
-sess = tf.Session()
-saver.restore(sess, /path/to/checkpoints)
-graph = sess.graph
-print([node.name for node in graph.as_graph_def().node])
-```
-```py
-('{fc7_acc}', 366000, 0.33333334)
-lr-batch-epoch: 0.0001 14259 10
-testing verification..
-(12000, 256)
-infer time 5.25035
-[lfw][366000]XNorm: 16.261008
-[lfw][366000]Accuracy-Flip: 0.99433+-0.00343
-testing verification..
-(14000, 256)
-infer time 6.030406
-[cfp_fp][366000]XNorm: 13.543931
-[cfp_fp][366000]Accuracy-Flip: 0.89614+-0.01629
-testing verification..
-(12000, 256)
-infer time 5.152523
-[agedb_30][366000]XNorm: 15.793682
-[agedb_30][366000]Accuracy-Flip: 0.95417+-0.01265
-saving 1
-INFO:root:Saved checkpoint to "./models/m1-arcface-emore/model-0001.params"
-[366000]Accuracy-Highest: 0.95417
-```
-```py
-import glob2
-from skimage.io import imread
-from skimage.transform import resize
-imm = glob2.glob('./dogImages/test/*/*')
-xx = np.array([resize(imread(ii), (224, 224)) for ii in imm])
-ixx = tf.convert_to_tensor(xx, dtype='float32')
-# ixx = tf.convert_to_tensor(xx, dtype=tf.uint8)
-idd = tf.data.Dataset.from_tensor_slices((ixx)).batch(1)
-
-def representative_data_gen():
-    for ii in idd.take(100):
-        yield [ii]
-converter = tf.lite.TFLiteConverter.from_saved_model('./keras_checkpoints/')
-converter.optimizations = [tf.lite.Optimize.DEFAULT]
-converter.representative_dataset = representative_data_gen
-tflite_quant_all_model = converter.convert()
-```

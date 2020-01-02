@@ -851,7 +851,7 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
           super(NormDense, self).build(input_shape)
       def call(self, inputs, **kwargs):
           norm_w = tf.nn.l2_normalize(self.w, axis=0)
-          # inputs = tf.nn.l2_normalize(inputs, axis=1)
+          inputs = tf.nn.l2_normalize(inputs, axis=1)
           return tf.matmul(inputs, norm_w)
       def compute_output_shape(self, input_shape):
           shape = tf.TensorShape(input_shape).as_list()
@@ -1177,13 +1177,18 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
 ## Arcface loss 4
   - **Mxnet Insigntface Arcface loss**
     ```py
-    def arcface_loss(y_true, y_pred, margin1=0.9, margin2=0.4, margin3=0.15, scale=64.0):
-        norm_logits = y_pred[:, 512:]
+    # def arcface_loss(y_true, y_pred, margin1=0.9, margin2=0.4, margin3=0.15, scale=64.0):
+    def arcface_loss(y_true, y_pred, margin1=1.0, margin2=0.5, margin3=0.0, scale=64.0):
+        # norm_logits = y_pred[:, 512:]
+        norm_logits = y_pred
         y_pred_vals = norm_logits[tf.cast(y_true, dtype=tf.bool)]
+        y_pred_vals = tf.clip_by_value(y_pred_vals, clip_value_min=-1.0, clip_value_max=1.0)
         theta = tf.cos(tf.acos(y_pred_vals) * margin1 + margin2) - margin3
-        theta_one_hot = tf.expand_dims(theta - y_pred_vals, 1) * y_true
-        arcface_logits = theta_one_hot + norm_logits
+        theta_one_hot = tf.expand_dims(theta - y_pred_vals, 1) * tf.cast(y_true, dtype=tf.float32)
+        arcface_logits = (theta_one_hot + norm_logits) * scale
+        tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
         return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
+    model.compile(optimizer=keras.optimizers.SGD(learning_rate=0.1, momentum=0.9), loss=arcface_loss, metrics=["accuracy"])
     ```
     **Plot**
     ```py
@@ -1860,6 +1865,24 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
   >>>> lfw evaluation max accuracy: 0.988833, thresh: 0.433936, overall max accuracy: 0.989167
   >>>> cfp_fp evaluation max accuracy: 0.928143, thresh: 0.196322, overall max accuracy: 0.929000
   >>>> agedb_30 evaluation max accuracy: 0.904833, thresh: 0.379133, overall max accuracy: 0.910167
+  ```
+  ```py
+  # softarc hh.h5 --> batch_hard_triplet_loss
+  Epoch 24/24
+  29650/29650 [==============================] - 6475s 218ms/step - loss: 0.0523
+  29650/29650 [==============================] - 6373s 215ms/step - loss: 0.0510
+  29650/29650 [==============================] - 6378s 215ms/step - loss: 0.0498
+  29650/29650 [==============================] - 6373s 215ms/step - loss: 0.0487
+  29650/29650 [==============================] - 6368s 215ms/step - loss: 0.0478
+  Epoch 29/29
+  29650/29650 [==============================] - 6363s 215ms/step - loss: 0.0469
+  29650/29650 [==============================] - 6358s 214ms/step - loss: 0.0460
+  29650/29650 [==============================] - 6346s 214ms/step - loss: 0.0454
+  29650/29650 [==============================] - 6345s 214ms/step - loss: 0.0447
+
+  >>>> lfw evaluation max accuracy: 0.995667, thresh: 0.342895, overall max accuracy: 0.996167
+  >>>> cfp_fp evaluation max accuracy: 0.949857, thresh: 0.167578, overall max accuracy: 0.950857
+  >>>> agedb_30 evaluation max accuracy: 0.956500, thresh: 0.298158, overall max accuracy: 0.956500
   ```
 ## tf-insightface train
   - Arcface loss

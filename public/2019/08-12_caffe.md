@@ -156,3 +156,9 @@
     # vi Makefile.config +53
     BLAS := open
     ```
+## Docker
+  - [BVLC/caffe/docker](https://github.com/BVLC/caffe/tree/master/docker)
+  ```sh
+  docker run --rm -u $(id -u):$(id -g) -v $(pwd):$(pwd) -w $(pwd) bvlc/caffe:cpu caffe train --solver=example_solver.prototxt
+  ```
+***
