@@ -809,7 +809,7 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
 
   ''' Basic model '''
   # xx = keras.applications.ResNet101V2(include_top=False, weights='imagenet')
-  # xx = tf.keras.applications.MobileNetV2(include_top=False, weights=None)
+  # xx = tf.keras.applications.MobileNetV2(input_shape=(112, 112, 3), include_top=False, weights=None)
   # xx = tf.keras.applications.ResNet50V2(include_top=False, weights='imagenet')
   xx = tf.keras.applications.ResNet50V2(input_shape=(112, 112, 3), include_top=False, weights='imagenet')
   xx.trainable = True
@@ -1223,11 +1223,14 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
     ![](images/arcface_loss_mxnet_insightface.png)
   - **Modified Arcface loss** 限制转化后的值不能大于原值
     ```py
-    def arcface_loss(y_true, y_pred, margin1=0.9, margin2=0.4, margin3=0.15, scale=64.0):
-        norm_logits = y_pred[:, 512:]
-        theta = tf.acos(norm_logits) * margin1 + margin2
-        cond = tf.logical_and(theta < np.pi, tf.cast(y_true, dtype=tf.bool))
-        arcface_logits = tf.where(cond, tf.cos(theta) - margin3, norm_logits) * scale
+    # def arcface_loss(y_true, y_pred, margin1=0.9, margin2=0.4, margin3=0.15, scale=64.0):
+    def arcface_loss(y_true, y_pred, margin1=1.0, margin2=0.5, margin3=0.0, scale=64.0):
+        # norm_logits = y_pred[:, 512:]
+        norm_logits = tf.clip_by_value(y_pred, clip_value_min=-1.0, clip_value_max=1.0)
+        theta = tf.cos(tf.acos(norm_logits) * margin1 + margin2) - margin3
+        cond = tf.logical_and(tf.cast(y_true, dtype=tf.bool), theta < norm_logits)
+        arcface_logits = tf.where(cond, theta, norm_logits) * scale
+        tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
         return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
 
     def arcface_loss(y_true, y_pred, margin1=0.9, margin2=0.4, margin3=0.15, scale=64.0):
@@ -1285,6 +1288,12 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
     45490/45490 [==============================] - 7538s 166ms/step - loss: 14.9531 - logits_accuracy: 0.0042
     45490/45490 [==============================] - 7536s 166ms/step - loss: 14.9377 - logits_accuracy: 0.0051
     45490/45490 [==============================] - 7542s 166ms/step - loss: 14.9266 - logits_accuracy: 0.0060
+    ```
+    ```py
+    # mobilenet arcface loss
+    Epoch 1/200
+    45490/45490 [==============================] - 6586s 145ms/step - loss: 11.3648 - accuracy: 8.4497e-05
+    45490/45490 [==============================] - 6629s 146ms/step - loss: 10.6558 - accuracy: 1.8840e-04
     ```
   - **Soft Arcface loss** 直接调整 softmax 值
     ```py
@@ -1879,10 +1888,34 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
   29650/29650 [==============================] - 6358s 214ms/step - loss: 0.0460
   29650/29650 [==============================] - 6346s 214ms/step - loss: 0.0454
   29650/29650 [==============================] - 6345s 214ms/step - loss: 0.0447
+  29650/29650 [==============================] - 6487s 219ms/step - loss: 0.0439
+  Epoch 34/34
+  29650/29650 [==============================] - 6503s 219ms/step - loss: 0.0435
+  29650/29650 [==============================] - 6515s 220ms/step - loss: 0.0429
+  29650/29650 [==============================] - 6433s 217ms/step - loss: 0.0425
+  29650/29650 [==============================] - 6432s 217ms/step - loss: 0.0421
+  29650/29650 [==============================] - 6428s 217ms/step - loss: 0.0416
+  Epoch 39/39
+  29650/29650 [==============================] - 6373s 215ms/step - loss: 0.0413
+  29650/29650 [==============================] - 6389s 215ms/step - loss: 0.0410
+  29650/29650 [==============================] - 6366s 215ms/step - loss: 0.0407
+  29650/29650 [==============================] - 6357s 214ms/step - loss: 0.0404
+  29650/29650 [==============================] - 6353s 214ms/step - loss: 0.0402
+  Epoch 44/44
+  29650/29650 [==============================] - 6375s 215ms/step - loss: 0.0400
+  29650/29650 [==============================] - 6406s 216ms/step - loss: 0.0398
+  alpha 0.3 --> alpha 0.2
+  Epoch 46/46
+  29650/29650 [==============================] - 6452s 218ms/step - loss: 0.0156
 
+  Epoch 32/32
   >>>> lfw evaluation max accuracy: 0.995667, thresh: 0.342895, overall max accuracy: 0.996167
   >>>> cfp_fp evaluation max accuracy: 0.949857, thresh: 0.167578, overall max accuracy: 0.950857
   >>>> agedb_30 evaluation max accuracy: 0.956500, thresh: 0.298158, overall max accuracy: 0.956500
+  Epoch 46/46
+  >>>> lfw evaluation max accuracy: 0.995833, thresh: 0.365894, overall max accuracy: 0.995833
+  >>>> cfp_fp evaluation max accuracy: 0.951143, thresh: 0.158986, overall max accuracy: 0.951143
+  >>>> agedb_30 evaluation max accuracy: 0.959333, thresh: 0.279509, overall max accuracy: 0.959333
   ```
 ## tf-insightface train
   - Arcface loss
