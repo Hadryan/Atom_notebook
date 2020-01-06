@@ -1,12 +1,49 @@
-# ___2019 - 12 - 24 Go___
+# ___2019 - 12 - 24 Go Basic___
 ***
+# 目录
+  <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
 
-- [Github tensorflow/tensorflow/go](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/go)
-- [Github galeone/tfgo](https://github.com/galeone/tfgo)
-- [Go 指南](http://go-tour-zh.appspot.com/flowcontrol/4)
+  - [___2019 - 12 - 24 Go Basic___](#2019-12-24-go-basic)
+  - [目录](#目录)
+  - [Install](#install)
+  	- [Install go](#install-go)
+  	- [Install gophernotes](#install-gophernotes)
+  	- [Install lgo](#install-lgo)
+  - [基础语法](#基础语法)
+  	- [foo](#foo)
+  	- [Go 程序的一般结构](#go-程序的一般结构)
+  	- [Go 数据类型](#go-数据类型)
+  	- [for 循环语句](#for-循环语句)
+  	- [if 条件语句](#if-条件语句)
+  	- [switch 语句](#switch-语句)
+  	- [func 函数](#func-函数)
+  	- [defer 延迟调用](#defer-延迟调用)
+  - [数据结构](#数据结构)
+  	- [指针](#指针)
+  	- [struct 结构体](#struct-结构体)
+  	- [数组](#数组)
+  	- [slice 切片](#slice-切片)
+  	- [range 迭代遍历](#range-迭代遍历)
+  	- [map 字典](#map-字典)
+  - [方法和接口](#方法和接口)
+  	- [方法](#方法)
+  	- [接口](#接口)
+  	- [Stringers 接口](#stringers-接口)
+  	- [Error 错误接口](#error-错误接口)
+  	- [Readers 接口](#readers-接口)
+  	- [Web 服务器](#web-服务器)
+  	- [Image 图片接口](#image-图片接口)
+  - [并发](#并发)
+  	- [goroutine](#goroutine)
+  	- [channel](#channel)
+  	- [select](#select)
+
+  <!-- /TOC -->
+***
 
 # Install
 ## Install go
+  - [Go 指南](http://go-tour-zh.appspot.com/flowcontrol/4)
   - [Getting Started install go](https://golang.org/doc/install)
   - **hello world**
     ```go
@@ -92,83 +129,6 @@
     Hello world
     12
     <nil>
-    ```
-## Install TensorFlow for C
-  - [Install TensorFlow for C](https://www.tensorflow.org/install/lang_c)
-  - **hello world**
-    ```c
-    #include <stdio.h>
-    #include <tensorflow/c/c_api.h>
-
-    int main() {
-        printf("Hello from TensorFlow C library version %s\n", TF_Version());
-        return 0;
-    }
-    ```
-    ```sh
-    gcc hello_tf.c -ltensorflow -o hello_tf
-    ./hello_tf
-    # Hello from TensorFlow C library version 1.15.0
-    ```
-## Install TensorFlow for Go
-  - [Install TensorFlow for Go](https://www.tensorflow.org/install/lang_go)
-    ```sh
-    go get github.com/tensorflow/tensorflow/tensorflow/go
-    ```
-  - **Q / A**
-    ```sh
-    ''' Q
-    package github.com/tensorflow/tensorflow/tensorflow/go/genop/internal/proto/github.com/tensorflow/tensorflow/tensorflow/go/core: cannot find package "github.com/tensorflow/tensorflow/tensorflow/go/genop/internal/proto/github.com/tensorflow/tensorflow/tensorflow/go/core" in any of:
-    '''
-    ''' A
-    Version of libtensorflow is r1.15
-    '''
-    cd ~/go/src/github.com/tensorflow/tensorflow/tensorflow/go
-    git checkout r1.15
-    go test github.com/tensorflow/tensorflow/tensorflow/go
-    ```
-  - [Github galeone/tfgo](https://github.com/galeone/tfgo)
-    ```sh
-    go get github.com/gogo/protobuf/proto
-    go get github.com/galeone/tfgo
-    ```
-  - **hello world**
-    ```go
-    package main
-
-    import (
-        tf "github.com/tensorflow/tensorflow/tensorflow/go"
-        "github.com/tensorflow/tensorflow/tensorflow/go/op"
-        "fmt"
-    )
-
-    func main() {
-        // Construct a graph with an operation that produces a string constant.
-        s := op.NewScope()
-        c := op.Const(s, "Hello from TensorFlow version " + tf.Version())
-        graph, err := s.Finalize()
-        if err != nil {
-            panic(err)
-        }
-
-        // Execute the graph in a session.
-        sess, err := tf.NewSession(graph, nil)
-        if err != nil {
-            panic(err)
-        }
-        output, err := sess.Run(nil, []tf.Output{c}, nil)
-        if err != nil {
-            panic(err)
-        }
-        fmt.Println(output[0].Value())
-    }
-    ```
-    ```sh
-    go run hello_tf.go
-    # Hello from TensorFlow version 1.15.0
-
-    # 生成静态库
-    go build -buildmode=c-archive hello_tf.go
     ```
 ***
 
@@ -1082,131 +1042,114 @@
     ch <- v    // 将 v 送入 channel ch
     v := <-ch  // 从 ch 接收，并且赋值给 v
     ```
-```go
-import "fmt"
-
-func sum(a []int, c chan int) {
-    sum := 0
-    for _, v := range a {
-        sum += v
+    ```go
+    func sum(a []int, c chan int) {
+        sum := 0
+        for _, v := range a {
+            sum += v
+        }
+        c <- sum // 将和送入 c
     }
-    c <- sum // 将和送入 c
-}
 
-a := []int{7, 2, 8, -9, 4, 0}
-c := make(chan int)
-go sum(a[:len(a)/2], c)
-go sum(a[len(a)/2:], c)
-x, y := <-c, <-c // 从 c 中获取
-fmt.Println(x, y, x+y)
-```
-缓冲 channel
-channel 可以是 _带缓冲的_。为 make 提供第二个参数作为缓冲长度来初始化一个缓冲 channel：
+    a := []int{7, 2, 8, -9, 4, 0}
+    c := make(chan int)
+    go sum(a[:len(a)/2], c)
+    go sum(a[len(a)/2:], c)
+    x, y := <-c, <-c // 从 c 中获取
+    fmt.Println(x, y, x+y)
+    // -5 17 12
+    ```
+  - **缓冲 channel** `ch := make(chan int, 100)`，指定 **缓冲长度** 来初始化一个缓冲 channel
+    - 发送数据时，在缓冲区满的时候会阻塞
+    - 接受数据时，在缓冲区清空的时候阻塞
+    ```go
+    c := make(chan int, 2)
+    c <- 1
+    c <- 2
+    fmt.Println(<-c)
+    fmt.Println(<-c)
+    // 1
+    // 2
+    // 2
+    ```
+  - **close 关闭 channel**
+    - **发送者** 可以调用 close 关闭一个 channel，表示没有值会再被发送
+    - **接收者** 可以通过赋值语句的第二个参数来测试 channel 是否被关闭，`v, ok := <-ch`，channel 关闭时 `ok == false`
+    - 向一个已经关闭的 channel 发送数据会引起 panic
+    - 通常情况下无需关闭 channel，只有在需要告诉接收者没有更多的数据的时候才有必要进行关闭，如中断一个 `range`
+  - **range 循环接收** `for i := range c` 会不断从 channel 接收值，直到被 `close` 关闭
+    ```go
+    func fibonacci(n int, c chan int) {
+        x, y := 0, 1
+        for i := 0; i < n; i++ {
+            c <- x
+            x, y = y, x+y
+        }
+        close(c)
+    }
 
-ch := make(chan int, 100)
-向缓冲 channel 发送数据的时候，只有在缓冲区满的时候才会阻塞。当缓冲区清空的时候接受阻塞。
-
-修改例子使得缓冲区被填满，然后看看会发生什么。
-```go
-import "fmt"
-
-func main() {
-	c := make(chan int, 2)
-	c <- 1
-	c <- 2
-	fmt.Println(<-c)
-	fmt.Println(<-c)
-}
-```
-## range 和 close
-发送者可以 close 一个 channel 来表示再没有值会被发送了。接收者可以通过赋值语句的第二参数来测试 channel 是否被关闭：当没有值可以接收并且 channel 已经被关闭，那么经过
-
-v, ok := <-ch
-之后 ok 会被设置为 `false`。
-
-循环 `for i := range c` 会不断从 channel 接收值，直到它被关闭。
-
-注意： 只有发送者才能关闭 channel，而不是接收者。向一个已经关闭的 channel 发送数据会引起 panic。 还要注意： channel 与文件不同；通常情况下无需关闭它们。只有在需要告诉接收者没有更多的数据的时候才有必要进行关闭，例如中断一个 `range`。
-```go
-func fibonacci(n int, c chan int) {
-	x, y := 0, 1
-	for i := 0; i < n; i++ {
-		c <- x
-		x, y = y, x+y
-	}
-	close(c)
-}
-
-func main() {
-	c := make(chan int, 10)
-	go fibonacci(cap(c), c)
-	for i := range c {
-		fmt.Println(i)
-	}
-}
-
-```
+    c := make(chan int, 10)
+    go fibonacci(cap(c), c)
+    for i := range c {
+        fmt.Printf("%v ", i)
+    }
+    // 0 1 1 2 3 5 8 13 21 34
+    ```
 ## select
-select 语句使得一个 goroutine 在多个通讯操作上等待。
+  - **select** 使一个 `goroutine` 在多个通讯操作上等待
+    - `select` 会阻塞，直到条件分支中的某个可以继续执行，这时就会执行那个条件分支
+    - 当多个都准备好时，会 **随机选择** 一个
+    ```go
+    func fibonacci(c, quit chan int) {
+        x, y := 0, 1
+        for {
+            select {
+            case c <- x:
+                x, y = y, x+y
+            case <-quit:
+                fmt.Println("quit")
+                return
+            }
+        }
+    }
 
-select 会阻塞，直到条件分支中的某个可以继续执行，这时就会执行那个条件分支。当多个都准备好的时候，会随机选择一个。
-```go
-func fibonacci(c, quit chan int) {
-	x, y := 0, 1
-	for {
-		select {
-		case c <- x:
-			x, y = y, x+y
-		case <-quit:
-			fmt.Println("quit")
-			return
-		}
-	}
-}
+    c := make(chan int)
+    quit := make(chan int)
+    go func() {
+        for i := 0; i < 10; i++ {
+            fmt.Printf("%v ", <-c)
+        }
+        quit <- 0
+    }()
+    fibonacci(c, quit)
+    // 0 1 1 2 3 5 8 13 21 34 quit
+    ```
+  - **默认选择** 为了 **非阻塞** 的发送或者接收，可使用 `default` 分支，当 select 中的其他条件分支都没有准备好的时候，`default` 分支会被执行
+    ```go
+    select {
+    case i := <-c:
+        // 使用 i
+    default:
+        // 从 c 读取会阻塞
+    }
+    ```
+    ```go
+    import "time"
 
-func main() {
-	c := make(chan int)
-	quit := make(chan int)
-	go func() {
-		for i := 0; i < 10; i++ {
-			fmt.Println(<-c)
-		}
-		quit <- 0
-	}()
-	fibonacci(c, quit)
-}
-```
-默认选择
-当 select 中的其他条件分支都没有准备好的时候，`default` 分支会被执行。
-
-为了非阻塞的发送或者接收，可使用 default 分支：
-
-select {
-case i := <-c:
-    // 使用 i
-default:
-    // 从 c 读取会阻塞
-}
-```go
-import (
-	"fmt"
-	"time"
-)
-
-func main() {
-	tick := time.Tick(100 * time.Millisecond)
-	boom := time.After(500 * time.Millisecond)
-	for {
-		select {
-		case <-tick:
-			fmt.Println("tick.")
-		case <-boom:
-			fmt.Println("BOOM!")
-			return
-		default:
-			fmt.Println("    .")
-			time.Sleep(50 * time.Millisecond)
-		}
-	}
-}
-```
+    tick := time.Tick(100 * time.Millisecond)
+    boom := time.After(500 * time.Millisecond)
+    for {
+        select {
+        case <-tick:
+            fmt.Printf("tick")
+        case <-boom:
+            fmt.Println(" BOOM!")
+            return
+        default:
+            fmt.Printf(".")
+            time.Sleep(50 * time.Millisecond)
+        }
+    }
+    // ..tick..tick..tick..tick..tick BOOM!
+    ```
+***

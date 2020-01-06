@@ -843,11 +843,11 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
 
   ''' Model with bottleneck '''
   class NormDense(tf.keras.layers.Layer):
-      def __init__(self, classes=1000, **kwargs):
+      def __init__(self, units=1000, **kwargs):
           super(NormDense, self).__init__(**kwargs)
-          self.output_dim = classes
+          self.units = units
       def build(self, input_shape):
-          self.w = self.add_weight(name='norm_dense_w', shape=(input_shape[-1], self.output_dim), initializer='random_normal', trainable=True)
+          self.w = self.add_weight(name='norm_dense_w', shape=(input_shape[-1], self.units), initializer='random_normal', trainable=True)
           super(NormDense, self).build(input_shape)
       def call(self, inputs, **kwargs):
           norm_w = tf.nn.l2_normalize(self.w, axis=0)
@@ -855,11 +855,12 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
           return tf.matmul(inputs, norm_w)
       def compute_output_shape(self, input_shape):
           shape = tf.TensorShape(input_shape).as_list()
-          shape[-1] = self.output_dim
+          shape[-1] = self.units
           return tf.TensorShape(shape)
       def get_config(self):
-          base_config = super(NormDense, self).get_config()
-          base_config['output_dim'] = self.output_dim
+          config = super(NormDense, self).get_config()
+          config.update({'units': self.units})
+          return config
       @classmethod
       def from_config(cls, config):
           return cls(**config)
