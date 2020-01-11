@@ -1274,10 +1274,33 @@
 
     # sudo vi /etc/proxychains.conf
     [ProxyList]
-    socks5  127.0.0.1 1080
+    socks5  127.0.0.1 8080
 
     # curl 测试
     proxychain curl www.google.com
+    ```
+  - **privoxy** 将 http 请求转发到 socks5 端口，配置全局代理
+    ```sh
+    sudo apt install privoxy
+
+    # 添加 socks5 转发规则
+    sudo vi /etc/privoxy/config
+    # 1337         forward-socks5t   /               127.0.0.1:8080 .
+    ```
+    privoxy 默认使用端口 `8118`，发送到该端口的 `http` / `https` 请求转发到指定的 `sockes5` 端口
+    ```sh
+    # /etc/privoxy/config
+    783 listen-address  127.0.0.1:8118
+    784 listen-address  [::1]:8118
+    ```
+    启动 privoxy 服务，配置 http / https 代理，可以通过 `Settings` -> `Network` -> `Network Proxy` -> `Manual` 配置系统全局代理
+    ```sh
+    sudo service privoxy start
+    export http_proxy='http://localhost:8118'
+    export https_proxy='https://localhost:8118'
+
+    # 测试
+    curl www.google.com
     ```
 ***
 

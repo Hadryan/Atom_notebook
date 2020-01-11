@@ -2017,3 +2017,42 @@ def model_verification_images(model_interf, iaa, ibb):
 model_verification_images(lambda xx: mm.predict(xx), aa / 255, bb / 255)
 ```
 192.168.0.184
+
+# 人脸旋转角度与侧脸
+  ```py
+  from skimage.transform import SimilarityTransform
+  import insightface
+  dd = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+  dd.prepare(-1)
+
+  def rotation_detect(dd, image_path, image_show=True):
+      dst = np.array([[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366], [41.5493, 92.3655], [70.729904, 92.2041]])
+      aa = imread(image_path)
+      if image_show:
+          fig = plt.figure()
+          plt.imshow(aa)
+
+      bbox, points = dd.detect(aa)
+      rrs = []
+      for src in points:
+          src = src.astype(np.float32)
+          tform = SimilarityTransform()
+          tform.estimate(src, dst)
+
+          cc = tform.params[:2]
+          ne = np.dot(cc, np.vstack([src.T, np.ones(src.shape[0])])).T
+          # lean = nose - (left_eye + right_eye) / 2
+          lean = ne[2, 0] - (ne[0, 0] + ne[1, 0]) / 2
+          rrs.append({'rotation' : tform.rotation, 'lean': lean})
+
+          if image_show:
+              plt.scatter(src[:, 0], src[:, 1])
+              plt.scatter(ne[:, 0], ne[:, 1])
+              template = "Rotation: %(rotation).4f, Lean: %(lean).4f"
+              plt.text(src[:, 0].min(), src[:, 1].max() + 30, template %(rrs[-1]), color='r')
+      return points, rrs
+
+  points, ne = rotation_detect(dd, 'test_images/rotate.png')
+  points, ne = rotation_detect(dd, 'test_images/side.png')
+  points, ne = rotation_detect(dd, 'test_images/side_rotate.png')
+  ```
