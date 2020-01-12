@@ -2016,7 +2016,7 @@ def model_verification_images(model_interf, iaa, ibb):
 
 model_verification_images(lambda xx: mm.predict(xx), aa / 255, bb / 255)
 ```
-192.168.0.184
+***
 
 # 人脸旋转角度与侧脸
   ```py
@@ -2056,3 +2056,4 @@ model_verification_images(lambda xx: mm.predict(xx), aa / 255, bb / 255)
   points, ne = rotation_detect(dd, 'test_images/side.png')
   points, ne = rotation_detect(dd, 'test_images/side_rotate.png')
   ```
+***
