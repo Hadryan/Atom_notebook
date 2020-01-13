@@ -10,6 +10,12 @@
   - [Insightface MXNet 模型使用](#insightface-mxnet-模型使用)
   	- [MXNet](#mxnet)
   	- [模型加载与特征提取](#模型加载与特征提取)
+  	- [模型训练](#模型训练)
+  - [Highest Accuracy](#highest-accuracy)
+  	- [Deepinsight Accuracy](#deepinsight-accuracy)
+  	- [Mobilenet 256 Embeddings](#mobilenet-256-embeddings)
+  	- [Mobilenet 512 embeddings](#mobilenet-512-embeddings)
+  	- [Vargface](#vargface)
   - [MTCNN](#mtcnn)
   	- [Testing function](#testing-function)
   	- [facenet mtcnn](#facenet-mtcnn)
@@ -17,28 +23,16 @@
   	- [MTCNN-Tensorflow](#mtcnn-tensorflow)
   	- [mtcnn.MTCNN](#mtcnnmtcnn)
   	- [caffe MTCNN](#caffe-mtcnn)
-  	- [TensorFlow mtcnn pb](#tensorflow-mtcnn-pb)
-  - [MMDNN 转化](#mmdnn-转化)
-  	- [Insightface caffe MTCNN model to TensorFlow](#insightface-caffe-mtcnn-model-to-tensorflow)
-  	- [Insightface MXNET model to TensorFlow pb model](#insightface-mxnet-model-to-tensorflow-pb-model)
-  	- [TensorFlow 加载 PB 模型](#tensorflow-加载-pb-模型)
   	- [人脸对齐](#人脸对齐)
-  - [Tensorflow Serving server](#tensorflow-serving-server)
   - [Docker 封装](#docker-封装)
   - [视频中识别人脸保存](#视频中识别人脸保存)
-  - [人脸跟踪](#人脸跟踪)
 
   <!-- /TOC -->
 ***
 
-# Related projects
-  - [deepinsight/insightface](https://github.com/deepinsight/insightface)
-  - [AITTSMD/MTCNN-Tensorflow](https://github.com/AITTSMD/MTCNN-Tensorflow)
-  - [ipazc/mtcnn](https://github.com/ipazc/mtcnn)
-  - [erikbern/ann-benchmarks](https://github.com/erikbern/ann-benchmarks)
-***
-
 # Insightface MXNet 模型使用
+## Insightface
+  - [deepinsight/insightface](https://github.com/deepinsight/insightface)
 ## MXNet
   ```sh
   # 安装 cuda-10-0 对应的 mxnet 版本
@@ -86,6 +80,113 @@
   # export image feature, OUT OF MEMORY
   emb = model.get_feature(model.get_input(img))
   ```
+## 模型训练
+  ```sh
+  # My 2-stage pipeline:
+  # Train softmax with lr=0.1 for 120K iterations.
+  # LRSTEPS='240000,360000,440000'
+  CUDA_VISIBLE_DEVICES='0,1,2,3' python -u train_softmax.py --data-dir $DATA_DIR --network "$NETWORK" --loss-type 0 --prefix "$PREFIX" --per-batch-size 128 --lr-steps "$LRSTEPS" --margin-s 32.0 --margin-m 0.1 --ckpt 2 --emb-size 128 --fc7-wd-mult 10.0 --wd 0.00004 --max-steps 140002
+
+  # Switch to ArcFace loss to do normal training with '100K,140K,160K' iterations.
+  # LRSTEPS='100000,140000,160000'
+  CUDA_VISIBLE_DEVICES='0,1,2,3' python -u train_softmax.py --data-dir $DATA_DIR --network "$NETWORK" --loss-type 4 --prefix "$PREFIX" --per-batch-size 128 --lr-steps "$LRSTEPS" --margin-s 64.0 --margin-m 0.5 --ckpt 1 --emb-size 128 --fc7-wd-mult 10.0 --wd 0.00004 --pretrained '../models2/model-y1-test/model,70'
+
+  # training dataset: ms1m
+  # LFW: 99.50, CFP_FP: 88.94, AgeDB30: 95.91
+  ```
+  **config.py 配置文件**
+  ```py
+  # config.py +78
+  network.m1.emb_size = 512
+
+  # config.py +117
+  dataset.emore.dataset_path = '/datasets/faces_emore'
+  dataset.emore.num_classes = 85742
+  ...
+  dataset.glint.dataset_path = '/datasets/faces_glint'
+  dataset.glint.num_classes = 180855
+
+  # config.py +147
+  loss.arcface = edict()
+  loss.arcface.loss_name = 'margin_softmax'
+  loss.arcface.loss_s = 64.0
+  loss.arcface.loss_m1 = 1.0
+  loss.arcface.loss_m2 = 0.5
+  loss.arcface.loss_m3 = 0.0
+  ```
+  **mobilenet 模型训练**
+  ```sh
+  export MXNET_ENABLE_GPU_P2P=0
+
+  # arcface train
+  CUDA_VISIBLE_DEVICES='0,1' python -u train_parall.py --network m1 --loss arcface --dataset emore --per-batch-size 96
+
+  # triplet fine-tune
+  CUDA_VISIBLE_DEVICES='0,1' python -u train.py --network m1 --loss arcface --dataset emore --per-batch-size 96 --pretrained ./models/m1-arcface-emore/model --lr 0.0001
+  CUDA_VISIBLE_DEVICES='1' python -u train.py --network m1 --loss triplet --dataset emore --per-batch-size 150 --pretrained ./models/m1-triplet-emore_97083/model --lr 0.0001 --lr-steps '1000,100000,160000,220000,280000,340000'
+  CUDA_VISIBLE_DEVICES='0' python -u train.py --network m1 --loss triplet --dataset glint --per-batch-size 150 --pretrained ./models/m1-triplet-emore_290445/model --pretrained-epoch 602 --lr 0.0001 --lr-steps '1000,100000,160000,220000,280000,340000'
+  ```
+  **Vargfacenet 模型训练**
+  ```sh
+  # Vargfacenet
+  CUDA_VISIBLE_DEVICES='0,1' python3 -u train_parall.py --network vargfacenet --loss softmax --dataset emore --per-batch-size 96
+  CUDA_VISIBLE_DEVICES='1' python3 -u train.py --network vargfacenet --loss arcface --dataset glint --per-batch-size 150 --pretrained ./model
+  s/vargfacenet-softmax-emore/model --pretrained-epoch 166 --lr 0.0001 --lr-steps '100000,160000,220000,280000,340000'
+  ```
+***
+
+# Highest Accuracy
+## Deepinsight Accuracy
+
+  | Method        | LFW(%) | CFP-FP(%) | AgeDB-30(%) | MegaFace(%)          |
+  | ------------- | ------ | --------- | ----------- | -------------------- |
+  | LResNet100E   | 99.77  | 98.27     | 98.28       | 98.47                |
+  | LResNet50E    | 99.80  | 92.74     | 97.76       | 97.64                |
+  | LResNet34E    | 99.65  | 92.12     | 97.70       | 96.70                |
+  | MobileFaceNet | 99.50  | 88.94     | 95.91       | -----                |
+  | VarGfaceNet   | 99.783 | 98.400    | 98.067      | 88.334 **DeepGlint** |
+## Mobilenet 256 Embeddings
+
+  | Step      | fc7_acc  | lfw     | cfp_fp  | agedb_30 | SUM     |
+  | --------- | -------- | ------- | ------- | -------- | ------- |
+  | **Loss**  | arcface  | **DS**  | glint   |          |         |
+  | 1660K     | 0.25     | 0.99567 | 0.89529 | 0.96683  | 2.85779 |
+  | **Loss**  | triplet  | **DS**  | emore   |          |         |
+  | 840       | 0.062472 | 0.99633 | 0.93429 | 0.97083  | 2.90145 |
+  | **Loss**  | triplet  | **DS**  | glint   |          |         |
+  | 960[40]   | 0.064614 | 0.99617 | 0.93686 | 0.97017  | 2.90319 |
+  | 2575[107] | 0.064761 | 0.99667 | 0.93829 | 0.96950  | 2.90445 |
+## Mobilenet 512 embeddings
+  | Step      | fc7_acc  | lfw     | cfp_fp  | agedb_30 | SUM     |
+  | --------- | -------- | ------- | ------- | -------- | ------- |
+  | **Loss**  | arcface  | **DS**  | emore   |          |         |
+  | 1204K     | 0.015625 | 0.99533 | 0.93671 | 0.96367  | 2.89571 |
+  | **Loss**  | triplet  | **DS**  | glint   |          |         |
+  | 25[1]     | 0.146767 | 0.99567 | 0.93971 | 0.96500  | 2.90038 |
+  | 532[20]   | 0.149680 | 0.99650 | 0.94614 | 0.96600  | 2.90864 |
+  | 613[23]   | 0.146067 | 0.99683 | 0.94957 | 0.96300  | 2.90940 |
+  | 668[25]   | 0.147614 | 0.99633 | 0.94757 | 0.96617  | 2.91007 |
+  | 914[34]   | 0.148697 | 0.99650 | 0.94886 | 0.96517  | 2.91052 |
+  | 996[37]   | 0.138909 | 0.99667 | 0.95014 | 0.96467  | 2.91148 |
+  | 2809[102] | 0.146283 | 0.99600 | 0.95071 | 0.96783  | 2.91455 |
+  | **Loss**  | triplet  | **DS**  | emore   |          |         |
+  | 1697[65]  | 0.155924 | 0.99667 | 0.95129 | 0.96817  | 2.91612 |
+## Vargface
+
+  | Step     | fc7_acc    | lfw     | cfp_fp  | agedb_30 | SUM     |
+  | -------- | ---------- | ------- | ------- | -------- | ------- |
+  | **Loss** | softmax    | **DS**  | emore   |          |         |
+  | 9.68K    | 0.265625   | 0.98383 | 0.82914 | 0.85117  |         |
+  | 25.66K   | 0.28645834 | 0.98333 | 0.83729 | 0.85717  |         |
+  | 62K      | 0.25520834 | 0.98067 | 0.83429 | 0.86517  |         |
+  | 72K      | 0.3125     | 0.97683 | 0.81329 | 0.87217  |         |
+  | 270K     | 0.7395833  | 0.99517 | 0.95086 | 0.93267  |         |
+  | 332K     | 0.703125   | 0.99583 | 0.94857 | 0.93350  |         |
+  | **Loss** | triplet    | **DS**  | glint   |          |         |
+  | 175[10]  | 0.070560   | 0.99567 | 0.94314 | 0.95033  | 2.88914 |
+  | 361[20]  | 0.056305   | 0.99683 | 0.94414 | 0.94867  | 2.88964 |
+  | 648[35]  | 0.064737   | 0.99567 | 0.94700 | 0.95250  | 2.89517 |
+  | **Loss** | triplet    | **DS**  | emore   |          |         |
 ***
 
 # MTCNN
@@ -180,6 +281,7 @@
   ```
   ![](images/insightface_mtcnn_multi.jpg)
 ## MTCNN-Tensorflow
+  - [AITTSMD/MTCNN-Tensorflow](https://github.com/AITTSMD/MTCNN-Tensorflow)
   ```py
   # cd ~/workspace/face_recognition_collection/MTCNN-Tensorflow/
 
@@ -223,6 +325,7 @@
   ```
   ![](images/MTCNN-Tensorflow_mtcnn_multi.jpg)
 ## mtcnn.MTCNN
+  - [ipazc/mtcnn](https://github.com/ipazc/mtcnn)
   ```py
   # cd ~/workspace/face_recognition_collection
   from mtcnn.mtcnn import MTCNN
@@ -287,71 +390,7 @@
       return bb, pp
   test_mtcnn_multi_face(img_name, detector.detectface)
   ```
-## TensorFlow mtcnn pb
-  ```py
-  # cd ~/workspace/face_recognition_collection/MTCNN/tensorflow
-  import cv2
-  from mtcnn import MTCNN
-
-  det = MTCNN('./mtcnn.pb')
-  img = cv2.imread('../../test_img/Anthony_Hopkins_0002.jpg')
-
-  det.detect(img)
-  # (array([[ 65.71266,  74.45414, 187.65063, 172.71921]], dtype=float32),
-  #  array([0.99999845], dtype=float32),
-  #  array([[113.4738  , 113.50406 , 138.02603 , 159.49994 , 158.71802 ,
-  #          102.397964, 147.4054  , 125.014786, 105.924614, 145.5773  ]],
-  #        dtype=float32))
-  ```
-  ```py
-  bb, cc, pp = det.detect(img)
-  bb = np.array([[ii[1], ii[0], ii[3], ii[2]] for ii in bb])
-  # Out[21]: array([[ 74.45414,  65.71266, 172.71921, 187.65063]], dtype=float32)
-  pp = np.array([ii.reshape(2, 5)[::-1].T for ii in pp])
-  # array([[[102.397964, 113.4738  ],
-  #         [147.4054  , 113.50406 ],
-  #         [125.014786, 138.02603 ],
-  #         [105.924614, 159.49994 ],
-  #         [145.5773  , 158.71802 ]]], dtype=float32)
-  ```
-***
-
-# MMDNN 转化
-## Insightface caffe MTCNN model to TensorFlow
-  - [Github microsoft/MMdnn](https://github.com/microsoft/MMdnn)
-  ```sh
-  pip install mmdnn
-  python -m mmdnn.conversion._script.convertToIR -f mxnet -n det1-symbol.json -w det1-0001.params -d det1 --inputShape 3,112,112
-  mmconvert -sf mxnet -iw det1-0001.params -in det1-symbol.json -df tensorflow -om det1 --inputShape 3,224,224
-  ```
-  ```sh
-  cd ~/workspace/face_recognition_collection/facenet/src
-  cp align align_bak -r
-
-  cd ~/workspace/face_recognition_collection/insightface/deploy/mtcnn-model
-  mmtoir -f caffe -n det1.prototxt -w det1.caffemodel -o det1
-  mmtoir -f caffe -n det2.prototxt -w det2.caffemodel -o det2
-  mmtoir -f caffe -n det3.prototxt -w det3.caffemodel -o det3
-
-  mmtocode -f tensorflow --IRModelPath det1.pb --IRWeightPath det1.npy --dstModelPath det1.py
-  mmtocode -f tensorflow --IRModelPath det2.pb --IRWeightPath det2.npy --dstModelPath det2.py
-  mmtocode -f tensorflow --IRModelPath det3.pb --IRWeightPath det3.npy --dstModelPath det3.py
-
-  cp *.npy ~/workspace/face_recognition_collection/facenet/src/align/
-  ```
-## Insightface MXNET model to TensorFlow pb model
-  ```sh
-  cd model-r100-ii/
-
-  # 一次转化
-  mmconvert -sf mxnet -in model-symbol.json -iw model-0000.params -df tensorflow -om resnet100 --dump_tag SERVING --inputShape 3,112,112
-
-  # 分步执行
-  mmtoir -f mxnet -n model-symbol.json -w model-0000.params -d resnet100 --inputShape 3,112,112
-  mmtocode -f tensorflow --IRModelPath resnet100.pb --IRWeightPath resnet100.npy --dstModelPath tf_resnet100.py
-  mmtomodel -f tensorflow -in tf_resnet100.py -iw resnet100.npy -o tf_resnet100 --dump_tag SERVING
-  ```
-## TensorFlow 加载 PB 模型
+## 人脸对齐
   ```py
   ''' 截取人脸位置图片 '''
   from mtcnn.mtcnn import MTCNN
@@ -359,27 +398,16 @@
   from skimage.transform import resize
   detector = MTCNN(steps_threshold=[0.6, 0.7, 0.7], min_face_size=40)
 
-  img = imread('/home/leondgarse/workspace/face_recognition_collection/test_img/Fotos_anuales_del_deporte_de_2012.jpg')
+  img = imread('/home/leondgarse/Atom_notebook/public/2019/images/mtcnn_test_image.jpg')
   ret = detector.detect_faces(img)
-  bbox = [[ii["box"][0], ii["box"][1], ii["box"][2] + ii["box"][0], ii["box"][3] + ii["box"][1]] for ii in ret]
+  bbox = [[ii["box"][0], ii["box"][1], ii["box"][0] + ii["box"][2], ii["box"][1] + ii["box"][3]] for ii in ret]
   nimgs = [resize(img[bb[1]: bb[3], bb[0]: bb[2]], (112, 112)) for bb in bbox]
   fig = plt.figure(figsize=(8, 1))
   plt.imshow(np.hstack(nimgs))
   plt.axis('off')
   plt.tight_layout()
-
-  ''' 提取特征值 '''
-  sess = tf.InteractiveSession()
-  meta_graph_def = tf.saved_model.loader.load(sess, ["serve"], "./resnet100")
-  x = sess.graph.get_tensor_by_name("data:0")
-  y = sess.graph.get_tensor_by_name("fc1/add_1:0")
-
-  emb = sess.run(y, feed_dict={x: nimgs})
-  print(emb.shape)
-  # (11, 512)
   ```
   ![](images/tf_pb_model_faces.jpg)
-## 人脸对齐
   ```py
   from skimage.transform import SimilarityTransform
   import cv2
@@ -408,86 +436,6 @@
   plt.tight_layout()
   ```
   ![](images/tf_pb_align_faces.jpg)
-***
-
-# Tensorflow Serving server
-  - `saved_model_cli` 显示模型 signature_def 信息
-    ```sh
-    cd /home/leondgarse/workspace/models/insightface_mxnet_model/model-r100-ii/tf_resnet100
-    tree
-    # .
-    # ├── 1
-    # │   ├── saved_model.pb
-    # │   └── variables
-    # │       ├── variables.data-00000-of-00001
-    # │       └── variables.index
-
-    saved_model_cli show --dir ./1
-    # The given SavedModel contains the following tag-sets:
-    # serve
-
-    saved_model_cli show --dir ./1 --tag_set serve
-    # The given SavedModel MetaGraphDef contains SignatureDefs with the following keys:
-    # SignatureDef key: "serving_default"
-
-    saved_model_cli show --dir ./1 --tag_set serve --signature_def serving_default
-    # The given SavedModel SignatureDef contains the following input(s):
-    #   inputs['input'] tensor_info:
-    #       dtype: DT_FLOAT
-    #       shape: (-1, 112, 112, 3)
-    #       name: data:0
-    # The given SavedModel SignatureDef contains the following output(s):
-    #   outputs['output'] tensor_info:
-    #       dtype: DT_FLOAT
-    #       shape: (-1, 512)
-    #       name: fc1/add_1:0
-    # Method name is: tensorflow/serving/predict
-    ```
-  - `tensorflow_model_server` 启动服务
-    ```sh
-    # model_base_path 需要绝对路径
-    tensorflow_model_server --port=8500 --rest_api_port=8501 --model_name=arcface --model_base_path=/home/leondgarse/workspace/models/insightface_mxnet_model/model-r100-ii/tf_resnet100
-    ```
-  - `requests` 请求返回特征值结果
-    ```py
-    import json
-    import requests
-    from skimage.transform import resize
-
-    rr = requests.get("http://localhost:8501/v1/models/arcface")
-    print(rr.json())
-    # {'model_version_status': [{'version': '1', 'state': 'AVAILABLE', 'status': {'error_code': 'OK', 'error_message': ''}}]}
-
-    x = plt.imread('grace_hopper.jpg')
-    print(x.shape)
-    # (600, 512, 3)
-
-    xx = resize(x, [112, 112])
-    data = json.dumps({"signature_name": "serving_default", "instances": [xx.tolist()]})
-    headers = {"content-type": "application/json"}
-    json_response = requests.post('http://localhost:8501/v1/models/arcface:predict',data=data, headers=headers)
-    rr = json_response.json()
-    print(rr.keys(), np.shape(rr['predictions']))
-    # dict_keys(['predictions']) (1, 512)
-    ```
-  - `MTCNN` 提取人脸位置后请求结果
-    ```py
-    from mtcnn.mtcnn import MTCNN
-
-    img = plt.imread('grace_hopper.jpg')
-    detector = MTCNN(steps_threshold=[0.6, 0.7, 0.7])
-    aa = detector.detect_faces(img)
-    bb = aa[0]['box']
-    cc = img[bb[1]: bb[1] + bb[3], bb[0]: bb[0] + bb[2]]
-    dd = resize(cc, [112, 112])
-
-    data = json.dumps({"signature_name": "serving_default", "instances": [dd.tolist()]})
-    headers = {"content-type": "application/json"}
-    json_response = requests.post('http://localhost:8501/v1/models/arcface:predict',data=data, headers=headers)
-    rr = json_response.json()
-    print(rr.keys(), np.shape(rr['predictions']))
-    # dict_keys(['predictions']) (1, 512)
-    ```
 ***
 
 # Docker 封装
@@ -552,11 +500,3 @@
       cv2.destroyAllWindows()
   ```
 ***
-
-# 人脸跟踪
-  - [zeusees/HyperFT](https://github.com/zeusees/HyperFT)
-  - [Ncnn_FaceTrack](https://github.com/qaz734913414/Ncnn_FaceTrack)
-  - HyperFT 项目多人脸跟踪算法
-    - 第一部分是初始化，通过mtcnn的人脸检测找出第一帧的人脸位置然后将其结果对人脸跟踪进行初始化
-    - 第二部分是更新，利用模板匹配进行人脸目标位置的初步预判，再结合mtcnn中的onet来对人脸位置进行更加精细的定位，最后通过mtcnn中的rnet的置信度来判断跟踪是否为人脸，防止当有手从面前慢慢挥过去的话，框会跟着手走而无法跟踪到真正的人脸
-    - 第三部分是定时检测，通过在更新的部分中加入一个定时器来做定时人脸检测，从而判断中途是否有新人脸的加入，本项目在定时人脸检测中使用了一个trick就是将已跟踪的人脸所在位置利用蒙版遮蔽起来，避免了人脸检测的重复检测，减少其计算量，从而提高了检测速度

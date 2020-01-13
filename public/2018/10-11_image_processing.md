@@ -2142,3 +2142,63 @@
   ```
   ![](images/image_process_close_border.png)
 ***
+
+# 计算点集中的矩形面积
+  ```py
+  def cal_rectangle_areas(aa):
+      ''' 每个 x 坐标对应的所有 y 值 '''
+      xxs = {}
+      for ixx, iyy in aa:
+          tt = xxs.get(ixx, set())
+          tt.add(iyy)
+          xxs[ixx] = tt
+      print(xxs)
+      # {1: [1, 3], 4: [1], 2: [2, 3], 3: [2, 3], 5: [2, 3]}
+
+      ''' 遍历 xxs，对于每个 x 值，在所有其他 x 值对应的 y 值集合上，查找交集 '''
+      rect = []
+      areas = []
+      while len(xxs) != 0:
+          xa, ya = xxs.popitem()
+          if len(ya) < 2:
+              continue
+          for xb, yb in xxs.items():
+              width = abs(xb - xa)
+              tt = list(ya.intersection(yb))
+              while len(tt) > 1:
+                  rect.extend([((xa, xb), (tt[0], ii)) for ii in tt[1:]])
+                  areas.extend([width * abs(tt[0] - ii) for ii in tt[1:]])
+                  tt = tt[1:]
+
+      print(rect, areas)
+      # [((5, 2), (2, 3)), ((5, 3), (2, 3)), ((3, 2), (2, 3))] [3, 2, 1]
+      return rect, areas
+
+  def draw_rectangles(dots, coords, labels, alpha=0.3):
+      colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w'] * 8
+      fig, axes = plt.subplots(1, 1)
+      axes.scatter(dots[:, 0], dots[:, 1])
+      for (xx, yy), label, cc in zip(coords, labels, colors):
+          axes.plot([xx[0], xx[1], xx[1], xx[0], xx[0]], [yy[0], yy[0], yy[1], yy[1], yy[0]], color=cc, label=label)
+          rect = plt.Rectangle((xx[0], yy[0]), xx[1] - xx[0], yy[1] - yy[0], color=cc, alpha=alpha)
+          axes.add_patch(rect)
+      axes.legend()
+      fig.tight_layout()
+
+  aa = np.array([[1, 1], [4, 1], [2, 2], [3, 2], [5, 2], [1, 3], [2, 3], [3, 3], [5, 3]])
+  plt.scatter(aa[:, 0], aa[:, 1])
+  rect, areas = cal_rectangle_areas(aa)
+  draw_rectangles(aa, rect, areas)
+
+  bb = aa[:, ::-1]
+  rect, areas = cal_rectangle_areas(bb)
+  draw_rectangles(bb, rect, areas)
+
+  xx = np.random.randint(1, 50, 100)
+  yy = np.random.randint(1, 50, 100)
+  aa = np.array(list(zip(xx, yy)))
+  rect, areas = cal_rectangle_areas(aa)
+  draw_rectangles(aa, rect, areas)
+  ```
+  ![](images/calc_rectangle_area.png)
+***

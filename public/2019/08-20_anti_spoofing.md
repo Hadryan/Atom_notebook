@@ -1,39 +1,58 @@
 # ___2019 - 08 - 20 Face Anti Spoofing___
 ***
-- [图像特征提取三大法宝：HOG特征，LBP特征，Haar特征](https://www.cnblogs.com/zhehan54/p/6723956.html)
-- [活体检测Face Anti-spoofing综述](https://zhuanlan.zhihu.com/p/43480539)
-- [纹理特征提取方法：LBP, 灰度共生矩阵](https://blog.csdn.net/ajianyingxiaoqinghan/article/details/71552744)
-- [JinghuiZhou/awesome_face_antispoofing](https://github.com/JinghuiZhou/awesome_face_antispoofing)
-- [基于LBP纹理特征计算GLCM的纹理特征统计量+SVM/RF识别纹理图片](https://blog.csdn.net/lovebyz/article/details/84032927)
-- [使用深度图像的单目可见光静默活体 Binary or Auxiliary Supervision(1)](https://zhuanlan.zhihu.com/p/60155768)
-- [Code for 3rd Place Solution in Face Anti-spoofing Attack Detection Challenge](https://github.com/SoftwareGift/FeatherNets_Face-Anti-spoofing-Attack-Detection-Challenge-CVPR2019)
-- [Code for 2nd Place Solution in Face Anti-spoofing Attack Detection Challenge](https://github.com/SeuTao/CVPR19-Face-Anti-spoofing)
-- [Aurora Guard 预测深度图 + 光验证码](https://zhuanlan.zhihu.com/p/61100492)
-- [基于双目摄像头的传统图像处理方法实现活体检测](https://blog.csdn.net/u011808673/article/details/83029198)
-- [AdaptivePooling与Max/AvgPooling相互转换](https://blog.csdn.net/xiaosongshine/article/details/89453037)
-- [NPU使用示例](http://ai.nationalchip.com/docs/gx8010/npukai-fa-zhi-nan/shi-li.html)
-- [TensorFlow C++ and Python Image Recognition Demo](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/examples/label_image)
-- [Github Tencent/ncnn](https://github.com/Tencent/ncnn)
-mplayer -tv driver=v4l2:width=352:height=288:device=/dev/video0 tv://
-mplayer -tv device=/dev/video0 tv://
-GAP - Global Average Pooling
 
+# 目录
+  <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
 
-```py
-from keras.preprocessing.image import ImageDataGenerator
-# construct the training image generator for data augmentation
-aug = ImageDataGenerator(rotation_range=20, zoom_range=0.15,
-    width_shift_range=0.2, height_shift_range=0.2, shear_range=0.15,
-    horizontal_flip=True, fill_mode="nearest")
+  - [___2019 - 08 - 20 Face Anti Spoofing___](#2019-08-20-face-anti-spoofing)
+  - [目录](#目录)
+  - [链接](#链接)
+  - [活体检测方法](#活体检测方法)
+  - [LBP](#lbp)
+  	- [LBP 算子](#lbp-算子)
+  	- [可见光近红外双目摄像头活体检测步骤](#可见光近红外双目摄像头活体检测步骤)
+  	- [NUAA 数据集加载](#nuaa-数据集加载)
+  	- [skimage 提取 LBP 特征](#skimage-提取-lbp-特征)
+  	- [图像分割](#图像分割)
+  	- [bob pad](#bob-pad)
+  	- [HSV 与 YCbCr 颜色空间下的 LBP](#hsv-与-ycbcr-颜色空间下的-lbp)
+  	- [特征组合与模型选择](#特征组合与模型选择)
+  - [Report](#report)
+  	- [train_test_hsv_uniform](#traintesthsvuniform)
+  	- [train_test_rgb_uniform](#traintestrgbuniform)
+  	- [train_test_ycbcr_uniform](#traintestycbcruniform)
+  	- [train_test_hsv_nri_uniform](#traintesthsvnriuniform)
+  	- [train_test_rgb_nri_uniform](#traintestrgbnriuniform)
+  	- [train_test_ycbcr_nri_uniform](#traintestycbcrnriuniform)
+  	- [Testing](#testing)
+  - [Keras](#keras)
+  	- [awesome face antispoofing](#awesome-face-antispoofing)
+  	- [keras Xception](#keras-xception)
+  	- [Keras 使用 LBP 特征训练 CNN 模型](#keras-使用-lbp-特征训练-cnn-模型)
+  	- [Keras 使用 Sobel 转换后的图像训练模型](#keras-使用-sobel-转换后的图像训练模型)
+  - [其他特征](#其他特征)
+  	- [Face_Liveness_Detection - DoG](#facelivenessdetection-dog)
+  	- [灰度共生矩阵(GLCM)](#灰度共生矩阵glcm)
+  	- [Gaussian](#gaussian)
+  - [数据收集与整理](#数据收集与整理)
 
-model.fit_generator(aug.flow(trainX, trainY, batch_size=BS),
-  	validation_data=(testX, testY), steps_per_epoch=len(trainX) // BS,
-  	epochs=EPOCHS)
-```
-```py
-text_threshold = filters.threshold_local(text,block_size=51, offset=10)
-image_show(text > text_threshold);
-```
+  <!-- /TOC -->
+***
+
+# 链接
+  - [图像特征提取三大法宝：HOG特征，LBP特征，Haar特征](https://www.cnblogs.com/zhehan54/p/6723956.html)
+  - [活体检测Face Anti-spoofing综述](https://zhuanlan.zhihu.com/p/43480539)
+  - [纹理特征提取方法：LBP, 灰度共生矩阵](https://blog.csdn.net/ajianyingxiaoqinghan/article/details/71552744)
+  - [JinghuiZhou/awesome_face_antispoofing](https://github.com/JinghuiZhou/awesome_face_antispoofing)
+  - [基于LBP纹理特征计算GLCM的纹理特征统计量+SVM/RF识别纹理图片](https://blog.csdn.net/lovebyz/article/details/84032927)
+  - [使用深度图像的单目可见光静默活体 Binary or Auxiliary Supervision(1)](https://zhuanlan.zhihu.com/p/60155768)
+  - [Code for 3rd Place Solution in Face Anti-spoofing Attack Detection Challenge](https://github.com/SoftwareGift/FeatherNets_Face-Anti-spoofing-Attack-Detection-Challenge-CVPR2019)
+  - [Code for 2nd Place Solution in Face Anti-spoofing Attack Detection Challenge](https://github.com/SeuTao/CVPR19-Face-Anti-spoofing)
+  - [Aurora Guard 预测深度图 + 光验证码](https://zhuanlan.zhihu.com/p/61100492)
+  - [基于双目摄像头的传统图像处理方法实现活体检测](https://blog.csdn.net/u011808673/article/details/83029198)
+  - [AdaptivePooling与Max/AvgPooling相互转换](https://blog.csdn.net/xiaosongshine/article/details/89453037)
+***
+
 # 活体检测方法
   - **静态方法** 不考虑图像之间的时序关联关系
     - 可以利用纹理信息，如傅里叶频谱分析，利用人脸照片在频域中的高频分量比真人脸要少来区分
@@ -56,7 +75,6 @@ image_show(text > text_threshold);
     - 2014 年 Yang et al 使用 AlexNet 用作特征提取器，最后加上 SVM 做分类器，在 CASIA 和 IDIAP Replay-Attack 两个数据集上的 HTER 均小于 5%
     - 2017 年 Lucena et al 使用迁移学习的思想将 CNN 应用在人脸反欺诈上，首先选择 VGG-16 预训练模型作为基础结构，然后在人脸欺诈数据集上进行微调网络权重，除了移除最后的全连接层和将另两个全连接层的尺寸修改为 256 和 1 将其转换为一个二分类器外，FASNet 和 VGG-16 完全一致，FASNet 在 3DMAD 和 REPLAY-ATTACK 数据集上分别能达到 0.0% 和 1.2% HTER，几乎能达到最好的水平，FASNet 的思路简单，可以很容易的扩展至其他网络结构或结合其他动态特征进行检测等
     - 2016 年发表的 Multi-cues intergration NN方法，在 3DMAD 和 REPLAY-ATTACK 数据集上的 HTER 为 0.0% 和 0.0%，只用了神经网络，还没用到 CNN 和 LSTM 等结构，Mutli-cues 主要包含三个方面的活体特征：shearlet 图像质量特征（SBIQF），脸部运动光流特征以及场景运动光流特征，然后使用神经网络做二分类问题
-
 ***
 
 # LBP
@@ -1405,7 +1423,7 @@ image_show(text > text_threshold);
     class FtrlOptimizer(tensorflow.python.training.optimizer.Optimizer)
      |  FtrlOptimizer(learning_rate, learning_rate_power=-0.5, initial_accumulator_value=0.1, l1_regularization_strength=0.0, l2_regularization_strength=0.0, use_locking=False, name='Ftrl', accum_name=None, linear_name=None, l2_shrinkage_regularization_strength=0.0)
     ```
-  - **keras Xception**
+## keras Xception
     ```py
     tf.enable_eager_execution()
 
@@ -1676,6 +1694,96 @@ image_show(text > text_threshold);
     opt = keras.optimizers.TFOptimizer(tf_opt)
     opt.lr = learning_rate
     ```
+## Keras 使用 Sobel 转换后的图像训练模型
+  ```py
+  import os
+  import skimage
+  import numpy as np
+  img_shape = (224, 224)
+  def read_sobel(ff, img_shape=img_shape):
+      img = skimage.io.imread(ff)
+      img_gray = skimage.color.rgb2gray(img)
+      img_edge = skimage.filters.sobel(img_gray)
+
+      return skimage.transform.resize(img_edge, img_shape)
+
+  def image_collection_by_file(file_name, file_path, limit=None, to_array=True, save_local=True, save_base_path="./Cropped", load_func=read_sobel):
+      with open(file_name, 'r') as ff:
+          aa = ff.readlines()
+      if limit:
+          aa = aa[:limit]
+      image_list = [os.path.join(file_path, ii.strip().replace('\\', '/')) for ii in aa]
+      image_collection = skimage.io.ImageCollection(image_list, load_func=load_func)
+      file_names = np.array(image_collection.files)
+      image_collection = image_collection.concatenate()
+      return image_collection, file_names
+
+  limit = None
+  imposter_train, imposter_train_f = image_collection_by_file("imposter_train_raw.txt", "ImposterRaw", limit=limit, save_base_path="./Cropped/imposter_train")
+  client_train, client_train_f = image_collection_by_file("client_train_raw.txt", "ClientRaw", limit=limit, save_base_path="./Cropped/client_train")
+  imposter_test, imposter_test_f = image_collection_by_file("imposter_test_raw.txt", "ImposterRaw", limit=limit, save_base_path="./Cropped/imposter_test")
+  client_test, client_test_f = image_collection_by_file("client_test_raw.txt", "ClientRaw", limit=limit, save_base_path="./Cropped/client_test")
+
+  train_x = np.concatenate([imposter_train, client_train])
+  train_y = np.array([[0, 1]] * imposter_train.shape[0] + [[1, 0]] * client_train.shape[0])
+  test_x = np.concatenate([imposter_test, client_test])
+  test_y = np.array([[0, 1]] * imposter_test.shape[0] + [[1, 0]] * client_test.shape[0])
+  train_x = np.expand_dims(train_x, -1)
+  test_x = np.expand_dims(test_x, -1)
+  print(train_x.shape, train_y.shape, test_x.shape, test_y.shape)
+
+  np.savez("train_test_sobel_dataset", train_x=train_x, train_y=train_y, test_x=test_x, test_y=test_y)
+  tt = np.load('train_test_sobel_dataset.npz')
+  train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
+
+  from tensorflow import keras
+  config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
+  sess = tf.Session(config=config)
+  keras.backend.set_session(sess)
+
+  from tensorflow.keras import layers
+  model = keras.Sequential([
+      layers.Input(shape=(img_shape[0], img_shape[1], 1)),
+      layers.Conv2D(512, 1, strides=1, padding='same', activation='relu'),
+      layers.AveragePooling2D(pool_size=1),
+      layers.Conv2D(64, 1, strides=1, activation='relu'),
+      layers.AveragePooling2D(pool_size=1),
+      layers.Dropout(0.5),
+      layers.GlobalAveragePooling2D(),
+      layers.Flatten(),
+      layers.Dense(2, activation=tf.nn.softmax)
+  ])
+
+  resnet50 = tf.keras.applications.resnet50.ResNet50(include_top=False, weights='imagenet')
+  resnet50.trainable = True
+
+  model = tf.keras.Sequential([
+      layers.Input(shape=(img_shape[0], img_shape[1], 1)),
+      resnet50,
+      layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)),
+      layers.Dropout(0.5),
+      # layers.AveragePooling2D(pool_size=512, strides=512, padding='same'),
+      layers.GlobalAveragePooling2D(),
+      layers.Flatten(),
+      layers.Dense(2, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001)),        
+  ])
+
+  model.compile(optimizer=keras.optimizers.Adadelta(0.01), loss=keras.losses.categorical_crossentropy, metrics=['accuracy'])
+  callbacks = [
+      keras.callbacks.TensorBoard(log_dir='./logs'),
+      keras.callbacks.ModelCheckpoint("./keras_checkpoints", monitor='val_loss', save_best_only=True),
+      keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
+  ]
+
+  from keras.preprocessing.image import ImageDataGenerator
+  aug = ImageDataGenerator(rotation_range=20, zoom_range=0.15,
+      width_shift_range=0.2, height_shift_range=0.2, brightness_range=(0.1, 2),
+      shear_range=0.15, horizontal_flip=True, fill_mode="nearest")
+
+  model.fit_generator(aug.flow(train_x, train_y, batch_size=8), validation_data=(test_x, test_y), epochs=50, callbacks=callbacks)
+
+  model.fit(train_x, train_y, batch_size=4, epochs=50, callbacks=callbacks, validation_data=(test_x, test_y))
+  ```
 ***
 
 # 其他特征
@@ -1722,50 +1830,51 @@ image_show(text > text_threshold);
   print_metrics(pred, test_y)
   ```
 ## 灰度共生矩阵(GLCM)
-  1. 算法简介
-  灰度共生矩阵法(GLCM， Gray-level co-occurrence matrix)，就是通过计算灰度图像得到它的共生矩阵，然后透过计算该共生矩阵得到矩阵的部分特征值，来分别代表图像的某些纹理特征（纹理的定义仍是难点）。灰度共生矩阵能反映图像灰度关于方向、相邻间隔、变化幅度等综合信息，它是分析图像的局部模式和它们排列规则的基础。
+  - **灰度共生矩阵法 GLCM** Gray-level co-occurrence matrix，通过计算灰度图像得到 **共生矩阵**，然后计算该共生矩阵的 **部分特征值**，分别代表图像的某些 **纹理特征**
+  - **灰度共生矩阵** 能反映图像灰度关于方向 / 相邻间隔 / 变化幅度等综合信息，是分析图像的局部模式和排列规则的基础
+  - **灰度共生矩阵的几个概念**
+    - **方向** 一般计算过程会分别选在几个不同的方向来进行，常规的是水平方向0°，垂直90°，以及45°和135°
+    - **步距d** 中心像元
+    - **灰度共生矩阵的阶数** 与灰度图像灰度值的阶数相同，即当灰度图像灰度值阶数为 N 时，灰度共生矩阵为 `N × N` 的矩阵
+  - **计算过程**
+    - GLCM 将拍摄的图像，定义 **角度** `["0"，"45"，"90"，"135"]` 和 **整数距离d** `[1, 2, 8, 16]`，其中 1 最优
+    - GLCM 的 **轴** 由图像中存在的 **灰度级** 定义，扫描图像的每个像素并将其存储为 **参考像素**，然后将 `参考像素` 与 `距离 d 的像素` 进行比较
+    - 以该 **距离** 为 **角度θ** 远离参考像素，称为 **相邻像素**，每次找到参考值和邻居值对时，GLCM 的相应行和列 **递增1**
+  - **skimage.feature.greycomatrix**
+    ```py
+    greycomatrix(image, distances, angles, levels=None, symmetric=False, normed=False)
+        Calculate the grey-level co-occurrence matrix.
 
-  对于灰度共生矩阵的理解，需要明确几个概念：方向，偏移量和灰度共生矩阵的阶数。
-  • 方向：一般计算过程会分别选在几个不同的方向来进行，常规的是水平方向0°，垂直90°，以及45°和135°；
-  • 步距d：中心像元（在下面的例程中进行说明）；
-  • 灰度共生矩阵的阶数：与灰度图像灰度值的阶数相同，即当灰度图像灰度值阶数为N时，灰度共生矩阵为N × N的矩阵；
-
-  GLCM将拍摄的图像（作为矩阵），定义角度（[“0”，“45”，“90”，“135”]__角度在我这影响不大） 和整数距离d（[1, 2, 8, 16]__‘1’最优）。GLCM的轴由图像中存在的灰度级定义。扫描图像的每个像素并将其存储为“参考像素”。然后将参考像素与距离d的像素进行比较，该距离为角度θ（其中“0”度是右边的像素，“90”是上面的像素）远离参考像素，称为相邻像素。每次找到参考值和邻居值对时，GLCM的相应行和列递增1。
-
-  ```py
-  greycomatrix(image, distances, angles, levels=None, symmetric=False, normed=False)
-      Calculate the grey-level co-occurrence matrix.
-
-      A grey level co-occurrence matrix is a histogram of co-occurring
-      greyscale values at a given offset over an image.
-  ```
-  图像特征值_峰度与偏度
-  Kurtosis(峰度）： 表征概率密度分布曲线在平均值处峰值高低的特征数，是对Sample构成的分布的峰值是否突兀或是平坦的描述。直观看来，峰度反映了峰部的尖度。样本的峰度是和正态分布相比较而言的统计量，计算时间序列x的峰度，峰度用于度量x偏离某分布的情况，正态分布的峰度为3。如果峰度大于3，峰的形状比较尖，比正态分布峰要陡峭。反之亦然; 在统计学中，峰度衡量实数随机变量概率分布的峰态，峰度高就意味着方差增大是由低频度的大于或小于平均值的极端差值引起的。
-  Skewness(偏度)： 是对Sample构成的分布的对称性状况的描述。计算时间序列x的偏度，偏度用于衡量x的对称性。若偏度为负，则x均值左侧的离散度比右侧强；若偏度为正，则x均值左侧的离散度比右侧弱。对于正态分布(或严格对称分布)偏度等于O。
-  YY:（这两个值比较熟悉，以前有个图计算的项目用Spark做，SparkSQL里就有该函数）
-
-  Python的2种参考（计算数据均值、标准差、偏度、峰度）：
-  ```py
-  import numpy as np
-  R = np.array([1， 2， 3， 4， 5， 6]) #初始化一组数据
-  R_mean = np.mean(R) #计算均值
-  R_var = np.var(R)  #计算方差
-  R_sc = np.mean((R - R_mean) ** 3)  #计算偏斜度
-  R_ku = np.mean((R - R_mean) ** 4) / pow(R_var， 2) #计算峰度
-  print([R_mean， R_var， R_sc， R_ku])
+        A grey level co-occurrence matrix is a histogram of co-occurring
+        greyscale values at a given offset over an image.
+    ```
+  - **图像的峰度与偏度特征值**
+    - **峰度 Kurtosis** 表征 **概率密度分布曲线** 在平均值处峰值高低的特征数，是对 Sample 构成的 **分布的峰值** 突兀或是平坦的描述，反映了峰部的尖度
+    - 样本的峰度是和 **正态分布** 相比较而言的统计量，峰度用于度量序列 x偏离某分布的情况，如果峰度大于正态分布的峰度，峰的形状比较尖，比正态分布峰要陡峭，反之亦然
+    - 在统计学中，峰度衡量实数随机变量概率分布的峰态，峰度高就意味着 **方差增大** 是由低频度的大于或小于平均值的 **极端差值** 引起的
+    - **偏度 Skewness** 是对 Sample 构成的分布的 **对称性状况** 的描述
+    - 若偏度为负，则 x **均值左侧的离散度比右侧强**，若偏度为正，则 x **均值左侧的离散度比右侧弱**，若偏度等于O，则 x 为正态分布等 **严格对称分布**
+  - **Python 计算数据均值 / 标准差 / 偏度 / 峰度**
+    ```py
+    import numpy as np
+    R = np.array([1, 2, 3, 4, 5, 6]) #初始化一组数据
+    R_mean = np.mean(R) #计算均值
+    R_var = np.var(R)  #计算方差
+    R_sc = np.mean((R - R_mean) ** 3)  #计算偏斜度
+    R_ku = np.mean((R - R_mean) ** 4) / pow(R_var, 2) #计算峰度
+    print([R_mean, R_var, R_sc, R_ku])
 
 
-  import numpy as np
-  from scipy import stats
-  x = np.random.randn(10000)
-  mu = np.mean(x， axis=0)
-  sigma = np.std(x， axis=0)
-  skew = stats.skew(x)
-  kurtosis = stats.kurtosis(x)
-  ```
-  使用GLCM特征值+SVM对纹理图片分类
-  通过提取灰度直方图的均值、标准差、峰度等统计特性和灰度共生矩阵的能量、相关性、对比度、熵值等如上所属纹理特性，作为 SVM 训练特征，得到 SVM 分类器，即可用于纹理图像的处理。
-  8个类别，图片质量稍低，但也得到了0.8左右的准确率，说明了统计特征的有效性。
+    import numpy as np
+    from scipy import stats
+    x = np.random.randn(10000)
+    mu = np.mean(x, axis=0)
+    sigma = np.std(x, axis=0)
+    skew = stats.skew(x)
+    kurtosis = stats.kurtosis(x)
+    print(mu, sigma, skew, kurtosis)
+    ```
+  - 通过提取灰度直方图的均值 / 标准差 / 峰度等统计特性和灰度共生矩阵的能量 / 相关性 / 对比度 / 熵值等如上所属纹理特性，作为 SVM 训练特征，得到 SVM 分类器，即可用于纹理图像的处理
 ## Gaussian
   ```py
   tt = np.load("~/workspace/datasets/NUAA/train_test_dataset.npz")
@@ -1811,7 +1920,7 @@ image_show(text > text_threshold);
   ```
 ***
 
-# 数据集处理
+# 数据收集与整理
   ```py
   from skimage.io import imread
   import glob2
@@ -1844,515 +1953,4 @@ image_show(text > text_threshold);
   print(train_y_oh.shape, test_y_oh.shape)
   # (2775, 4) (2775, 4)
   ```
-# ImageDataGenerator
-  ```py
-  import numpy as np
-  import matplotlib.pyplot as plt
-  from keras.preprocessing.image import *
-
-  img = np.random.rand(1, 500, 500, 3)
-
-  fig, ax = plt.subplots(1, 5, figsize=(20, 10))
-  ax = ax.ravel()
-  ax[0].imshow(img[0])
-  ax[1].imshow(next(ImageDataGenerator().flow(img))[0])
-  ax[2].imshow(next(ImageDataGenerator(brightness_range=(0., 0.)).flow(img))[0])
-  ax[3].imshow(next(ImageDataGenerator(brightness_range=(1., 1.)).flow(img))[0])
-  ax[4].imshow(next(ImageDataGenerator(brightness_range=(1., 1.)).flow(img))[0] / 255)
-  ```
-  ```py
-  seed = 1
-  from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
-
-  data_gen = ImageDataGenerator(rescale=1./255, validation_split=0.1)
-
-
-  img_gen = data_gen.flow_from_directory('segmentation_dataset/tumorImage/', target_size=(512, 512), batch_size=4,
-                                         class_mode=None, seed=seed, color_mode='grayscale')
-  mask_gen = data_gen.flow_from_directory('segmentation_dataset/maskImage/', target_size=(512, 512), batch_size=4,
-                                         class_mode=None, seed=seed, color_mode='grayscale')
-
-  train_gen = zip(img_gen, mask_gen)
-  ```
-  The keras implementation in TF 1.14 and TF 2.0-RC seems to not recognize zip objects as generators or sequences. I created a bug for the TensorFlow project.
-
-  Workaround for now: Create an inline generator
-  train_gen = (pair for pair in zip(img_gen, mask_gen))
-  ```py
-  data_gen_args = dict(rotation_range=0.2,
-                      width_shift_range=0.05,
-                      height_shift_range=0.05,
-                      shear_range=0.05,
-                      zoom_range=0.05,
-                      horizontal_flip=True,
-                      fill_mode='nearest',
-                      rescale=1./255)
-
-  image_generator = tf.keras.preprocessing.image.ImageDataGenerator(data_gen_args)
-  mask_generator = tf.keras.preprocessing.image.ImageDataGenerator(data_gen_args)
-
-  imageGenerator = image_generator.flow_from_directory('membrane/train',color_mode="grayscale",classes=['image'],class_mode=None,batch_size=5)
-  maskGenerator = mask_generator.flow_from_directory('membrane/train',color_mode="grayscale",classes=['label'],class_mode=None,batch_size=5)
-
-  train_generator = zip(imageGenerator, maskGenerator)
-
-
-  history = model.fit_generator(train_generator,steps_per_epoch=100,epochs=3)
-  ```
-  ```py
-  def my_input_fn(total_items, epochs):
-      dataset = tf.data.Dataset.from_generator(lambda: my_generator(total_items),
-                                               output_types=(tf.float64, tf.int64))
-
-      dataset = dataset.repeat(epochs)
-      dataset = dataset.batch(32)
-      return dataset
-
-  if __name__ == "__main__":
-      tf.enable_eager_execution()
-
-      model = tf.keras.Sequential([tf.keras.layers.Flatten(input_shape=(4, 20, 1)),
-                                   tf.keras.layers.Dense(64, activation=tf.nn.relu),
-                                   tf.keras.layers.Dense(12, activation=tf.nn.softmax)])
-
-      model.compile(optimizer='adam',
-                    loss='categorical_crossentropy',
-                    metrics=['accuracy'])
-
-      total_items = 100
-      batch_size = 32
-      epochs = 10
-      num_batches = int(total_items/batch_size)
-      dataset = my_input_fn(total_items, epochs)
-      model.fit_generator(dataset, epochs=epochs, steps_per_epoch=num_batches)
-  ```
-# Dog Species Classifier
-## Tensorflow 1.14
-  ```py
-  import tensorflow as tf
-  from tensorflow import keras
-  # config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5, allow_growth=True))
-  config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
-  sess = tf.Session(config=config)
-  keras.backend.set_session(sess)
-
-  from tensorflow.python.keras import layers
-  from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
-  from PIL import ImageFile
-  ImageFile.LOAD_TRUNCATED_IMAGES = True
-
-  train_data_gen = ImageDataGenerator(rescale=1./255, rotation_range=20, zoom_range=0.15,
-      width_shift_range=0.2, height_shift_range=0.2, brightness_range=(0.1, 2),
-      shear_range=0.15, horizontal_flip=True, fill_mode="nearest")
-
-  train_img_gen = train_data_gen.flow_from_directory('./dogImages/train/', target_size=(512, 512), batch_size=4, seed=1)
-  val_data_gen = ImageDataGenerator(rescale=1./255)
-  val_img_gen = val_data_gen.flow_from_directory('./dogImages/valid/', target_size=(512, 512), seed=1)
-
-  img_shape = (512, 512, 3)
-  xx = keras.applications.resnet50.ResNet50(include_top=False, weights='imagenet')
-  # xx = keras.applications.vgg19.VGG19(include_top=False, weights='imagenet')
-  xx.trainable = True
-  model = tf.keras.Sequential([
-      layers.Input(shape=img_shape),
-      xx,
-      layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)),
-      # layers.MaxPooling2D(2),
-      layers.Dropout(0.5),
-      # layers.AveragePooling2D(pool_size=512, strides=512, padding='same'),
-      layers.GlobalAveragePooling2D(),
-      layers.Flatten(),
-      layers.Dense(133, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001)),        
-  ])
-  model.summary()
-
-  callbacks = [
-      keras.callbacks.TensorBoard(log_dir='./logs'),
-      keras.callbacks.ModelCheckpoint("./keras_checkpoints", monitor='val_loss', save_best_only=True),
-      keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
-  ]
-  model.compile(optimizer=keras.optimizers.Adadelta(0.1), loss='categorical_crossentropy', metrics=['accuracy'])
-  model.fit_generator(train_img_gen, validation_data=val_img_gen, epochs=50, callbacks=callbacks, verbose=1, workers=10)
-
-  import glob2
-  from skimage.io import imread
-  from skimage.transform import resize
-
-  model = tf.keras.models.load_model('keras_checkpoints')
-  index_2_name = {vv: kk for kk, vv in train_img_gen.class_indices.items()}
-  aa = resize(imread('./dogImages/1806687557.jpg'), (512, 512))
-  pp = model.predict(np.expand_dims(aa, 0))
-  print(index_2_name[pp.argmax()])
-  # 029.Border_collie
-
-  imm = glob2.glob('./dogImages/test/*/*')
-  xx = np.array([resize(imread(ii), (512, 512)) for ii in imm])
-  yy = np.array([int(os.path.basename(os.path.dirname(ii)).split('.')[0]) -1 for ii in imm])
-  pp = model.predict(xx)
-  tt = np.argmax(pp, 1)
-  print((tt == yy).sum() / yy.shape[0])
-  # 0.8588516746411483
-
-  top_3_err = [(np.sort(ii)[-3:], ii.argmax(), imm[id]) for id, (ii, jj) in enumerate(zip(pp, yy)) if jj not in ii.argsort()[-3:]]
-  print(1 - len(top_3_err) / yy.shape[0])
-  # 0.965311004784689
-  ```
-## Tensorflow 2.0
-  ```py
-  import tensorflow as tf
-  gpus = tf.config.experimental.list_physical_devices('GPU')
-  tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
-  tf.config.experimental.set_memory_growth(gpus[0], True)
-  # tf.config.experimental.set_virtual_device_configuration(gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=10240)])
-
-  from tensorflow import keras
-  from tensorflow.python.keras import layers
-  from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
-  from PIL import ImageFile
-
-  ImageFile.LOAD_TRUNCATED_IMAGES = True
-
-  img_shape = (224, 224, 3)
-  train_data_gen = ImageDataGenerator(rescale=1./255, rotation_range=20, zoom_range=0.15,
-      width_shift_range=0.2, height_shift_range=0.2, brightness_range=(0.1, 2),
-      shear_range=0.15, horizontal_flip=True, fill_mode="nearest")
-  train_img_gen = train_data_gen.flow_from_directory('./dogImages/train/', target_size=img_shape[:2], batch_size=4, seed=1)
-  val_data_gen = ImageDataGenerator(rescale=1./255)
-  val_img_gen = val_data_gen.flow_from_directory('./dogImages/valid/', target_size=img_shape[:2], batch_size=4, seed=1)                           
-
-  xx = keras.applications.ResNet50V2(include_top=False, weights='imagenet')
-
-  xx.trainable = True
-  model = tf.keras.Sequential([
-      layers.Input(shape=img_shape),
-      xx,
-      layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)),
-      # layers.MaxPooling2D(2),
-      layers.Dropout(0.5),
-      # layers.AveragePooling2D(pool_size=512, strides=512, padding='same'),
-      layers.GlobalAveragePooling2D(),
-      layers.Flatten(),
-      layers.Dense(133, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001)),                                                                                                                 
-  ])
-  model.summary()
-  callbacks = [
-      keras.callbacks.TensorBoard(log_dir='./logs'),
-      keras.callbacks.ModelCheckpoint("./keras_checkpoints", monitor='val_loss', save_best_only=True),
-      keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
-  ]
-  model.compile(optimizer=keras.optimizers.Adadelta(0.1), loss='categorical_crossentropy', metrics=['accuracy'])
-  model.fit_generator(train_img_gen, validation_data=val_img_gen, epochs=50, callbacks=callbacks, verbose=1, workers=10)
-  ```
-  ```sh
-  toco --saved_model_dir ./keras_checkpoints --output_file foo.tflite
-  ```
-  ```py
-  from tensorflow_model_optimization.sparsity import keras as sparsity
-  batch_size = 4
-  end_step = np.ceil(train_img_gen.classes.shape[0] / batch_size).astype(np.int32) * 55
-  pruning_params = {
-      "pruning_schedule": sparsity.PolynomialDecay(
-          initial_sparsity=0.5,
-          final_sparsity=0.9,
-          begin_step=2000,
-          end_step=end_step,
-          frequency=100)
-  }
-
-  pruned_model = tf.keras.Sequential([
-      layers.Input(shape=img_shape),
-      # sparsity.prune_low_magnitude(keras.applications.ResNet50V2(include_top=False, weights='imagenet'), **pruning_params),
-      keras.applications.ResNet50V2(include_top=False, weights='imagenet'),
-      sparsity.prune_low_magnitude(layers.Conv2D(512, 1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)), **pruning_params),
-      layers.Dropout(0.5),
-      layers.GlobalAveragePooling2D(),
-      layers.Flatten(),
-      sparsity.prune_low_magnitude(layers.Dense(133, activation='softmax', kernel_regularizer=keras.regularizers.l2(0.00001)), **pruning_params)
-  ])
-  ```
-  ```py
-  import glob2
-  from skimage.io import imread
-  from skimage.transform import resize
-  imm = glob2.glob('./dogImages/test/*/*')
-  xx = np.array([resize(imread(ii), (224, 224)) for ii in imm])
-  ixx = tf.convert_to_tensor(xx, dtype='float32')
-  # ixx = tf.convert_to_tensor(xx, dtype=tf.uint8)
-  idd = tf.data.Dataset.from_tensor_slices((ixx)).batch(1)
-
-  def representative_data_gen():
-      for ii in idd.take(100):
-          yield [ii]
-  converter = tf.lite.TFLiteConverter.from_saved_model('./keras_checkpoints/')
-  converter.optimizations = [tf.lite.Optimize.DEFAULT]
-  converter.representative_dataset = representative_data_gen
-  tflite_quant_all_model = converter.convert()
-  ```
-
-```py
-import os
-import skimage
-import numpy as np
-img_shape = (224, 224)
-def read_sobel(ff, img_shape=img_shape):
-    img = skimage.io.imread(ff)
-    img_gray = skimage.color.rgb2gray(img)
-    img_edge = skimage.filters.sobel(img_gray)
-
-    return skimage.transform.resize(img_edge, img_shape)
-
-def image_collection_by_file(file_name, file_path, limit=None, to_array=True, save_local=True, save_base_path="./Cropped", load_func=read_sobel):
-    with open(file_name, 'r') as ff:
-        aa = ff.readlines()
-    if limit:
-        aa = aa[:limit]
-    image_list = [os.path.join(file_path, ii.strip().replace('\\', '/')) for ii in aa]
-    image_collection = skimage.io.ImageCollection(image_list, load_func=load_func)
-    file_names = np.array(image_collection.files)
-    image_collection = image_collection.concatenate()
-    return image_collection, file_names
-
-limit = None
-imposter_train, imposter_train_f = image_collection_by_file("imposter_train_raw.txt", "ImposterRaw", limit=limit, save_base_path="./Cropped/imposter_train")
-client_train, client_train_f = image_collection_by_file("client_train_raw.txt", "ClientRaw", limit=limit, save_base_path="./Cropped/client_train")
-imposter_test, imposter_test_f = image_collection_by_file("imposter_test_raw.txt", "ImposterRaw", limit=limit, save_base_path="./Cropped/imposter_test")
-client_test, client_test_f = image_collection_by_file("client_test_raw.txt", "ClientRaw", limit=limit, save_base_path="./Cropped/client_test")
-
-train_x = np.concatenate([imposter_train, client_train])
-train_y = np.array([[0, 1]] * imposter_train.shape[0] + [[1, 0]] * client_train.shape[0])
-test_x = np.concatenate([imposter_test, client_test])
-test_y = np.array([[0, 1]] * imposter_test.shape[0] + [[1, 0]] * client_test.shape[0])
-train_x = np.expand_dims(train_x, -1)
-test_x = np.expand_dims(test_x, -1)
-print(train_x.shape, train_y.shape, test_x.shape, test_y.shape)
-
-np.savez("train_test_sobel_dataset", train_x=train_x, train_y=train_y, test_x=test_x, test_y=test_y)
-tt = np.load('train_test_sobel_dataset.npz')
-train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
-
-from tensorflow import keras
-config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
-sess = tf.Session(config=config)
-keras.backend.set_session(sess)
-
-from tensorflow.keras import layers
-model = keras.Sequential([
-    layers.Input(shape=(img_shape[0], img_shape[1], 1)),
-    layers.Conv2D(512, 1, strides=1, padding='same', activation='relu'),
-    layers.AveragePooling2D(pool_size=1),
-    layers.Conv2D(64, 1, strides=1, activation='relu'),
-    layers.AveragePooling2D(pool_size=1),
-    layers.Dropout(0.5),
-    layers.GlobalAveragePooling2D(),
-    layers.Flatten(),
-    layers.Dense(2, activation=tf.nn.softmax)
-])
-
-resnet50 = tf.keras.applications.resnet50.ResNet50(include_top=False, weights='imagenet')
-resnet50.trainable = True
-
-model = tf.keras.Sequential([
-    layers.Input(shape=(img_shape[0], img_shape[1], 1)),
-    resnet50,
-    layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)),
-    layers.Dropout(0.5),
-    # layers.AveragePooling2D(pool_size=512, strides=512, padding='same'),
-    layers.GlobalAveragePooling2D(),
-    layers.Flatten(),
-    layers.Dense(2, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001)),        
-])
-
-model.compile(optimizer=keras.optimizers.Adadelta(0.01), loss=keras.losses.categorical_crossentropy, metrics=['accuracy'])
-callbacks = [
-    keras.callbacks.TensorBoard(log_dir='./logs'),
-    keras.callbacks.ModelCheckpoint("./keras_checkpoints", monitor='val_loss', save_best_only=True),
-    keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
-]
-
-from keras.preprocessing.image import ImageDataGenerator
-aug = ImageDataGenerator(rotation_range=20, zoom_range=0.15,
-    width_shift_range=0.2, height_shift_range=0.2, brightness_range=(0.1, 2),
-    shear_range=0.15, horizontal_flip=True, fill_mode="nearest")
-
-model.fit_generator(aug.flow(train_x, train_y, batch_size=8), validation_data=(test_x, test_y), epochs=50, callbacks=callbacks)
-
-model.fit(train_x, train_y, batch_size=4, epochs=50, callbacks=callbacks, validation_data=(test_x, test_y))
-```
-- [Unet Plus Plus with EfficientNet Encoder](https://www.kaggle.com/meaninglesslives/unet-plus-plus-with-efficientnet-encoder)
-- [mask-rcnn with augmentation and multiple masks](https://www.kaggle.com/abhishek/mask-rcnn-with-augmentation-and-multiple-masks)
-- [Xception, InceptionV3 Ensemble methods](https://www.kaggle.com/robhardwick/xception-inceptionv3-ensemble-methods)
-- [find rectangles in image, preferably with skimage](https://stackoverflow.com/questions/36635124/find-rectangles-in-image-preferably-with-skimage)
-- [How to detect simple geometric shapes using OpenCV](https://stackoverflow.com/questions/11424002/how-to-detect-simple-geometric-shapes-using-opencv)
-- [detect rectangle in image and crop](https://stackoverflow.com/questions/45767866/detect-rectangle-in-image-and-crop)
-- [python-opencv2利用cv2.findContours()函数来查找检测物体的轮廓](https://blog.csdn.net/hjxu2016/article/details/77833336)
-```c
-#include <cstdio>
-#include "tensorflow/lite/interpreter.h"
-#include "tensorflow/lite/kernels/register.h"
-#include "tensorflow/lite/model.h"
-#include "tensorflow/lite/optional_debug_tools.h"
-
-using namespace tflite;
-
-#define TFLITE_MINIMAL_CHECK(x)                              \
-  if (!(x)) {                                                \
-    fprintf(stderr, "Error at %s:%d\n", __FILE__, __LINE__); \
-    exit(1);                                                 \
-  }
-
-int main(int argc, char* argv[]) {
-  if (argc != 2) {
-    fprintf(stderr, "minimal <tflite model>\n");
-    return 1;
-  }
-  const char* filename = argv[1];
-
-  // Load model
-  std::unique_ptr<tflite::FlatBufferModel> model =
-      tflite::FlatBufferModel::BuildFromFile(filename);
-  TFLITE_MINIMAL_CHECK(model != nullptr);
-
-  // Build the interpreter
-  tflite::ops::builtin::BuiltinOpResolver resolver;
-  InterpreterBuilder builder(* model, resolver);
-  std::unique_ptr<Interpreter> interpreter;
-  builder(&interpreter);
-  TFLITE_MINIMAL_CHECK(interpreter != nullptr);
-
-  // Allocate tensor buffers.
-  TFLITE_MINIMAL_CHECK(interpreter->AllocateTensors() == kTfLiteOk);
-  printf("=== Pre-invoke Interpreter State ===\n");
-  tflite::PrintInterpreterState(interpreter.get());
-
-  // Fill input buffers
-  // TODO(user): Insert code to fill input tensors
-
-  // Run inference
-  TFLITE_MINIMAL_CHECK(interpreter->Invoke() == kTfLiteOk);
-  printf("\n\n=== Post-invoke Interpreter State ===\n");
-  tflite::PrintInterpreterState(interpreter.get());
-
-  // Read output buffers
-  // TODO(user): Insert getting data out code.
-
-  return 0;
-}
-```
-## inspect_checkpoint
-  ```py
-  检查某个检查点中的变量
-  我们可以使用 inspect_checkpoint 库快速检查某个检查点中的变量。
-
-  继续前面所示的保存/恢复示例：
-
-  # import the inspect_checkpoint library
-  from tensorflow.python.tools import inspect_checkpoint as chkp
-
-  # print all tensors in checkpoint file
-  chkp.print_tensors_in_checkpoint_file("/tmp/model.ckpt", tensor_name='', all_tensors=True)
-
-  # tensor_name:  v1
-  # [ 1.  1.  1.]
-  # tensor_name:  v2
-  # [-1. -1. -1. -1. -1.]
-
-  # print only tensor v1 in checkpoint file
-  chkp.print_tensors_in_checkpoint_file("/tmp/model.ckpt", tensor_name='v1', all_tensors=False)
-
-  # tensor_name:  v1
-  # [ 1.  1.  1.]
-
-  # print only tensor v2 in checkpoint file
-  chkp.print_tensors_in_checkpoint_file("/tmp/model.ckpt", tensor_name='v2', all_tensors=False)
-
-  # tensor_name:  v2
-  # [-1. -1. -1. -1. -1.]
-  ```
-## insightface
-  ```py
-  sess = tf.InteractiveSession()
-  meta_graph_def = tf.saved_model.loader.load(sess, ["serve"], "./")
-  print(meta_graph_def.signature_def)
-
-  x = sess.graph.get_tensor_by_name("data:0")
-  y = sess.graph.get_tensor_by_name("fc1/add_1:0")
-
-  from mtcnn.mtcnn import MTCNN
-  from skimage.transform import resize
-
-  img = plt.imread('./3.jpg')
-  detector = MTCNN(steps_threshold=[0.6, 0.7, 0.7])
-  ret = detector.detect_faces(img)
-
-  bb = ret[0]['box']
-  frame = img[bb[0]:bb[0] + bb[2], bb[1]:bb[1] + bb[3]]
-  frame = resize(frame, (112, 112))
-
-  frame = frame[np.newaxis, :, :, :]
-  rr = sess.run(y, feed_dict={x: frame})
-  ```
-## keras session
-  ```py
-  import keras.backend.tensorflow_backend as KTF
-  import tensorflow as tf
-  config = tf.ConfigProto()
-  config.gpu_options.allow_growth=True   
-  sess = tf.Session(config=config)
-
-  KTF.set_session(sess)
-  ```
-```py
-from skimage.io import imread
-import glob2
-
-iaa = glob2.glob('test_images/*')
-ibb = [ii.replace('test_images', 'test_results').replace('.jpg', '.png') for ii in iaa]
-icc = [imread(ii) for ii in iaa]
-idd = [imread(ii) for ii in ibb]
-iee = [((ii > 127) * 255).astype(uint8) for ii in idd]
-
-fig, axes = plt.subplots(3, 3)
-axes = axes.flatten()
-for ax, ii, cc in zip(axes, icc, iee):
-    ax.imshow(ii)
-    ax.contour(cc[:, :, 0], colors=['r'])
-    ax.set_axis_off()
-fig.tight_layout()
-```
-
-```sh
-cd local_bin/
-wget https://sdk.lunarg.com/sdk/download/1.1.126.0/linux/vulkansdk-linux-x86_64-1.1.126.0.tar.gz?Human=true -O vulkansdk-linux-x86_64-1.1.126.0.tar.gz
-tar xvf vulkansdk-linux-x86_64-1.1.126.0.tar.gz
-export VULKAN_SDK=`pwd`/1.1.126.0/x86_64
-cd workspace/ncnn
-
-cd build-android-armv7/
-rm ./* -rf
-cmake -DCMAKE_TOOLCHAIN_FILE=/home/leondgarse/Android/Sdk/ndk/20.0.5594570/build/cmake/android.toolchain.cmake -DANDROID_ABI="armeabi-v7a" -DANDROID_ARM_NEON=ON -DANDROID_PLATFORM=android-24 -DNCNN_VULKAN=ON ..
-make -j4
-make install
-
-cd ../build-android-aarch64/
-cmake -DCMAKE_TOOLCHAIN_FILE=/home/leondgarse/Android/Sdk/ndk/20.0.5594570/build/cmake/android.toolchain.cmake -DANDROID_ABI="arm64-v8a" -DANDROID_PLATFORM=android-24 -DNCNN_VULKAN=ON ..
-make -j4
-make install
-
-cd ../ncnn-android-vulkan-lib
-rm include/ arm64-v8a/libncnn.a armeabi-v7a/libncnn.a -rf
-cd ..
-
-cp build-android-aarch64/install/include/ ncnn-android-vulkan-lib/ -r
-cp build-android-armv7/install/lib/libncnn.a ncnn-android-vulkan-lib/armeabi-v7a/
-cp build-android-aarch64/install/lib/libncnn.a ncnn-android-vulkan-lib/arm64-v8a/
-rm ../ncnn-android-squeezenet/app/src/main/jni/ncnn-android-vulkan-lib -r
-cp ncnn-android-vulkan-lib/ ../ncnn-android-squeezenet/app/src/main/jni/ -r
-```
-```sh
-adb shell stop
-adb shell setprop log.redirect-stdio true
-adb shell start
-
-mv /dev/null /dev/null.bak
-touch /dev/null
-```
+***

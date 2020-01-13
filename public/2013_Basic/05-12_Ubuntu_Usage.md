@@ -1674,6 +1674,11 @@
     - **Firefox** [baidu-pan-exporter 插件](https://addons.mozilla.org/en-US/firefox/addon/baidu-pan-exporter/?src=search)
     - **Chrome** 可以 clone 源码，通过 Chrome -> `chrome://extensions/` -> `Load unpacked` -> 选择 `chrome/release` 文件夹
     - 安装插件后在浏览器中选择百度云文件后，会出现 `导出下载` 按钮，可以选择使用 `ARIA2 RPC` / `文本导出` / `设置`
+## mplayer 视频流
+  ```sh
+  mplayer -tv driver=v4l2:width=352:height=288:device=/dev/video0 tv://
+  mplayer -tv device=/dev/video0 tv://
+  ```
 ***
 
 # 系统备份恢复
@@ -1928,46 +1933,30 @@
     - shutter edit
 ***
 
-```sh
-6 如何把当前使用的系统做成 Live 系统
+# 制作 ISO 文件
+  ```sh
+  # ubuntu-14.04.4-server-i386.iso 服务器版 制作过程
+  unzip lub.zip
 
-(1) 安装 lupin-casper： sudo apt-get install lupin-casper ；
-(2) 用 UCloner 备份当前系统，文件名后缀必须为 .squashfs （默认即是）；
-(3) 在任意 fat/ntfs/ext 分区根目录创建一个名为 casper 的目录（注意，其它分区不可再有同名目录）；
-(4) 将系统备份文件拷贝到 casper 目录；
-(5) 到 /boot 中将当前使用的内核和 initrd 文件也拷贝到 casper 目录（可用 echo initrd.img-`uname -r` vmlinuz-`uname -r` 来查看文件名）；
-(6) 建立启动项。以 grub4dos 为例：
+  ./lub  -b
+  apt-get install lupin-casper
+  mkdir /home/jxg
+  mkdir /home/jxg/mnt
+  mount -o loop /home/uftp/ubuntu-14.04.4-server-i386.iso /home/jxg/mnt/
+  mkdir /home/jxg/livecd
+  rsync  --exclude= /home/jxg/mnt/install/filesystem.squashfs -a /home/jxg/mnt/ /home/jxg/livecd/
+  cp /home/root/backup2016.05.03.squashfs /home/jxg/livecd/install/filesystem.squashfs
+  dpkg -l | grep ii | awk '{print $2,$3}' > /home/jxg/livecd/casper/filesystem.manifest
+  dpkg -l | grep ii | awk '{print $2,$3}' > /home/jxg/livecd/install/filesystem.manifest
+  cd ../jxg/livecd/
+  ls
+  rm md5sum.txt
+  find -type f -print0 | sudo xargs -0 md5sum | grep -v ./isolinux/ | grep -v ./md5sum.txt | sudo tee md5sum.txt
+  apt-get install mkisofs
+  mkisofs -D -r -V "$IMAGE_NAME" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ../ubuntu-jxg-test.iso .
 
-title Live Ubuntu
-find --set-root /casper/内核文件名
-kernel /casper/内核文件名 boot=casper ro ignore_uuid
-initrd /casper/initrd文件名
-
- 将其中的 “内核文件名” 和 “initrd文件名” 用相应的文件名替换。
-```
-```sh
-# ubuntu-14.04.4-server-i386.iso 服务器版 制作过程
-unzip lub.zip
-
-./lub  -b
-apt-get install lupin-casper
-mkdir /home/jxg
-mkdir /home/jxg/mnt
-mount -o loop /home/uftp/ubuntu-14.04.4-server-i386.iso /home/jxg/mnt/
-mkdir /home/jxg/livecd
-rsync  --exclude= /home/jxg/mnt/install/filesystem.squashfs -a /home/jxg/mnt/ /home/jxg/livecd/
-cp /home/root/backup2016.05.03.squashfs /home/jxg/livecd/install/filesystem.squashfs
-dpkg -l | grep ii | awk '{print $2,$3}' > /home/jxg/livecd/casper/filesystem.manifest
-dpkg -l | grep ii | awk '{print $2,$3}' > /home/jxg/livecd/install/filesystem.manifest
-cd ../jxg/livecd/
-ls
-rm md5sum.txt
-find -type f -print0 | sudo xargs -0 md5sum | grep -v ./isolinux/ | grep -v ./md5sum.txt | sudo tee md5sum.txt
-apt-get install mkisofs
-mkisofs -D -r -V "$IMAGE_NAME" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ../ubuntu-jxg-test.iso .
-
-mkisofs -D -r -V "ubuntu-16.04.2-server-amd64.iso" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o "../RDCloudInstallOS.iso" .
-```
-```sh
-mkisofs -D -r -V "ubuntu-18.04-desktop-x86_64.iso" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -allow-limited-size -o "../test.iso" .
-```
+  mkisofs -D -r -V "ubuntu-16.04.2-server-amd64.iso" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o "../RDCloudInstallOS.iso" .
+  ```
+  ```sh
+  mkisofs -D -r -V "ubuntu-18.04-desktop-x86_64.iso" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -allow-limited-size -o "../test.iso" .
+  ```

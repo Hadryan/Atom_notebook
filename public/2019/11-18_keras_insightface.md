@@ -1,232 +1,51 @@
-什么是fine-tuning？
-  在实践中，由于数据集不够大，很少有人从头开始训练网络。常见的做法是使用预训练的网络（例如在ImageNet上训练的分类1000类的网络）来重新fine-tuning（也叫微调），或者当做特征提取器。
-  以下是常见的两类迁移学习场景：
-1 卷积网络当做特征提取器。使用在ImageNet上预训练的网络，去掉最后的全连接层，剩余部分当做特征提取器（例如AlexNet在最后分类器前，是4096维的特征向量）。这样提取的特征叫做CNN codes。得到这样的特征后，可以使用线性分类器（Liner SVM、Softmax等）来分类图像。
-2 Fine-tuning卷积网络。替换掉网络的输入层（数据），使用新的数据继续训练。Fine-tune时可以选择fine-tune全部层或部分层。通常，前面的层提取的是图像的通用特征（generic features）（例如边缘检测，色彩检测），这些特征对许多任务都有用。后面的层提取的是与特定类别有关的特征，因此fine-tune时常常只需要Fine-tuning后面的层。
- 
-预训练模型
-在ImageNet上训练一个网络，即使使用多GPU也要花费很长时间。因此人们通常共享他们预训练好的网络，这样有利于其他人再去使用。例如，Caffe有预训练好的网络地址Model Zoo。
+# ___2019 - 11 - 18 Keras Insightface___
+***
 
-  何时以及如何Fine-tune
-决定如何使用迁移学习的因素有很多，这是最重要的只有两个：新数据集的大小、以及新数据和原数据集的相似程度。有一点一定记住：网络前几层学到的是通用特征，后面几层学到的是与类别相关的特征。这里有使用的四个场景：
-1、新数据集比较小且和原数据集相似。因为新数据集比较小，如果fine-tune可能会过拟合；又因为新旧数据集类似，我们期望他们高层特征类似，可以使用预训练网络当做特征提取器，用提取的特征训练线性分类器。
-2、新数据集大且和原数据集相似。因为新数据集足够大，可以fine-tune整个网络。
-3、新数据集小且和原数据集不相似。新数据集小，最好不要fine-tune，和原数据集不类似，最好也不使用高层特征。这时可是使用前面层的特征来训练SVM分类器。
-4、新数据集大且和原数据集不相似。因为新数据集足够大，可以重新训练。但是实践中fine-tune预训练模型还是有益的。新数据集足够大，可以fine-tine整个网络。
- 
-实践建议
-预训练模型的限制。使用预训练模型，受限于其网络架构。例如，你不能随意从预训练模型取出卷积层。但是因为参数共享，可以输入任意大小图像；卷积层和池化层对输入数据大小没有要求（只要步长stride fit），其输出大小和属于大小相关；全连接层对输入大小没有要求，输出大小固定。
-学习率。与重新训练相比，fine-tune要使用更小的学习率。因为训练好的网络模型权重已经平滑，我们不希望太快扭曲（distort）它们（尤其是当随机初始化线性分类器来分类预训练模型提取的特征时）。
+# 目录
+  <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
 
-```py
-CUDA_VISIBLE_DEVICES='0,1,2,3' python -u train_softmax.py
---network r100
---loss-type 4
---margin-m 0.5
---prefix ../model-r100
---pretrained '../model-r100, 287' > ../model-r100.log 2>&1 &
+  - [___2019 - 11 - 18 Keras Insightface___](#2019-11-18-keras-insightface)
+  - [目录](#目录)
+  - [Fine tune](#fine-tune)
+  - [人脸识别损失函数](#人脸识别损失函数)
+  - [ImageDataGenerator](#imagedatagenerator)
+  - [训练模型拟合 embeddings](#训练模型拟合-embeddings)
+  	- [First try](#first-try)
+  	- [数据处理](#数据处理)
+  	- [模型训练](#模型训练)
+  	- [模型测试](#模型测试)
+  - [Keras Insightface](#keras-insightface)
+  	- [tf-insightface train](#tf-insightface-train)
+  	- [MXnet record to folder](#mxnet-record-to-folder)
+  	- [Loading data by ImageDataGenerator](#loading-data-by-imagedatagenerator)
+  	- [Loading data by Datasets](#loading-data-by-datasets)
+  	- [Evaluate](#evaluate)
+  	- [Basic model](#basic-model)
+  	- [Gently stop fit callbacks](#gently-stop-fit-callbacks)
+  	- [Softmax train](#softmax-train)
+  	- [Arcface loss](#arcface-loss)
+  	- [Arcface loss 3](#arcface-loss-3)
+  	- [Arcface loss 4](#arcface-loss-4)
+  	- [Center loss](#center-loss)
+  	- [Offline Triplet loss train SUB](#offline-triplet-loss-train-sub)
+  	- [Online Triplet loss train](#online-triplet-loss-train)
+  	- [TF 通用函数](#tf-通用函数)
+  	- [模型测试](#模型测试)
+  - [人脸旋转角度与侧脸](#人脸旋转角度与侧脸)
+  - [人脸跟踪](#人脸跟踪)
+  - [ncnn](#ncnn)
 
-I use ArchLoss
-Have to discard the weight of fc7 layer, as the number of output is not the same.
-@myfighterforever Use deploy/model_slim.py. As is named, this script can slim model. Just in case you need it still.
-```
-```py
-finetune_lr = {k: 0 for k in arg_params}
-for key in aux_params:
-finetune_lr[key]=0
-opt.set_lr_mult(finetune_lr)
-#print(aux_params['fc7_weight'])
-#print(arg_params.keys())
+  <!-- /TOC -->
+***
 
-model.fit(train_dataiter,
-    begin_epoch        = begin_epoch,
-    num_epoch          = 1,
-    eval_data          = val_dataiter,
-    eval_metric        = eval_metrics,
-    kvstore            = args.kvstore,
-    optimizer          = opt,
-    #optimizer_params   = optimizer_params,
-    initializer        = initializer,
-    arg_params         = arg_params,
-    aux_params         = aux_params,
-    allow_missing      = True,
-    batch_end_callback = _batch_callback,
-    epoch_end_callback = epoch_cb )
-for key in finetune_lr:
-    finetune_lr[key]=args.lr
-opt.set_lr_mult(finetune_lr)
-print('start train the structure')
-model.fit(train_dataiter,
-          begin_epoch=1,
-          num_epoch=100,
-          eval_data=val_dataiter,
-          eval_metric=eval_metrics,
-          kvstore=args.kvstore,
-          optimizer=opt,
-          # optimizer_params   = optimizer_params,
-          initializer=initializer,
-          arg_params=arg_params,
-          aux_params=aux_params,
-          allow_missing=True,
-          batch_end_callback=_batch_callback,
-          epoch_end_callback=epoch_cb)
-like this
-```
-```py
-Delete fc7 weight by calling deploy/model_slim.py
-python model_slim.py --model ../models/model-r34-amf/model,0
-```
-```py
-I use the pretrained model https://github.com/deepinsight/insightface/wiki/Model-Zoo#31-lresnet100e-irarcfacems1m-refine-v2 to finetune on the same ms1m-refine-v2 dataset(https://github.com/deepinsight/insightface/wiki/Dataset-Zoo#ms1m-refine-v2recommended)
-The accuracy start from 0, is this normal?
-The command line is as follows
+# Fine tune
+  - **fine-tuning** 在实践中，由于数据集不够大，很少会从头开始训练网络，常见的做法是使用预训练的网络来重新 **微调 fine-tuning**，或当做特征提取器
+    - 卷积网络当做 **特征提取器**，使用在 ImageNet 上预训练的网络，去掉最后的全连接层，剩余部分当做特征提取器，得到特征后可以使用线性分类器 Liner SVM / Softmax 等来分类图像
+    - **Fine-tuning 卷积网络** 替换掉网络的输入层，使用新的数据继续训练，可以选择 fine-tune 全部层或部分层，通常前面的层提取的是图像的 **通用特征 generic features**，如边缘 / 色彩特征，后面的层提取的是与特定类别有关的特征，因此常常只需要 fine-tuning 后面的层
+    - 一般如果新数据集比较小且和原数据集相似，可以使用预训练网络当做特征提取器，用提取的特征训练线性分类器，如果新数据集足够大，可以 fine-tune 整个网络
+    - 与重新训练相比，fine-tune 要使用 **更小的学习率**，因为训练好的网络模型权重已经平滑，不希望太快扭曲 distort 它们
+***
 
-CUDA_VISIBLE_DEVICES='0,1,2,3' python -u train_softmax.py --network r100 --loss-type 4 --margin-m 0.5 --data-dir ../datasets/faces_emore  --prefix ../model-r100 --per-batch-size 64  --pretrained ../pre_trained_models/model-r100-ii/model,0
-
-Try decreasing learning rate and also it is not recommended to fine-tune the same dataset.
-```
-```py
-Hi
-I want to finetune your pretrained model (r50) with embedding size 128. Starting point is your train_softmax.py:
-CUDA_VISIBLE_DEVICES='0' python -u train_softmax.py --emb-size=128 --pretrained '../models/model-r50-am-lfw/model,0' --network r50 --loss-type 0 --margin-m 0.5 --data-dir ../datasets/faces_ms1m_112x112 --prefix ../models/model-r50-am-lfw/
-
-this results in:
-mxnet.base.MXNetError: [08:51:39] src/operator/nn/../tensor/../elemwise_op_common.h:123: Check failed: assign(&dattr, (*vec)[i]) Incompatible attr in node at 0-th output: expected [512], got [128]
-
-I have tried to remove the last fc layer (fc1), then add fc7 as done in your code, then freeze all layers except fc7. Still the dimensions don't match.
-
-Any advise on how to do this? Thanks.
-
-Embedding layer(fc1) is not the last FC layer, but fc7(embedding to number of classes) is. You should train from scratch with different embedding size
-
-train fc1 and fc7 from scratch
-
-I had figured out the same as @zhaowwenzhong and managed to finetune the model by replacing the last two fully connected layers fc1 and fc7 and freezing all others.
-
-@nttstar I want to train from scratch with different embedding size.
-1、_weight = mx.symbol.Variable("fc7_weight", shape=(args.num_classes, args.emb_size), lr_mult=1.0, wd_mult=args.fc7_wd_mult)
-change to ---->>>_weight = mx.symbol.Variable("fc7_weight_finetune", init = mx.init.Xavier(rnd_type='gaussian', factor_type="out", magnitude=2),shape=(args.num_classes, args.emb_size), lr_mult=1.0, wd_mult=args.fc7_wd_mult)
-
-2、fc7 = mx.sym.FullyConnected(data=nembedding, weight = _weight, no_bias = True, num_hidden=args.num_classes, name='fc7')
-change to --->> >fc7 = mx.sym.FullyConnected(data=nembedding, weight = _weight, no_bias = True, num_hidden=args.num_classes, name='fc7_finetune')
-```
-```py
-Appreciate for you goog work! first I train on ms1m dataset until acc is 90% on train dataset. then I wan to finetune on my own data. I have make the *.rec and *.idx. but when I begun to finetune, the program load the pr-trained model, and crash. warning that the number of my dataset classes is not equeal to the ms1m. it seems we should freezen the FC layer.
-
-is your code offer the function of finetuneing?
-
-CUDA_VISIBLE_DEVICES='0,1,2,3' python -u train_softmax.py
---network r100
---loss-type 4
---margin-m 0.5
---prefix ../model-r100
---pretrained '../model-r100, 287' > ../model-r100.log 2>&1 &
-
-I use ArchLoss
-
-Have to discard the weight of fc7 layer, as the number of output is not the same.
-
-@myfighterforever Use deploy/model_slim.py. As is named, this script can slim model.
-Just in case you need it still.
-```
-```py
-Hi, I also encountered the same problem. And I find solution here #569 .
-
-Check config.ckpt_embedding in your config.py, it's True as default.
-If config.ckpt_embedding is set to True, the checkpoint only save the model until embedding layer. The other weights are lost such as fc7_weight. This led to the low accuracy when fine-tuning.
-
-The conclusion is, if I want to train A model from scratch and take A as a pretrained model for training B model, config.ckpt_embedding should be set to False while training A and be set to True while training B. (If B model is final model I need.)
-```
-```sh
-export MXNET_ENABLE_GPU_P2P=0
-CUDA_VISIBLE_DEVICES='0,1' python -u train_parall.py --network m1 --loss arcface --dataset emore --per-batch-size 96
-CUDA_VISIBLE_DEVICES='0,1' python -u train.py --network m1 --loss arcface --dataset emore --per-batch-size 96 --pretrained ./models/m1-arcface-emore/model --lr 0.0001
-CUDA_VISIBLE_DEVICES='' python -u train.py --network m1 --loss triplet --dataset emore --per-batch-size 120 --pretrained ~/workspace/samba/m1-arcface-emore/model --lr 0.0001 --verbose 400 --lr-steps '10000,16000,22000'
-CUDA_VISIBLE_DEVICES='1' python -u train.py --network m1 --loss triplet --dataset emore --per-batch-size 150 --pretrained ./models/m1-triplet-emore_97083/model --lr 0.0001 --lr-steps '1000,100000,160000,220000,280000,340000'
-CUDA_VISIBLE_DEVICES='0' python -u train.py --network m1 --loss triplet --dataset glint --per-batch-size 150 --pretrained ./models/m1-triplet-emore_290445/model --pretrained-epoch 602 --lr 0.0001 --lr-steps '1000,100000,160000,220000,280000,340000'
-
-CUDA_VISIBLE_DEVICES='0,1' python3 -u train_parall.py --network vargfacenet --loss softmax --dataset emore --per-batch-size 96
-CUDA_VISIBLE_DEVICES='1' python3 -u train.py --network vargfacenet --loss arcface --dataset glint --per-batch-size 150 --pretrained ./model
-s/vargfacenet-softmax-emore/model --pretrained-epoch 166 --lr 0.0001 --lr-steps '100000,160000,220000,280000,340000'
-
-```
-# save and restore Tensorflow models
-  - [A quick complete tutorial to save and restore Tensorflow models](https://cv-tricks.com/tensorflow-tutorial/save-restore-tensorflow-models-quick-complete-tutorial/)
-  ```py
-  oring model and retraining with your own dataPython
-
-  import tensorflow as tf
-
-  sess=tf.Session()    
-  #First let's load meta graph and restore weights
-  saver = tf.train.import_meta_graph('my_test_model-1000.meta')
-  saver.restore(sess,tf.train.latest_checkpoint('./'))
-
-
-  # Now, let's access and create placeholders variables and
-  # create feed-dict to feed new data
-
-  graph = tf.get_default_graph()
-  w1 = graph.get_tensor_by_name("w1:0")
-  w2 = graph.get_tensor_by_name("w2:0")
-  feed_dict ={w1:13.0,w2:17.0}
-
-  #Now, access the op that you want to run.
-  op_to_restore = graph.get_tensor_by_name("op_to_restore:0")
-
-  print sess.run(op_to_restore,feed_dict)
-  #This will print 60 which is calculated
-  #using new values of w1 and w2 and saved value of b1.
-  ```
-  ```py
-  import tensorflow as tf
-
-  sess=tf.Session()    
-  #First let's load meta graph and restore weights
-  saver = tf.train.import_meta_graph('my_test_model-1000.meta')
-  saver.restore(sess,tf.train.latest_checkpoint('./'))
-
-
-  # Now, let's access and create placeholders variables and
-  # create feed-dict to feed new data
-
-  graph = tf.get_default_graph()
-  w1 = graph.get_tensor_by_name("w1:0")
-  w2 = graph.get_tensor_by_name("w2:0")
-  feed_dict ={w1:13.0,w2:17.0}
-
-  #Now, access the op that you want to run.
-  op_to_restore = graph.get_tensor_by_name("op_to_restore:0")
-
-  #Add more to the current graph
-  add_on_op = tf.multiply(op_to_restore,2)
-
-  print sess.run(add_on_op,feed_dict)
-  #This will print 120.
-  ```
-  ```py
-  ......
-  ......
-  saver = tf.train.import_meta_graph('vgg.meta')
-  # Access the graph
-  graph = tf.get_default_graph()
-  ## Prepare the feed_dict for feeding data for fine-tuning
-
-  #Access the appropriate output for fine-tuning
-  fc7= graph.get_tensor_by_name('fc7:0')
-
-  #use this if you only want to change gradients of the last layer
-  fc7 = tf.stop_gradient(fc7) # It's an identity function
-  fc7_shape= fc7.get_shape().as_list()
-
-  new_outputs=2
-  weights = tf.Variable(tf.truncated_normal([fc7_shape[3], num_outputs], stddev=0.05))
-  biases = tf.Variable(tf.constant(0.05, shape=[num_outputs]))
-  output = tf.matmul(fc7, weights) + biases
-  pred = tf.nn.softmax(output)
-
-  # Now, you run this with fine-tuning data in sess.run()
-  ```
 # 人脸识别损失函数
   - 人脸识别模型训练的损失函数主要分为 **基于分类 softmax 的损失函数** 和 **基于 triplet loss 的损失函数** 两大类
     - **基于分类 softmax 的损失函数** 因为是否对 embedding 或分类权重 W 做归一化以及是否增加额外的间隔 margin 等产生了多种变体
@@ -257,333 +76,362 @@ s/vargfacenet-softmax-emore/model --pretrained-epoch 166 --lr 0.0001 --lr-steps 
     - Triplet Loss 直接对样本表示间的距离进行优化，在训练数据足够多，模型表示能力足够强的情况下，能够学得很好的结果
     - 其缺点是，一方面训练时模型收敛速度较慢，另一方面在构造triplet时需要选择合适的正样本对和负样本对，因此需要设计 triplet 的构造选择机制，这一过程通常比较复杂
     - 较好的训练方式是先用分类损失训练模型，然后再用 Triplet Loss 对模型进行 finetune 以进一步提升模型性能
-# 计算点集中的矩形面积
-  ```py
-  def cal_rectangle_areas(aa):
-      ''' 每个 x 坐标对应的所有 y 值 '''
-      xxs = {}
-      for ixx, iyy in aa:
-          tt = xxs.get(ixx, set())
-          tt.add(iyy)
-          xxs[ixx] = tt
-      print(xxs)
-      # {1: [1, 3], 4: [1], 2: [2, 3], 3: [2, 3], 5: [2, 3]}
-
-      ''' 遍历 xxs，对于每个 x 值，在所有其他 x 值对应的 y 值集合上，查找交集 '''
-      rect = []
-      areas = []
-      while len(xxs) != 0:
-          xa, ya = xxs.popitem()
-          if len(ya) < 2:
-              continue
-          for xb, yb in xxs.items():
-              width = abs(xb - xa)
-              tt = list(ya.intersection(yb))
-              while len(tt) > 1:
-                  rect.extend([((xa, xb), (tt[0], ii)) for ii in tt[1:]])
-                  areas.extend([width * abs(tt[0] - ii) for ii in tt[1:]])
-                  tt = tt[1:]
-
-      print(rect, areas)
-      # [((5, 2), (2, 3)), ((5, 3), (2, 3)), ((3, 2), (2, 3))] [3, 2, 1]
-      return rect, areas
-
-  def draw_rectangles(dots, coords, labels, alpha=0.3):
-      colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w'] * 8
-      fig, axes = plt.subplots(1, 1)
-      axes.scatter(dots[:, 0], dots[:, 1])
-      for (xx, yy), label, cc in zip(coords, labels, colors):
-          axes.plot([xx[0], xx[1], xx[1], xx[0], xx[0]], [yy[0], yy[0], yy[1], yy[1], yy[0]], color=cc, label=label)
-          rect = plt.Rectangle((xx[0], yy[0]), xx[1] - xx[0], yy[1] - yy[0], color=cc, alpha=alpha)
-          axes.add_patch(rect)
-      axes.legend()
-      fig.tight_layout()
-
-  aa = np.array([[1, 1], [4, 1], [2, 2], [3, 2], [5, 2], [1, 3], [2, 3], [3, 3], [5, 3]])
-  plt.scatter(aa[:, 0], aa[:, 1])
-  rect, areas = cal_rectangle_areas(aa)
-  draw_rectangles(aa, rect, areas)
-
-  bb = aa[:, ::-1]
-  rect, areas = cal_rectangle_areas(bb)
-  draw_rectangles(bb, rect, areas)
-
-  xx = np.random.randint(1, 50, 100)
-  yy = np.random.randint(1, 50, 100)
-  aa = np.array(list(zip(xx, yy)))
-  rect, areas = cal_rectangle_areas(aa)
-  draw_rectangles(aa, rect, areas)
-  ```
-  ![](images/calc_rectangle_area.png)
 ***
-后台管理系统 http://47.103.82.71:38838/admin/login
-人脸注册 http://47.103.82.71:38838/faceRecognize/registerFace
-人脸检测 http://47.103.82.71:38838/faceRecognize/detectFace
-人脸删除 http://47.103.82.71:38838/faceRecognize/deleteFace
 
-```py
-loaded = tf.saved_model.load('models_resnet')
-interf = loaded.signatures['serving_default']
-teacher_model_interf = lambda images: interf(images)['output'].numpy()
+# ImageDataGenerator
+  - **基本使用**
+    ```py
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from keras.preprocessing.image import ImageDataGenerator
 
-def image_generator(teacher_model_interf, input_shape=[112, 112, 3], batch_size=64):
-    while True:
-        batch_x = tf.random.uniform([batch_size] + input_shape, minval=0, maxval=255, dtype=tf.float32)
-        batch_y = teacher_model_interf(batch_x)
-        yield (batch_x, batch_y)
-train_gen = image_generator(teacher_model_interf)
-ixx, iyy = next(train_gen)
+    img = np.random.rand(1, 500, 500, 3)
 
-xx = tf.keras.applications.MobileNetV2(input_shape=[112, 112, 3], include_top=False, weights=None)
-# xx = tf.keras.applications.NASNetMobile(input_shape=[112, 112, 3], include_top=False, weights=None)
-xx.trainable = True
-model = tf.keras.models.Sequential([
-    xx,
-    tf.keras.layers.GlobalAveragePooling2D(),
-    tf.keras.layers.BatchNormalization(),
-    tf.keras.layers.Dropout(0.1),
-    tf.keras.layers.Dense(512)
-])
-model.compile(optimizer='adam', loss='mse', metrics=["mae",'accuracy'])
-model.summary()
+    fig, ax = plt.subplots(1, 5, figsize=(20, 10))
+    ax = ax.ravel()
+    ax[0].imshow(img[0])
+    ax[1].imshow(next(ImageDataGenerator().flow(img))[0])
+    ax[2].imshow(next(ImageDataGenerator(brightness_range=(0., 0.)).flow(img))[0])
+    ax[3].imshow(next(ImageDataGenerator(brightness_range=(1., 1.)).flow(img))[0])
+    ax[4].imshow(next(ImageDataGenerator(brightness_range=(1., 1.)).flow(img))[0] / 255)
+    ```
+    ![](images/imagegenarator_test.png)
+  - **flow_from_directory**
+    ```py
+    seed = 1
+    from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
 
-model.fit_generator(train_gen, epochs=20, steps_per_epoch=10, use_multiprocessing=True)
-```
-```py
-import glob2
-from skimage.io import imread
-def data_gen(path, batch_size=64, shuffle=True, base_path_replace=[]):
-    while True:
-        image_path_files = glob2.glob(os.path.join(path, '*_img.foo'))
-        image_path_files = np.random.permutation(image_path_files)
-        emb_files = [ii.replace('_img.foo', '_emb.npy') for ii in image_path_files]
-        print("This should be the epoch start, total files = %d" % (image_path_files.shape[0]))
-        for ipps, iees in zip(image_path_files, emb_files):
-            with open(ipps, 'r') as ff:
-                image_paths = np.array([ii.strip() for ii in ff.readlines()])
-            image_embs = np.load(iees)
-            total = len(image_paths)
-            if shuffle:
-                indexes = np.random.permutation(total)
-            else:
-                indexes = np.arange(total)
-            print("\nimage_path_files = %s, emb_files = %s, total = %d" % (ipps, iees, total))
-            for id in range(0, total, batch_size):
-                cc = indexes[id: id + batch_size]
-                # print("id start = %d, end = %d, cc = %s" % (id, id + batch_size, cc))
-                image_batch_data = image_paths[cc]
-                if len(image_batch_data) < batch_size:
-                    continue
-                if len(base_path_replace) != 0:
-                    image_batch_data = [ii.replace(base_path_replace[0], base_path_replace[1]) for ii in image_batch_data]
-                images = (np.array([imread(ii) for ii in image_batch_data]) / 255).astype('float32')
-                embs = image_embs[cc]
+    data_gen = ImageDataGenerator(rescale=1./255, validation_split=0.1)
 
-                yield (images, embs)
-            print("Processed Id: %d - %d" % (id, id + batch_size))
 
-gpus = tf.config.experimental.list_physical_devices('GPU')
-tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
-tf.config.experimental.set_memory_growth(gpus[0], True)
+    img_gen = data_gen.flow_from_directory('segmentation_dataset/tumorImage/', target_size=(512, 512), batch_size=4,
+                                           class_mode=None, seed=seed, color_mode='grayscale')
+    mask_gen = data_gen.flow_from_directory('segmentation_dataset/maskImage/', target_size=(512, 512), batch_size=4,
+                                           class_mode=None, seed=seed, color_mode='grayscale')
 
-BATCH_SIZE = 100
-DATA_PATH = './'
-# train_gen = data_gen(DATA_PATH, batch_size=BATCH_SIZE, shuffle=True, base_path_replace=['/media/uftp/images', '/home/leondgarse/workspace/images'])
-train_gen = data_gen(DATA_PATH, batch_size=BATCH_SIZE, shuffle=True)
-steps_per_epoch = int(np.floor(100000 / BATCH_SIZE) * len(os.listdir(DATA_PATH)) / 2)
+    train_gen = zip(img_gen, mask_gen)
+    ```
+  - **模型训练 fit_generator**
+    ```py
+    from keras.preprocessing.image import ImageDataGenerator
+    # construct the training image generator for data augmentation
+    aug = ImageDataGenerator(rotation_range=20, zoom_range=0.15,
+        width_shift_range=0.2, height_shift_range=0.2, shear_range=0.15,
+        horizontal_flip=True, fill_mode="nearest")
 
-hist = model.fit_generator(train_gen, epochs=50, steps_per_epoch=steps_per_epoch, verbose=1)
-```
-```py
-from skimage.io import imread
-gpus = tf.config.experimental.list_physical_devices('GPU')
-tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
-tf.config.experimental.set_memory_growth(gpus[0], True)
+    model.fit_generator(aug.flow(trainX, trainY, batch_size=BS),
+      	validation_data=(testX, testY), steps_per_epoch=len(trainX) // BS,
+      	epochs=EPOCHS)
+    ```
+  - **ImageDataGenerator 生成图像数据与对应 mask**
+    - TF 1.14 与 TF 2.0 中的 `ImageDataGenerator` 实现不能将 `zip` 对象识别为 `generators` / `sequences`，需要转化为 **内联的生成器 inline generator**
+      ```py
+      train_gen = (pair for pair in zip(img_gen, mask_gen))
+      ```
+      ```py
+      data_gen_args = dict(rotation_range=0.2,
+                          width_shift_range=0.05,
+                          height_shift_range=0.05,
+                          shear_range=0.05,
+                          zoom_range=0.05,
+                          horizontal_flip=True,
+                          fill_mode='nearest',
+                          rescale=1./255)
 
-pp = '/media/uftp/images/faces_emore_112x112_folders/'
-with open('faces_emore_img.foo', 'w') as ff:
-    for dd in os.listdir(pp):
-        dd = os.path.join(pp, dd)
-        for ii in os.listdir(dd):
-            ff.write(os.path.join(dd, ii) + '\n')
-# 5822653
-with open('faces_emore_img.foo', 'r') as ff:
-    tt = [ii.strip() for ii in ff.readlines()]
+      image_generator = tf.keras.preprocessing.image.ImageDataGenerator(data_gen_args)
+      mask_generator = tf.keras.preprocessing.image.ImageDataGenerator(data_gen_args)
 
-for ii in range(59):
-    print(ii * 100000, (ii+1) * 100000)
-    with open('./{}_img.foo'.format(ii), 'w') as ff:
-        ff.write('\n'.join(tt[ii * 100000: (ii+1) * 100000]))
+      imageGenerator = image_generator.flow_from_directory('membrane/train', color_mode="grayscale", classes=['image'], class_mode=None, batch_size=5)
+      maskGenerator = mask_generator.flow_from_directory('membrane/train', color_mode="grayscale", classes=['label'], class_mode=None, batch_size=5)
 
-loaded = tf.saved_model.load('./model_resnet')
-_interp = loaded.signatures["serving_default"]
-interp = lambda ii: _interp(tf.convert_to_tensor(ii, dtype="float32"))["output"].numpy()
+      train_generator = (pair for pair in zip(imageGenerator, maskGenerator))
 
-with open('0_img.foo', 'r') as ff:
-    tt = [ii.strip() for ii in ff.readlines()]
-print(len(tt))
 
-ees = []
-for id, ii in enumerate(tt):
-    ii = ii.replace('/media/uftp', '/home/leondgarse/workspace')
-    imm = imread(ii)
-    ees.append(interp([imm])[0])
-    if id % 10 == 0:
-        print("Processing %d..." % id)
+      history = model.fit_generator(train_generator, steps_per_epoch=100, epochs=3)
+      ```
+    - **ImageDataGenerator 转化为 `tf.data.Dataset`** 提升读取效率
+      ```py
+      def my_input_fn(total_items, epochs):
+          dataset = tf.data.Dataset.from_generator(lambda: my_generator(total_items),
+                                                   output_types=(tf.float64, tf.int64))
 
-from skimage.io import ImageCollection
-icc = ImageCollection(tt)
-for id, (iff, imm) in enumerate(zip(icc.files, icc)):
-    if id % 10 == 0:
-        print("Processing %d..." % id)
-    ees.append(interp([imm])[0])
+          dataset = dataset.repeat(epochs)
+          dataset = dataset.batch(32)
+          return dataset
 
-import glob2
-for fn in glob2.glob('./*_img.foo'):
-    with open(fn, 'r') as ff:
-        tt = [ii.strip() for ii in ff.readlines()]
-    target_file = fn.replace('_img.foo', '_emb')
-    print(fn, len(tt), target_file)
+      if __name__ == "__main__":
+          tf.enable_eager_execution()
 
-    ees = []
-    for id, ii in enumerate(tt):
-        # ii = ii.replace('/media/uftp', '/home/leondgarse/workspace')
-        imm = imread(ii)
-        ees.append(interp([imm])[0])
-        if id % 100 == 0:
-            print("Processing %d..." % id)
-    ees = np.array(ees)
-    print(ees.shape)
-    np.save(target_file, ees)
-```
-```py
-from skimage.io import imread
-from sklearn.preprocessing import normalize
+          model = tf.keras.Sequential([tf.keras.layers.Flatten(input_shape=(4, 20, 1)),
+                                       tf.keras.layers.Dense(64, activation=tf.nn.relu),
+                                       tf.keras.layers.Dense(12, activation=tf.nn.softmax)])
 
-def model_test(image_paths, model_path, scale=1.0):
-    loaded = tf.saved_model.load(model_path)
-    interf = loaded.signatures['serving_default']
-    images = [imread(ipp) * scale for ipp in image_paths]
+          model.compile(optimizer='adam',
+                        loss='categorical_crossentropy',
+                        metrics=['accuracy'])
 
-    preds = interf(tf.convert_to_tensor(images, dtype='float32'))['output'].numpy()
-    return np.dot(normalize(preds), normalize(preds).T), preds
-
-images = ['/home/leondgarse/workspace/samba/1770064353.jpg', '/home/leondgarse/workspace/samba/541812715.jpg']
-model_test(images, 'model_mobilefacenet/')
-```
-```sh
-My 2-stage pipeline:
-
-Train softmax with lr=0.1 for 120K iterations.
-LRSTEPS='240000,360000,440000'
-CUDA_VISIBLE_DEVICES='0,1,2,3' python -u train_softmax.py --data-dir $DATA_DIR --network "$NETWORK" --loss-type 0 --prefix "$PREFIX" --per-batch-size 128 --lr-steps "$LRSTEPS" --margin-s 32.0 --margin-m 0.1 --ckpt 2 --emb-size 128 --fc7-wd-mult 10.0 --wd 0.00004 --max-steps 140002
-Switch to ArcFace loss to do normal training with '100K,140K,160K' iterations.
-LRSTEPS='100000,140000,160000'
-CUDA_VISIBLE_DEVICES='0,1,2,3' python -u train_softmax.py --data-dir $DATA_DIR --network "$NETWORK" --loss-type 4 --prefix "$PREFIX" --per-batch-size 128 --lr-steps "$LRSTEPS" --margin-s 64.0 --margin-m 0.5 --ckpt 1 --emb-size 128 --fc7-wd-mult 10.0 --wd 0.00004 --pretrained '../models2/model-y1-test/model,70'
-Pretrained model: baiduyun
-training dataset: ms1m
-LFW: 99.50, CFP_FP: 88.94, AgeDB30: 95.91
-```
-```py
-import glob2
-from keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras import layers
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
-
-path = '/home/tdtest/workspace/insightface-master/faces_emore_img/emb_done'
-image_path_files = glob2.glob(os.path.join(path, '*_img.foo'))
-emb_files = [ii.replace('_img.foo', '_emb.npy') for ii in image_path_files]
-image_names = []
-image_embs = []
-for ii, ee in zip(image_path_files, emb_files):
-    with open(ii, 'r') as ff:
-        image_names.extend([ii.strip() for ii in ff.readlines()])
-    image_embs.append(np.load(ee))
-image_embs = np.concatenate(image_embs)
-image_classes = [int(os.path.basename(os.path.dirname(ii))) for ii in image_names]
-print(len(image_names), len(image_classes), image_embs.shape)
-
-np.savez('faces_emore_class_emb', image_names=np.array(image_names), image_classes=np.array(image_classes), image_embs=image_embs)
-aa = np.load('faces_emore_class_emb.npz')
-image_names, image_classes, image_embs = aa['image_names'], aa['image_classes'], aa['image_embs']
-classes = np.max(image_classes) + 1
-print(image_names.shape, image_classes.shape, image_embs.shape, classes)
-# (5822653,) (5822653,) (5822653, 512) 85742
-
-data_df = pd.DataFrame({"image_names": image_names, "image_classes": image_classes, "image_embs": list(image_embs)})
-image_gen = ImageDataGenerator(rescale=1./255, validation_split=0.1)
-train_data_gen = image_gen.flow_from_dataframe(data_df, directory=None, x_col='image_names', y_col=["image_classes", "image_embs"], class_mode='multi_output', target_size=(112, 112), batch_size=128, seed=1, subset='training', validate_filenames=False)
-# Found 5240388 non-validated image filenames.
-val_data_gen = image_gen.flow_from_dataframe(data_df, directory=None, x_col='image_names', y_col=["image_classes", "image_embs"], class_mode='multi_output', target_size=(112, 112), batch_size=128, seed=1, subset='validation', validate_filenames=False)
-# Found 582265 non-validated image filenames.
-
-xx = tf.keras.applications.MobileNetV2(include_top=False, weights=None)
-xx.trainable = True
-inputs = layers.Input(shape=(112, 112, 3))
-nn = xx(inputs)
-nn = layers.GlobalAveragePooling2D()(nn)
-nn = layers.BatchNormalization()(nn)
-nn = layers.Dropout(0.1)(nn)
-embedding = layers.Dense(512)(nn)
-logits = layers.Dense(classes, activation='softmax')(embedding)
-
-model = keras.models.Model(inputs, [logits, embedding])
-model.compile(optimizer='adam', loss=[keras.losses.sparse_categorical_crossentropy, keras.losses.mse])
-# model.compile(optimizer='adam', loss=[keras.losses.sparse_categorical_crossentropy, keras.losses.mse], metrics=['accuracy', 'mae'])
-model.summary()
-
-reduce_lr = ReduceLROnPlateau('val_loss', factor=0.1, patience=5, verbose=1)
-model_checkpoint = ModelCheckpoint("./keras_checkpoints", 'val_loss', verbose=1, save_best_only=True)
-callbacks = [model_checkpoint, reduce_lr]
-hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=200, verbose=1, callbacks=callbacks)
-```
+          total_items = 100
+          batch_size = 32
+          epochs = 10
+          num_batches = int(total_items/batch_size)
+          dataset = my_input_fn(total_items, epochs)
+          model.fit_generator(dataset, epochs=epochs, steps_per_epoch=num_batches)
+      ```
 ***
-# Keras Insightface
-## MXnet record to folder
+
+# 训练模型拟合 embeddings
+## First try
   ```py
-  import os
-  import numpy as np
-  import mxnet as mx
-  from tqdm import tqdm
-
-  # read_dir = '/datasets/faces_glint/'
-  # save_dir = '/datasets/faces_glint_112x112_folders'
-  read_dir = '/datasets/faces_emore'
-  save_dir = '/datasets/faces_emore_112x112_folders'
-  idx_path = os.path.join(read_dir, 'train.idx')
-  bin_path = os.path.join(read_dir, 'train.rec')
-
-  imgrec = mx.recordio.MXIndexedRecordIO(idx_path, bin_path, 'r')
-  rec_header, _ = mx.recordio.unpack(imgrec.read_idx(0))
-
-  # for ii in tqdm(range(1, 10)):
-  for ii in tqdm(range(1, int(rec_header.label[0]))):
-      img_info = imgrec.read_idx(ii)
-      header, img = mx.recordio.unpack(img_info)
-      img_idx = str(int(np.sum(header.label)))
-      img_save_dir = os.path.join(save_dir, img_idx)
-      if not os.path.exists(img_save_dir):
-          os.makedirs(img_save_dir)
-      # print(os.path.join(img_save_dir, str(ii) + '.jpg'))
-      with open(os.path.join(img_save_dir, str(ii) + '.jpg'), 'wb') as ff:
-          ff.write(img)
-  ```
-  ```py
-  import io
-  import pickle
-  import tensorflow as tf
+  import glob2
   from skimage.io import imread
 
-  test_bin_file = '/datasets/faces_emore/agedb_30.bin'
-  test_bin_file = '/datasets/faces_emore/cfp_fp.bin'
-  with open(test_bin_file, 'rb') as ff:
-      bins, issame_list = pickle.load(ff, encoding='bytes')
+  loaded = tf.saved_model.load('model_resnet')
+  interf = loaded.signatures['serving_default']
+  teacher_model_interf = lambda images: interf(tf.convert_to_tensor(images, dtype=tf.float32))['output'].numpy()
 
-  bb = [tf.image.encode_jpeg(imread(io.BytesIO(ii))) for ii in bins]
-  with open(test_bin_file, 'wb') as ff:
-      pickle.dump([bb, issame_list], ff)
+  def data_gen(path, teacher_model_interf, batch_size=64, base_path_replace=[]):
+      image_path_files = glob2.glob(os.path.join(path, '*/*'))
+      total = len(image_path_files)
+      while True:
+          image_path_files = np.random.permutation(image_path_files)
+          print("This should be the epoch start, total files = %d" % (image_path_files.shape[0]))
+          for id in range(0, total, batch_size):
+              image_batch_data = image_path_files[id: id + batch_size]
+              if len(base_path_replace) != 0:
+                  image_batch_data = [ii.replace(base_path_replace[0], base_path_replace[1]) for ii in image_batch_data]
+              images = (np.array([imread(ii) for ii in image_batch_data]) / 255).astype('float32')
+              embs = teacher_model_interf(images)
+              yield (images, embs)
+              print("Processed Id: %d - %d" % (id, id + batch_size))
+
+  gpus = tf.config.experimental.list_physical_devices('GPU')
+  tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
+  tf.config.experimental.set_memory_growth(gpus[0], True)
+
+  BATCH_SIZE = 100
+  DATA_PATH = './'
+  # train_gen = data_gen(DATA_PATH, batch_size=BATCH_SIZE, base_path_replace=['/media/uftp/images', '/home/leondgarse/workspace/images'])
+  train_gen = data_gen(DATA_PATH, teacher_model_interf, batch_size=BATCH_SIZE)
+  steps_per_epoch = int(np.ceil(5822653 / BATCH_SIZE))
+  ixx, iyy = next(train_gen)
+  print(ixx.shape, iyy.shape)
+  # (100, 112, 112, 3) (100, 512)
+
+  xx = tf.keras.applications.MobileNetV2(input_shape=[112, 112, 3], include_top=False, weights=None)
+  # xx = tf.keras.applications.NASNetMobile(input_shape=[112, 112, 3], include_top=False, weights=None)
+  xx.trainable = True
+  model = tf.keras.models.Sequential([
+      xx,
+      tf.keras.layers.GlobalAveragePooling2D(),
+      tf.keras.layers.BatchNormalization(),
+      tf.keras.layers.Dropout(0.1),
+      tf.keras.layers.Dense(512)
+  ])
+  model.compile(optimizer='adam', loss='mse', metrics=["mae",'accuracy'])
+  model.summary()
+
+  hist = model.fit_generator(train_gen, epochs=50, steps_per_epoch=steps_per_epoch, verbose=1)
   ```
+## 数据处理
+  - 生成图像数据集对应的 embedding 数据
+  ```py
+  from skimage.io import imread
+  gpus = tf.config.experimental.list_physical_devices('GPU')
+  tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
+  tf.config.experimental.set_memory_growth(gpus[0], True)
+
+  ''' 图片路径列表 '''
+  pp = '/datasets/faces_emore_112x112_folders/'
+  with open('faces_emore_img.foo', 'w') as ff:
+      for dd in os.listdir(pp):
+          dd = os.path.join(pp, dd)
+          for ii in os.listdir(dd):
+              ff.write(os.path.join(dd, ii) + '\n')
+  # 5822653
+
+  ''' 分割图片路径列表，每 100000 张图片作为一个文件 '''
+  with open('faces_emore_img.foo', 'r') as ff:
+      tt = [ii.strip() for ii in ff.readlines()]
+
+  for ii in range(59):
+      print(ii * 100000, (ii+1) * 100000)
+      with open('./{}_img.foo'.format(ii), 'w') as ff:
+          ff.write('\n'.join(tt[ii * 100000: (ii+1) * 100000]))
+
+  ''' 加载目标模型 '''
+  loaded = tf.saved_model.load('./model_resnet')
+  _interp = loaded.signatures["serving_default"]
+  interp = lambda ii: _interp(tf.convert_to_tensor(ii, dtype="float32"))["output"].numpy()
+
+  ''' 转化特征向量 embedding 值 '''
+  import glob2
+  for fn in glob2.glob('./*_img.foo'):
+      with open(fn, 'r') as ff:
+          tt = [ii.strip() for ii in ff.readlines()]
+      target_file = fn.replace('_img.foo', '_emb')
+      print(fn, len(tt), target_file)
+
+      ees = []
+      for id, ii in enumerate(tt):
+          # ii = ii.replace('/media/uftp', '/home/leondgarse/workspace')
+          imm = imread(ii)
+          ees.append(interp([imm])[0])
+          if id % 100 == 0:
+              print("Processing %d..." % id)
+      ees = np.array(ees)
+      print(ees.shape)
+      np.save(target_file, ees)
+
+  ''' 合并处理完的数据 '''
+  import glob2
+
+  path = '/home/tdtest/workspace/insightface-master/faces_emore_img/emb_done'
+  image_path_files = glob2.glob(os.path.join(path, '*_img.foo'))
+  emb_files = [ii.replace('_img.foo', '_emb.npy') for ii in image_path_files]
+  image_names = []
+  image_embs = []
+  for ii, ee in zip(image_path_files, emb_files):
+      with open(ii, 'r') as ff:
+          image_names.extend([ii.strip() for ii in ff.readlines()])
+      image_embs.append(np.load(ee))
+  image_embs = np.concatenate(image_embs)
+  image_classes = np.array([int(os.path.basename(os.path.dirname(ii))) for ii in image_names])
+  image_names=np.array(image_names)
+  classes = np.max(image_classes) + 1
+
+  np.savez('faces_emore_class_emb', image_names=image_names, image_classes=image_classes, image_embs=image_embs)
+  print(image_names.shape, image_classes.shape, image_embs.shape, classes)
+  # (5822653,) (5822653,) (5822653, 512) 85742
+  ```
+## 模型训练
+  ```py
+  from keras.preprocessing.image import ImageDataGenerator
+  from tensorflow.keras import layers
+  from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+
+  aa = np.load('faces_emore_class_emb.npz')
+  image_names, image_classes, image_embs = aa['image_names'], aa['image_classes'], aa['image_embs']
+  classes = np.max(image_classes) + 1
+  print(image_names.shape, image_classes.shape, image_embs.shape, classes)
+  # (5822653,) (5822653,) (5822653, 512) 85742
+
+  data_df = pd.DataFrame({"image_names": image_names, "image_classes": image_classes, "image_embs": list(image_embs)})
+  image_gen = ImageDataGenerator(rescale=1./255, validation_split=0.1)
+  train_data_gen = image_gen.flow_from_dataframe(data_df, directory=None, x_col='image_names', y_col=["image_classes", "image_embs"], class_mode='multi_output', target_size=(112, 112), batch_size=128, seed=1, subset='training', validate_filenames=False)
+  # Found 5240388 non-validated image filenames.
+  val_data_gen = image_gen.flow_from_dataframe(data_df, directory=None, x_col='image_names', y_col=["image_classes", "image_embs"], class_mode='multi_output', target_size=(112, 112), batch_size=128, seed=1, subset='validation', validate_filenames=False)
+  # Found 582265 non-validated image filenames.
+
+  xx = tf.keras.applications.MobileNetV2(include_top=False, weights=None)
+  xx.trainable = True
+  inputs = layers.Input(shape=(112, 112, 3))
+  nn = xx(inputs)
+  nn = layers.GlobalAveragePooling2D()(nn)
+  nn = layers.BatchNormalization()(nn)
+  nn = layers.Dropout(0.1)(nn)
+  embedding = layers.Dense(512, name="embeddings")(nn)
+  logits = layers.Dense(classes, activation='softmax', name="logits")(embedding)
+
+  model = keras.models.Model(inputs, [logits, embedding])
+  model.compile(optimizer='adam', loss=[keras.losses.sparse_categorical_crossentropy, keras.losses.mse])
+  # model.compile(optimizer='adam', loss=[keras.losses.sparse_categorical_crossentropy, keras.losses.mse], metrics=['accuracy', 'mae'])
+  model.summary()
+
+  reduce_lr = ReduceLROnPlateau('val_loss', factor=0.1, patience=5, verbose=1)
+  model_checkpoint = ModelCheckpoint("./keras_checkpoints", 'val_loss', verbose=1, save_best_only=True)
+  callbacks = [model_checkpoint, reduce_lr]
+  hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=200, verbose=1, callbacks=callbacks)
+  ```
+## 模型测试
+  ```py
+  from skimage.io import imread
+  from sklearn.preprocessing import normalize
+
+  def model_test(image_paths, model_path, scale=1.0, output_key="output"):
+      loaded = tf.saved_model.load(model_path)
+      interf = loaded.signatures['serving_default']
+      images = [imread(ipp) * scale for ipp in image_paths]
+
+      preds = interf(tf.convert_to_tensor(images, dtype='float32'))[output_key].numpy()
+      return np.dot(normalize(preds), normalize(preds).T), preds
+
+  images = ['/home/leondgarse/workspace/samba/1770064353.jpg', '/home/leondgarse/workspace/samba/541812715.jpg']
+  model_test(images, 'keras_checkpoints/', output_key='embeddings')
+  ```
+***
+
+# Keras Insightface
+## tf-insightface train
+  - [Github Fei-Wang/insightface](https://github.com/Fei-Wang/insightface)
+  - Arcface loss
+    ```py
+    epoch: 25, step: 60651, loss = 15.109766960144043, logit_loss = 15.109766960144043, center_loss = 0
+    epoch: 25, step: 60652, loss = 17.565662384033203, logit_loss = 17.565662384033203, center_loss = 0
+    Saving checkpoint for epoch 25 at /home/tdtest/workspace/tf_insightface/recognition/mymodel-26
+    Time taken for epoch 25 is 8373.555536031723 sec
+    ```
+  - Arcface center loss
+    ```py
+    epoch: 0, step: 60652, loss = 11.264640808105469, logit_loss = 11.262413024902344, center_loss = 0.002227420685812831
+    Saving checkpoint for epoch 0 at /home/tdtest/workspace/tf_insightface/recognition/mymodel-1
+    Time taken for epoch 0 is 8373.187638521194 sec
+    ```
+## MXnet record to folder
+  - [Insightface Dataset Zoo](https://github.com/deepinsight/insightface/wiki/Dataset-Zoo)
+  - **转化 faces_emore 训练数据集**
+    ```py
+    import os
+    import numpy as np
+    import mxnet as mx
+    from tqdm import tqdm
+
+    # read_dir = '/datasets/faces_glint/'
+    # save_dir = '/datasets/faces_glint_112x112_folders'
+    read_dir = '/datasets/faces_emore'
+    save_dir = '/datasets/faces_emore_112x112_folders'
+    idx_path = os.path.join(read_dir, 'train.idx')
+    bin_path = os.path.join(read_dir, 'train.rec')
+
+    imgrec = mx.recordio.MXIndexedRecordIO(idx_path, bin_path, 'r')
+    rec_header, _ = mx.recordio.unpack(imgrec.read_idx(0))
+
+    # for ii in tqdm(range(1, 10)):
+    for ii in tqdm(range(1, int(rec_header.label[0]))):
+        img_info = imgrec.read_idx(ii)
+        header, img = mx.recordio.unpack(img_info)
+        img_idx = str(int(np.sum(header.label)))
+        img_save_dir = os.path.join(save_dir, img_idx)
+        if not os.path.exists(img_save_dir):
+            os.makedirs(img_save_dir)
+        # print(os.path.join(img_save_dir, str(ii) + '.jpg'))
+        with open(os.path.join(img_save_dir, str(ii) + '.jpg'), 'wb') as ff:
+            ff.write(img)
+    ```
+  - **转化验证数据集 bin files** 有些数据的图片个是不能用 `tf.image.decode_jpeg` 解码
+    ```sh
+    #    bins   | issame_list
+    img_1 img_2 | 1
+    img_3 img_4 | 1
+    img_5 img_6 | 0
+    img_7 img_8 | 0
+    ```
+    ```py
+    import io
+    import pickle
+    import tensorflow as tf
+    from skimage.io import imread
+
+    test_bin_files = ['/datasets/faces_emore/agedb_30.bin', '/datasets/faces_emore/cfp_fp.bin']
+    for test_bin_file in test_bin_files:
+        with open(test_bin_file, 'rb') as ff:
+            bins, issame_list = pickle.load(ff, encoding='bytes')
+
+        bb = [tf.image.encode_jpeg(imread(io.BytesIO(ii))) for ii in bins]
+        with open(test_bin_file, 'wb') as ff:
+            pickle.dump([bb, issame_list], ff)
+    ```
 ## Loading data by ImageDataGenerator
+  - **ImageDataGenerator 加载数据集** 可以应用 **数据增强**，分割 **训练/验证数据集**，但单独使用速度慢，可以结合 `tf.data.Dataset` 使用
   ```py
   ''' flow_from_dataframe '''
   import glob2
@@ -804,6 +652,7 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
   >>>> agedb_30 evaluation max accuracy: 0.912500, thresh: 0.082330, overall max accuracy: 0.912500
   ```
 ## Basic model
+  - [TensorFlow Addons Layers: WeightNormalization](https://www.tensorflow.org/addons/tutorials/layers_weightnormalization)
   ```py
   from tensorflow.keras import layers
 
@@ -1734,6 +1583,7 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
   >>>> agedb_30 evaluation max accuracy: 0.938333, thresh: 0.160105, overall max accuracy: 0.939500
   ```
 ## Online Triplet loss train
+  - [TensorFlow Addons Losses: TripletSemiHardLoss](https://www.tensorflow.org/addons/tutorials/losses_triplet)
   ```py
   import pickle
   import pandas as pd
@@ -1918,21 +1768,7 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
   >>>> cfp_fp evaluation max accuracy: 0.951143, thresh: 0.158986, overall max accuracy: 0.951143
   >>>> agedb_30 evaluation max accuracy: 0.959333, thresh: 0.279509, overall max accuracy: 0.959333
   ```
-## tf-insightface train
-  - Arcface loss
-    ```py
-    epoch: 25, step: 60651, loss = 15.109766960144043, logit_loss = 15.109766960144043, center_loss = 0
-    epoch: 25, step: 60652, loss = 17.565662384033203, logit_loss = 17.565662384033203, center_loss = 0
-    Saving checkpoint for epoch 25 at /home/tdtest/workspace/tf_insightface/recognition/mymodel-26
-    Time taken for epoch 25 is 8373.555536031723 sec
-    ```
-  - Arcface center loss
-    ```py
-    epoch: 0, step: 60652, loss = 11.264640808105469, logit_loss = 11.262413024902344, center_loss = 0.002227420685812831
-    Saving checkpoint for epoch 0 at /home/tdtest/workspace/tf_insightface/recognition/mymodel-1
-    Time taken for epoch 0 is 8373.187638521194 sec
-    ```
-## FUNC
+## TF 通用函数
   - **tf.compat.v1.scatter_sub** 将 `ref` 中 `indices` 指定位置的值减去 `updates`，会同步更新 `ref`
     ```py
     scatter_sub(ref, indices, updates, use_locking=False, name=None)
@@ -2003,19 +1839,15 @@ hist = model.fit_generator(train_data_gen, validation_data=val_data_gen, epochs=
     print(tf.matmul(tf.nn.l2_normalize(aa, 1), tf.nn.l2_normalize(bb, 0)).numpy())
     # [[0.8944272  0.98994946]]
     ```
-***
-- [TensorFlow Addons Losses: TripletSemiHardLoss](https://www.tensorflow.org/addons/tutorials/losses_triplet)
-- [TensorFlow Addons Layers: WeightNormalization](https://www.tensorflow.org/addons/tutorials/layers_weightnormalization)
-- [读取多个(海康\大华)网络摄像头的视频流 (使用opencv-python)，解决实时读取延迟问题](https://zhuanlan.zhihu.com/p/38136322)
-- [sklearn与keras结合调参](https://cloud.tencent.com/developer/article/1447855)
-```py
-def model_verification_images(model_interf, iaa, ibb):
-    eea = model_interf(tf.convert_to_tensor([iaa]))
-    eeb = model_interf(tf.convert_to_tensor([ibb]))
-    return np.dot(normalize(eea), normalize(eeb).T)
+## 模型测试
+  ```py
+  def model_verification_images(model_interf, iaa, ibb):
+      eea = model_interf(tf.convert_to_tensor([iaa]))
+      eeb = model_interf(tf.convert_to_tensor([ibb]))
+      return np.dot(normalize(eea), normalize(eeb).T)
 
-model_verification_images(lambda xx: mm.predict(xx), aa / 255, bb / 255)
-```
+  model_verification_images(lambda xx: mm.predict(xx), aa / 255, bb / 255)
+  ```
 ***
 
 # 人脸旋转角度与侧脸
@@ -2055,5 +1887,46 @@ model_verification_images(lambda xx: mm.predict(xx), aa / 255, bb / 255)
   points, ne = rotation_detect(dd, 'test_images/rotate.png')
   points, ne = rotation_detect(dd, 'test_images/side.png')
   points, ne = rotation_detect(dd, 'test_images/side_rotate.png')
+  ```
+***
+
+# 人脸跟踪
+  - [zeusees/HyperFT](https://github.com/zeusees/HyperFT)
+  - [Ncnn_FaceTrack](https://github.com/qaz734913414/Ncnn_FaceTrack)
+  - HyperFT 项目多人脸跟踪算法
+    - 第一部分是初始化，通过mtcnn的人脸检测找出第一帧的人脸位置然后将其结果对人脸跟踪进行初始化
+    - 第二部分是更新，利用模板匹配进行人脸目标位置的初步预判，再结合mtcnn中的onet来对人脸位置进行更加精细的定位，最后通过mtcnn中的rnet的置信度来判断跟踪是否为人脸，防止当有手从面前慢慢挥过去的话，框会跟着手走而无法跟踪到真正的人脸
+    - 第三部分是定时检测，通过在更新的部分中加入一个定时器来做定时人脸检测，从而判断中途是否有新人脸的加入，本项目在定时人脸检测中使用了一个trick就是将已跟踪的人脸所在位置利用蒙版遮蔽起来，避免了人脸检测的重复检测，减少其计算量，从而提高了检测速度
+***
+
+# ncnn
+  - [Github Tencent/ncnn](https://github.com/Tencent/ncnn)
+  ```sh
+  cd local_bin/
+  wget https://sdk.lunarg.com/sdk/download/1.1.126.0/linux/vulkansdk-linux-x86_64-1.1.126.0.tar.gz?Human=true -O vulkansdk-linux-x86_64-1.1.126.0.tar.gz
+  tar xvf vulkansdk-linux-x86_64-1.1.126.0.tar.gz
+  export VULKAN_SDK=`pwd`/1.1.126.0/x86_64
+  cd workspace/ncnn
+
+  cd build-android-armv7/
+  rm ./* -rf
+  cmake -DCMAKE_TOOLCHAIN_FILE=/home/leondgarse/Android/Sdk/ndk/20.0.5594570/build/cmake/android.toolchain.cmake -DANDROID_ABI="armeabi-v7a" -DANDROID_ARM_NEON=ON -DANDROID_PLATFORM=android-24 -DNCNN_VULKAN=ON ..
+  make -j4
+  make install
+
+  cd ../build-android-aarch64/
+  cmake -DCMAKE_TOOLCHAIN_FILE=/home/leondgarse/Android/Sdk/ndk/20.0.5594570/build/cmake/android.toolchain.cmake -DANDROID_ABI="arm64-v8a" -DANDROID_PLATFORM=android-24 -DNCNN_VULKAN=ON ..
+  make -j4
+  make install
+
+  cd ../ncnn-android-vulkan-lib
+  rm include/ arm64-v8a/libncnn.a armeabi-v7a/libncnn.a -rf
+  cd ..
+
+  cp build-android-aarch64/install/include/ ncnn-android-vulkan-lib/ -r
+  cp build-android-armv7/install/lib/libncnn.a ncnn-android-vulkan-lib/armeabi-v7a/
+  cp build-android-aarch64/install/lib/libncnn.a ncnn-android-vulkan-lib/arm64-v8a/
+  rm ../ncnn-android-squeezenet/app/src/main/jni/ncnn-android-vulkan-lib -r
+  cp ncnn-android-vulkan-lib/ ../ncnn-android-squeezenet/app/src/main/jni/ -r
   ```
 ***

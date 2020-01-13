@@ -33,10 +33,20 @@
   	- [模型微调 Fine-tuning imported models](#模型微调-fine-tuning-imported-models)
   	- [Control flow in SavedModels](#control-flow-in-savedmodels)
   	- [Estimators 保存与加载 SavedModels](#estimators-保存与加载-savedmodels)
-  - [MTCNN](#mtcnn)
-  	- [TF 2.0 加载 frozen MTCNN](#tf-20-加载-frozen-mtcnn)
+  - [MMDNN 转化与 TensorFlow MTCNN](#mmdnn-转化与-tensorflow-mtcnn)
+  	- [Insightface caffe MTCNN model to TensorFlow](#insightface-caffe-mtcnn-model-to-tensorflow)
+  	- [MTCNN with all platforms](#mtcnn-with-all-platforms)
   	- [MTCNN pb 模型转化为 saved model](#mtcnn-pb-模型转化为-saved-model)
+  	- [TF_1 加载 frozen MTCNN](#tf1-加载-frozen-mtcnn)
+  	- [TF_2 加载 frozen MTCNN](#tf2-加载-frozen-mtcnn)
+  - [Insightface saved_model 模型](#insightface-savedmodel-模型)
+  	- [Insightface MXNET model to TensorFlow model](#insightface-mxnet-model-to-tensorflow-model)
+  	- [TensorFlow 加载 Insightface saved_model 模型](#tensorflow-加载-insightface-savedmodel-模型)
+  	- [Tensorflow Serving server](#tensorflow-serving-server)
   	- [Insightface Checkpoints to SavedModel](#insightface-checkpoints-to-savedmodel)
+  - [TF_1 checkpoints](#tf1-checkpoints)
+  	- [save and restore checkpoints models](#save-and-restore-checkpoints-models)
+  	- [inspect_checkpoint](#inspectcheckpoint)
 
   <!-- /TOC -->
 ***
@@ -959,21 +969,41 @@
   - **tf.estimator.export.build_raw_serving_input_receiver_fn** 可以用于创建输入功能
 ***
 
-# MTCNN
-## TF 2.0 加载 frozen MTCNN
-  ```py
-  graph_def = tf.compat.v1.GraphDef()
-  loaded = graph_def.ParseFromString(open('./mtcnn.pb', 'rb').read())
-  def _imports_graph_def():
-      tf.compat.v1.import_graph_def(graph_def, name="")
-  wrapped_import = tf.compat.v1.wrap_function(_imports_graph_def, [])
-  import_graph = wrapped_import.graph
-  fe = tf.nest.map_structure(import_graph.as_graph_element, ['input:0', 'min_size:0', 'thresholds:0', 'factor:0'])
-  ft = tf.nest.map_structure(import_graph.as_graph_element, ['prob:0', 'landmarks:0', 'box:0'])
-  inception_func = wrapped_import.prune(fe, ft)
-  input_img = tf.ones([1,224,224,3], dtype=tf.float32)
-  out = inception_func(input_img, tf.constant(20.0), tf.constant([0.6, 0.6, 0.6]), tf.constant(0.7))
+# MMDNN 转化与 TensorFlow MTCNN
+## Insightface caffe MTCNN model to TensorFlow
+  - [Github microsoft/MMdnn](https://github.com/microsoft/MMdnn)
+  ```sh
+  pip install mmdnn
+  python -m mmdnn.conversion._script.convertToIR -f mxnet -n det1-symbol.json -w det1-0001.params -d det1 --inputShape 3,112,112
+  mmconvert -sf mxnet -iw det1-0001.params -in det1-symbol.json -df tensorflow -om det1 --inputShape 3,224,224
   ```
+  ```sh
+  cd ~/workspace/face_recognition_collection/facenet/src
+  cp align align_bak -r
+
+  cd ~/workspace/face_recognition_collection/insightface/deploy/mtcnn-model
+  mmtoir -f caffe -n det1.prototxt -w det1.caffemodel -o det1
+  mmtoir -f caffe -n det2.prototxt -w det2.caffemodel -o det2
+  mmtoir -f caffe -n det3.prototxt -w det3.caffemodel -o det3
+
+  mmtocode -f tensorflow --IRModelPath det1.pb --IRWeightPath det1.npy --dstModelPath det1.py
+  mmtocode -f tensorflow --IRModelPath det2.pb --IRWeightPath det2.npy --dstModelPath det2.py
+  mmtocode -f tensorflow --IRModelPath det3.pb --IRWeightPath det3.npy --dstModelPath det3.py
+
+  cp *.npy ~/workspace/face_recognition_collection/facenet/src/align/
+  ```
+## MTCNN with all platforms
+  - [Github imistyrain/MTCNN](https://github.com/imistyrain/MTCNN)
+  - **使用 RGB 图像替换 BGR 图像用于检测** 生成的模型默认使用 `BGR` 图像用于检测
+    ```py
+    # tensorflow/caffe2tf.py +357
+    images = images[:, :, ::-1]
+    images = tf.expand_dims(images, 0)    
+    ```
+    Tensorflow 1.14 环境下生成 PB 模型
+    ```sh
+    python caffe2tf.py
+    ```
 ## MTCNN pb 模型转化为 saved model
   ```py
   import tensorflow as tf
@@ -1014,85 +1044,368 @@
 
   builder.save()
   ```
-## Insightface Checkpoints to SavedModel
+## TF_1 加载 frozen MTCNN
   ```py
-  saver = tf.train.import_meta_graph(/path/to/meta/graph)
-  sess = tf.Session()
-  saver.restore(sess, /path/to/checkpoints)
-  graph = sess.graph
-  print([node.name for node in graph.as_graph_def().node])
+  tf.__version__
+  # '1.14.0'
+
+  graph_def = tf.GraphDef()
+  loaded = graph_def.ParseFromString(open('./mtcnn.pb', 'rb').read())
+  def _imports_graph_def():
+      tf.import_graph_def(graph_def, name="")
+  wrapped_import = tf.wrap_function(_imports_graph_def, [])
+  import_graph = wrapped_import.graph
+  fe = tf.nest.map_structure(import_graph.as_graph_element, ['input:0', 'min_size:0', 'thresholds:0', 'factor:0'])
+  ft = tf.nest.map_structure(import_graph.as_graph_element, ['prob:0', 'landmarks:0', 'box:0'])
+  inception_func = wrapped_import.prune(fe, ft)
+  input_img = tf.ones([224,224,3], dtype=tf.float32)
+  out = inception_func(input_img, tf.constant(20.0), tf.constant([0.6, 0.6, 0.6]), tf.constant(0.7))
+  ```
+## TF_2 加载 frozen MTCNN
+  ```py
+  import tensorflow as tf
+  tf.__version__
+  # '2.0.0'
+
+  class MTCNN:
+
+      def __init__(self, model_path, min_size=40, factor=0.709, thresholds=[0.6, 0.7, 0.7]):
+          self.min_size = min_size
+          self.factor = factor
+          self.thresholds = thresholds
+
+          graph = tf.Graph()
+          with graph.as_default():
+              with open(model_path, 'rb') as f:
+                  graph_def = tf.compat.v1.GraphDef.FromString(f.read())
+                  tf.import_graph_def(graph_def, name='')
+          self.graph = graph
+          config = tf.compat.v1.ConfigProto(
+              gpu_options = tf.compat.v1.GPUOptions(allow_growth=True),
+              allow_soft_placement=True,
+              intra_op_parallelism_threads=4,
+              inter_op_parallelism_threads=4
+              )
+          config.gpu_options.allow_growth = True
+          self.sess = tf.compat.v1.Session(graph=graph, config=config)
+
+      def detect_faces(self, img):
+          feeds = {
+              self.graph.get_operation_by_name('input').outputs[0]: img,
+              self.graph.get_operation_by_name('min_size').outputs[0]: self.min_size,
+              self.graph.get_operation_by_name('thresholds').outputs[0]: self.thresholds,
+              self.graph.get_operation_by_name('factor').outputs[0]: self.factor
+          }
+          fetches = [self.graph.get_operation_by_name('prob').outputs[0],
+                    self.graph.get_operation_by_name('landmarks').outputs[0],
+                    self.graph.get_operation_by_name('box').outputs[0]]
+          prob, landmarks, box = self.sess.run(fetches, feeds)
+          return box, prob, landmarks
   ```
   ```py
-  tf.__version__  # '1.14.0'
-  import yaml
-  from model import get_embd
+  # cd ~/workspace/face_recognition_collection/MTCNN/tensorflow
+  img = plt.imread('../test_images/2.jpg')
+  det = MTCNN("./mtcnn.pb")
+  det.detect_faces(img)
+  # (array([[ 65.71266,  74.45414, 187.65063, 172.71921]], dtype=float32),
+  #  array([0.99999845], dtype=float32),
+  #  array([[113.4738  , 113.50406 , 138.02603 , 159.49994 , 158.71802 ,
+  #          102.397964, 147.4054  , 125.014786, 105.924614, 145.5773  ]],
+  #        dtype=float32))
 
-  ''' 加载模型 '''
-  config = yaml.load(open('./configs/config_ms1m_100.yaml'))
-  images = tf.placeholder(dtype=tf.float32, shape=[None, 112, 112, 3], name='input_image')
-  train_phase_dropout = tf.placeholder(dtype=tf.bool, shape=None, name='train_phase')
-  train_phase_bn = tf.placeholder(dtype=tf.bool, shape=None, name='train_phase_last')
-  embds, _ = get_embd(images, train_phase_dropout, train_phase_bn, config)
+  bb, cc, pp = det.detect_faces(img)
+  bb = np.array([[ii[1], ii[0], ii[3], ii[2]] for ii in bb])
+  # array([[ 74.45414,  65.71266, 172.71921, 187.65063]], dtype=float32)
+  pp = np.array([ii.reshape(2, 5)[::-1].T for ii in pp])
+  # array([[[102.397964, 113.4738  ],
+  #         [147.4054  , 113.50406 ],
+  #         [125.014786, 138.02603 ],
+  #         [105.924614, 159.49994 ],
+  #         [145.5773  , 158.71802 ]]], dtype=float32)
+  ```
+***
 
+# Insightface saved_model 模型
+## Insightface MXNET model to TensorFlow model
+  ```sh
+  cd model-r100-ii/
+
+  # 一次转化
+  mmconvert -sf mxnet -in model-symbol.json -iw model-0000.params -df tensorflow -om resnet100 --dump_tag SERVING --inputShape 3,112,112
+
+  # 分步执行
+  mmtoir -f mxnet -n model-symbol.json -w model-0000.params -d resnet100 --inputShape 3,112,112
+  mmtocode -f tensorflow --IRModelPath resnet100.pb --IRWeightPath resnet100.npy --dstModelPath tf_resnet100.py
+  mmtomodel -f tensorflow -in tf_resnet100.py -iw resnet100.npy -o tf_resnet100 --dump_tag SERVING
+  ```
+## TensorFlow 加载 Insightface saved_model 模型
+  ```py
+  # Tensorflow 1.14
+  ''' 提取特征值 '''
   sess = tf.InteractiveSession()
-  tf.global_variables_initializer().run()
+  meta_graph_def = tf.saved_model.loader.load(sess, ["serve"], "./tf_resnet100")
+  x = sess.graph.get_tensor_by_name("data:0")
+  y = sess.graph.get_tensor_by_name("fc1/add_1:0")
+
+  emb = sess.run(y, feed_dict={x: np.ones([3, 112, 112, 3], dtype=np.float32)})
+  print(emb.shape)
+  # (3, 512)
+  ```
+  ```py
+  # Tensorflow 2.0
+  loaded = tf.saved_model.load('./tf_resnet100')
+  loaded.signatures
+  # _SignatureMap({'serving_default': <tensorflow.python.eager.wrap_function.WrappedFunction object at 0x7fee8c051fd0>})
+  _interp = loaded.signatures['serving_default']
+  interp = lambda xx: _interp(tf.convert_to_tensor(xx, dtype=tf.float32))["output"].numpy()
+  emb = interp(np.ones([3, 112, 112, 3]))
+  print(emb.shape)
+  # (3, 512)
+  ```
+## Tensorflow Serving server
+  - `saved_model_cli` 显示模型 signature_def 信息
+    ```sh
+    cd /home/leondgarse/workspace/models/insightface_mxnet_model/model-r100-ii/tf_resnet100
+    tree
+    # .
+    # ├── 1
+    # │   ├── saved_model.pb
+    # │   └── variables
+    # │       ├── variables.data-00000-of-00001
+    # │       └── variables.index
+
+    saved_model_cli show --dir ./1
+    # The given SavedModel contains the following tag-sets:
+    # serve
+
+    saved_model_cli show --dir ./1 --tag_set serve
+    # The given SavedModel MetaGraphDef contains SignatureDefs with the following keys:
+    # SignatureDef key: "serving_default"
+
+    saved_model_cli show --dir ./1 --tag_set serve --signature_def serving_default
+    # The given SavedModel SignatureDef contains the following input(s):
+    #   inputs['input'] tensor_info:
+    #       dtype: DT_FLOAT
+    #       shape: (-1, 112, 112, 3)
+    #       name: data:0
+    # The given SavedModel SignatureDef contains the following output(s):
+    #   outputs['output'] tensor_info:
+    #       dtype: DT_FLOAT
+    #       shape: (-1, 512)
+    #       name: fc1/add_1:0
+    # Method name is: tensorflow/serving/predict
+    ```
+  - `tensorflow_model_server` 启动服务
+    ```sh
+    # model_base_path 需要绝对路径
+    tensorflow_model_server --port=8500 --rest_api_port=8501 --model_name=arcface --model_base_path=/home/leondgarse/workspace/models/insightface_mxnet_model/model-r100-ii/tf_resnet100
+    ```
+  - `requests` 请求返回特征值结果
+    ```py
+    import json
+    import requests
+    from skimage.transform import resize
+
+    rr = requests.get("http://localhost:8501/v1/models/arcface")
+    print(rr.json())
+    # {'model_version_status': [{'version': '1', 'state': 'AVAILABLE', 'status': {'error_code': 'OK', 'error_message': ''}}]}
+
+    x = plt.imread('grace_hopper.jpg')
+    print(x.shape)
+    # (600, 512, 3)
+
+    xx = resize(x, [112, 112])
+    data = json.dumps({"signature_name": "serving_default", "instances": [xx.tolist()]})
+    headers = {"content-type": "application/json"}
+    json_response = requests.post('http://localhost:8501/v1/models/arcface:predict',data=data, headers=headers)
+    rr = json_response.json()
+    print(rr.keys(), np.shape(rr['predictions']))
+    # dict_keys(['predictions']) (1, 512)
+    ```
+  - `MTCNN` 提取人脸位置后请求结果
+    ```py
+    from mtcnn.mtcnn import MTCNN
+
+    img = plt.imread('grace_hopper.jpg')
+    detector = MTCNN(steps_threshold=[0.6, 0.7, 0.7])
+    aa = detector.detect_faces(img)
+    bb = aa[0]['box']
+    cc = img[bb[1]: bb[1] + bb[3], bb[0]: bb[0] + bb[2]]
+    dd = resize(cc, [112, 112])
+
+    data = json.dumps({"signature_name": "serving_default", "instances": [dd.tolist()]})
+    headers = {"content-type": "application/json"}
+    json_response = requests.post('http://localhost:8501/v1/models/arcface:predict',data=data, headers=headers)
+    rr = json_response.json()
+    print(rr.keys(), np.shape(rr['predictions']))
+    # dict_keys(['predictions']) (1, 512)
+    ```
+## Insightface Checkpoints to SavedModel
+  - [Github luckycallor/InsightFace-tensorflow](https://github.com/luckycallor/InsightFace-tensorflow)
+  - **Tensorflow 1.14 加载并保存模型**
+    ```py
+    tf.__version__  # '1.14.0'
+    import yaml
+    from model import get_embd
+
+    ''' 加载模型 '''
+    config = yaml.load(open('./configs/config_ms1m_100.yaml'))
+    images = tf.placeholder(dtype=tf.float32, shape=[None, 112, 112, 3], name='input_image')
+    train_phase_dropout = tf.placeholder(dtype=tf.bool, shape=None, name='train_phase')
+    train_phase_bn = tf.placeholder(dtype=tf.bool, shape=None, name='train_phase_last')
+    embds, _ = get_embd(images, train_phase_dropout, train_phase_bn, config)
+
+    sess = tf.InteractiveSession()
+    tf.global_variables_initializer().run()
+    saver = tf.train.Saver()
+    saver.restore(sess, '/home/leondgarse/Downloads/config_ms1m_100_334k/best-m-334000')
+
+    ''' 从 graph 中获取输入 / 输出 tensor '''
+    gg = sess.graph
+    oo = gg.get_operations()
+    print(len(oo))
+    # 4046
+
+    ''' 输入 tensor，必须包括所有的 Placeholder '''
+    oo[:5]
+    # [<tf.Operation 'input_image' type=Placeholder>,
+    #  <tf.Operation 'train_phase' type=Placeholder>,
+    #  <tf.Operation 'train_phase_last' type=Placeholder>,
+    #  <tf.Operation 'embd_extractor/resnet_v2_50/conv1/weights/Initializer/truncated_normal/shape' type=Const>,
+    #  <tf.Operation 'embd_extractor/resnet_v2_50/conv1/weights/Initializer/truncated_normal/mean' type=Const>]
+    [ii for ii in oo if ii.type == 'Placeholder']
+    # [<tf.Operation 'input_image' type=Placeholder>,
+    #  <tf.Operation 'train_phase' type=Placeholder>,
+    #  <tf.Operation 'train_phase_last' type=Placeholder>]
+    feeds = {
+      'input_image': gg.get_tensor_by_name('input_image:0'),
+      'train_phase': gg.get_tensor_by_name('train_phase:0'),
+      'train_phase_last': gg.get_tensor_by_name('train_phase_last:0')
+    }
+    feeds = {ii.name: ii.outputs[0]  for ii in oo if ii.type == 'Placeholder'}
+
+    ''' 输出 tensor，首先获取到名称 [ ??? ] '''
+    oo[-5:] # NOT these
+    # [<tf.Operation 'save/Assign_277' type=Assign>,
+    #  <tf.Operation 'save/Assign_278' type=Assign>,
+    #  <tf.Operation 'save/Assign_279' type=Assign>,
+    #  <tf.Operation 'save/Assign_280' type=Assign>,
+    #  <tf.Operation 'save/restore_all' type=NoOp>]
+    [(id, ii) for id, ii in enumerate(oo) if len(ii.outputs) != 0 and
+              ii.outputs[0].shape.dims != None and ii.outputs[0].shape.as_list() == [None, 512]]
+    # [(3693, <tf.Operation 'embd_extractor/fully_connected/MatMul' type=MatMul>),
+    #  (3694, <tf.Operation 'embd_extractor/fully_connected/BiasAdd' type=BiasAdd>),
+    #  (3752, <tf.Operation 'embd_extractor/BatchNorm_1/Reshape_1' type=Reshape>)]
+    oo[3750:3756]
+    # [<tf.Operation 'embd_extractor/BatchNorm_1/cond_1/Merge_1' type=Merge>,
+    #  <tf.Operation 'embd_extractor/BatchNorm_1/Shape' type=Shape>,
+    #  <tf.Operation 'embd_extractor/BatchNorm_1/Reshape_1' type=Reshape>,
+    #  <tf.Operation 'init' type=NoOp>,
+    #  <tf.Operation 'save/filename/input' type=Const>,
+    #  <tf.Operation 'save/filename' type=PlaceholderWithDefault>]
+    fetches = {
+      'output': gg.get_tensor_by_name('embd_extractor/BatchNorm_1/Reshape_1:0')
+    }
+
+    tf.saved_model.simple_save(sess, './1', inputs=feeds, outputs=fetches)
+    ```
+  - **Tensorflow 2.0 加载 saved_model**
+    ```py
+    tf.__version__  # '2.0.0'
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    tf.config.experimental.set_memory_growth(gpus[0], True)
+
+    gg = tf.saved_model.load('./1')
+    tt = gg.signatures['serving_default']
+    tt(input_image=tf.ones([1, 112, 112, 3]), train_phase_last=tf.constant(False), train_phase=tf.constant(False))
+    ```
+***
+
+# TF_1 checkpoints
+## save and restore checkpoints models
+  - [A quick complete tutorial to save and restore Tensorflow models](https://cv-tricks.com/tensorflow-tutorial/save-restore-tensorflow-models-quick-complete-tutorial/)
+  ```py
+  import tensorflow as tf
+  tf.__version__
+  # '1.14.0'
+
+  ''' Save checkpoints'''
+  #Define a test operation that we will restore
+  w1 = tf.placeholder("float", name="w1")
+  w2 = tf.placeholder("float", name="w2")
+  b1= tf.Variable(2.0, name="bias")
+  feed_dict ={w1:4, w2:8}
+
+  w3 = tf.multiply(w1, w2)
+  w4 = tf.add(w3, b1, name="op_to_restore")
+
+  sess = tf.Session()
+  sess.run(tf.global_variables_initializer())
   saver = tf.train.Saver()
-  saver.restore(sess, '/home/leondgarse/Downloads/config_ms1m_100_334k/best-m-334000')
+  saver.save(sess, 'test/my_test_model', global_step=1000)
+  os.listdir('test')
+  # ['my_test_model-1000.data-00000-of-00001', 'checkpoint', 'my_test_model-1000.index', 'my_test_model-1000.meta']
 
-  ''' 从 graph 中获取输入 / 输出 tensor '''
-  gg = sess.graph
-  oo = gg.get_operations()
-  print(len(oo))
-  # 4046
+  ''' Load checkpoints'''
+  sess = tf.Session()
+  #First let's load meta graph and restore weights
+  saver = tf.train.import_meta_graph('./test/my_test_model-1000.meta')
+  saver.restore(sess, tf.train.latest_checkpoint('./test'))
 
-  ''' 输入 tensor，必须包括所有的 Placeholder '''
-  oo[:5]
-  # [<tf.Operation 'input_image' type=Placeholder>,
-  #  <tf.Operation 'train_phase' type=Placeholder>,
-  #  <tf.Operation 'train_phase_last' type=Placeholder>,
-  #  <tf.Operation 'embd_extractor/resnet_v2_50/conv1/weights/Initializer/truncated_normal/shape' type=Const>,
-  #  <tf.Operation 'embd_extractor/resnet_v2_50/conv1/weights/Initializer/truncated_normal/mean' type=Const>]
-  [ii for ii in oo if ii.type == 'Placeholder']
-  # [<tf.Operation 'input_image' type=Placeholder>,
-  #  <tf.Operation 'train_phase' type=Placeholder>,
-  #  <tf.Operation 'train_phase_last' type=Placeholder>]
-  feeds = {
-    'input_image': gg.get_tensor_by_name('input_image:0'),
-    'train_phase': gg.get_tensor_by_name('train_phase:0'),
-    'train_phase_last': gg.get_tensor_by_name('train_phase_last:0')
-  }
-  feeds = {ii.name: ii.outputs[0]  for ii in oo if ii.type == 'Placeholder'}
+  # Now, let's access and create placeholders variables and
+  # create feed-dict to feed new data
+  graph = tf.get_default_graph()  # Or graph = sess.graph
+  w1 = graph.get_tensor_by_name("w1:0")
+  w2 = graph.get_tensor_by_name("w2:0")
+  feed_dict ={w1:13.0, w2:17.0}
 
-  ''' 输出 tensor，首先获取到名称 [ ??? ] '''
-  oo[-5:] # NOT these
-  # [<tf.Operation 'save/Assign_277' type=Assign>,
-  #  <tf.Operation 'save/Assign_278' type=Assign>,
-  #  <tf.Operation 'save/Assign_279' type=Assign>,
-  #  <tf.Operation 'save/Assign_280' type=Assign>,
-  #  <tf.Operation 'save/restore_all' type=NoOp>]
-  [(id, ii) for id, ii in enumerate(oo) if len(ii.outputs) != 0 and
-            ii.outputs[0].shape.dims != None and ii.outputs[0].shape.as_list() == [None, 512]]
-  # [(3693, <tf.Operation 'embd_extractor/fully_connected/MatMul' type=MatMul>),
-  #  (3694, <tf.Operation 'embd_extractor/fully_connected/BiasAdd' type=BiasAdd>),
-  #  (3752, <tf.Operation 'embd_extractor/BatchNorm_1/Reshape_1' type=Reshape>)]
-  oo[3750:3756]
-  # [<tf.Operation 'embd_extractor/BatchNorm_1/cond_1/Merge_1' type=Merge>,
-  #  <tf.Operation 'embd_extractor/BatchNorm_1/Shape' type=Shape>,
-  #  <tf.Operation 'embd_extractor/BatchNorm_1/Reshape_1' type=Reshape>,
-  #  <tf.Operation 'init' type=NoOp>,
-  #  <tf.Operation 'save/filename/input' type=Const>,
-  #  <tf.Operation 'save/filename' type=PlaceholderWithDefault>]
-  fetches = {
-    'output': gg.get_tensor_by_name('embd_extractor/BatchNorm_1/Reshape_1:0')
-  }
+  #Now, access the op that you want to run.
+  op_to_restore = graph.get_tensor_by_name("op_to_restore:0")
+  print(sess.run(op_to_restore, feed_dict))
+  # 223.0
 
-  tf.saved_model.simple_save(sess, './1', inputs=feeds, outputs=fetches)
+  ''' Add more to the current graph '''
+  add_on_op = tf.multiply(op_to_restore,2)
 
-  tf.__version__  # '2.0.0'
-  gpus = tf.config.experimental.list_physical_devices('GPU')
-  tf.config.experimental.set_memory_growth(gpus[0], True)
-  gg = tf.saved_model.load('./1')
-  tt = gg.signatures['serving_default']
-  tt(input_image=tf.ones([1, 112, 112, 3]), train_phase_last=tf.constant(False), train_phase=tf.constant(False))
+  print(sess.run(add_on_op, feed_dict))
+  # 446.0
+  ```
+  **一个更复杂的示例**
+  ```py
+  ......
+  ......
+  saver = tf.train.import_meta_graph('vgg.meta')
+  # Access the graph
+  graph = tf.get_default_graph()
+  ## Prepare the feed_dict for feeding data for fine-tuning
+
+  #Access the appropriate output for fine-tuning
+  fc7= graph.get_tensor_by_name('fc7:0')
+
+  #use this if you only want to change gradients of the last layer
+  fc7 = tf.stop_gradient(fc7) # It's an identity function
+  fc7_shape= fc7.get_shape().as_list()
+
+  new_outputs=2
+  weights = tf.Variable(tf.truncated_normal([fc7_shape[3], num_outputs], stddev=0.05))
+  biases = tf.Variable(tf.constant(0.05, shape=[num_outputs]))
+  output = tf.matmul(fc7, weights) + biases
+  pred = tf.nn.softmax(output)
+  ```
+## inspect_checkpoint
+  - **tensorflow.python.tools.inspect_checkpoint** 可以快速检测某个 checkpoint 中的变量
+  ```py
+  # import the inspect_checkpoint library
+  from tensorflow.python.tools import inspect_checkpoint as chkp
+
+  chkp.print_tensors_in_checkpoint_file("./test/my_test_model-1000", tensor_name='', all_tensors=True)
+  # tensor_name:  bias
+  # 2.0
+  # Total number of params: 1
+
+  chkp.print_tensors_in_checkpoint_file("./test/my_test_model-1000", tensor_name='bias', all_tensors=True)
+  # tensor_name:  bias
+  # 2.0
+  # Total number of params: 1
   ```
 ***

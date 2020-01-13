@@ -178,3 +178,168 @@
   P(因∣果) P(θ∣x)
   后验概率 P(θ∣x) = P(x∣θ) * P(θ) / P(x) = 似然估计 ∗ 先验概率 / evidence
   ```
+***
+
+# Dog Species Classifier
+## Tensorflow 1.14
+  ```py
+  import tensorflow as tf
+  from tensorflow import keras
+  # config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5, allow_growth=True))
+  config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
+  sess = tf.Session(config=config)
+  keras.backend.set_session(sess)
+
+  from tensorflow.python.keras import layers
+  from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
+  from PIL import ImageFile
+  ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+  train_data_gen = ImageDataGenerator(rescale=1./255, rotation_range=20, zoom_range=0.15,
+      width_shift_range=0.2, height_shift_range=0.2, brightness_range=(0.1, 2),
+      shear_range=0.15, horizontal_flip=True, fill_mode="nearest")
+
+  train_img_gen = train_data_gen.flow_from_directory('./dogImages/train/', target_size=(512, 512), batch_size=4, seed=1)
+  val_data_gen = ImageDataGenerator(rescale=1./255)
+  val_img_gen = val_data_gen.flow_from_directory('./dogImages/valid/', target_size=(512, 512), seed=1)
+
+  img_shape = (512, 512, 3)
+  xx = keras.applications.resnet50.ResNet50(include_top=False, weights='imagenet')
+  # xx = keras.applications.vgg19.VGG19(include_top=False, weights='imagenet')
+  xx.trainable = True
+  model = tf.keras.Sequential([
+      layers.Input(shape=img_shape),
+      xx,
+      layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)),
+      # layers.MaxPooling2D(2),
+      layers.Dropout(0.5),
+      # layers.AveragePooling2D(pool_size=512, strides=512, padding='same'),
+      layers.GlobalAveragePooling2D(),
+      layers.Flatten(),
+      layers.Dense(133, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001)),        
+  ])
+  model.summary()
+
+  callbacks = [
+      keras.callbacks.TensorBoard(log_dir='./logs'),
+      keras.callbacks.ModelCheckpoint("./keras_checkpoints", monitor='val_loss', save_best_only=True),
+      keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
+  ]
+  model.compile(optimizer=keras.optimizers.Adadelta(0.1), loss='categorical_crossentropy', metrics=['accuracy'])
+  model.fit_generator(train_img_gen, validation_data=val_img_gen, epochs=50, callbacks=callbacks, verbose=1, workers=10)
+
+  import glob2
+  from skimage.io import imread
+  from skimage.transform import resize
+
+  model = tf.keras.models.load_model('keras_checkpoints')
+  index_2_name = {vv: kk for kk, vv in train_img_gen.class_indices.items()}
+  aa = resize(imread('./dogImages/1806687557.jpg'), (512, 512))
+  pp = model.predict(np.expand_dims(aa, 0))
+  print(index_2_name[pp.argmax()])
+  # 029.Border_collie
+
+  imm = glob2.glob('./dogImages/test/*/*')
+  xx = np.array([resize(imread(ii), (512, 512)) for ii in imm])
+  yy = np.array([int(os.path.basename(os.path.dirname(ii)).split('.')[0]) -1 for ii in imm])
+  pp = model.predict(xx)
+  tt = np.argmax(pp, 1)
+  print((tt == yy).sum() / yy.shape[0])
+  # 0.8588516746411483
+
+  top_3_err = [(np.sort(ii)[-3:], ii.argmax(), imm[id]) for id, (ii, jj) in enumerate(zip(pp, yy)) if jj not in ii.argsort()[-3:]]
+  print(1 - len(top_3_err) / yy.shape[0])
+  # 0.965311004784689
+  ```
+## Tensorflow 2.0
+  ```py
+  import tensorflow as tf
+  gpus = tf.config.experimental.list_physical_devices('GPU')
+  tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
+  tf.config.experimental.set_memory_growth(gpus[0], True)
+  # tf.config.experimental.set_virtual_device_configuration(gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=10240)])
+
+  from tensorflow import keras
+  from tensorflow.python.keras import layers
+  from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
+  from PIL import ImageFile
+
+  ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+  img_shape = (224, 224, 3)
+  train_data_gen = ImageDataGenerator(rescale=1./255, rotation_range=20, zoom_range=0.15,
+      width_shift_range=0.2, height_shift_range=0.2, brightness_range=(0.1, 2),
+      shear_range=0.15, horizontal_flip=True, fill_mode="nearest")
+  train_img_gen = train_data_gen.flow_from_directory('./dogImages/train/', target_size=img_shape[:2], batch_size=4, seed=1)
+  val_data_gen = ImageDataGenerator(rescale=1./255)
+  val_img_gen = val_data_gen.flow_from_directory('./dogImages/valid/', target_size=img_shape[:2], batch_size=4, seed=1)                           
+
+  xx = keras.applications.ResNet50V2(include_top=False, weights='imagenet')
+
+  xx.trainable = True
+  model = tf.keras.Sequential([
+      layers.Input(shape=img_shape),
+      xx,
+      layers.Conv2D(512, 1, strides=1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)),
+      # layers.MaxPooling2D(2),
+      layers.Dropout(0.5),
+      # layers.AveragePooling2D(pool_size=512, strides=512, padding='same'),
+      layers.GlobalAveragePooling2D(),
+      layers.Flatten(),
+      layers.Dense(133, activation="softmax", kernel_regularizer=keras.regularizers.l2(0.00001)),                                                                                                                 
+  ])
+  model.summary()
+  callbacks = [
+      keras.callbacks.TensorBoard(log_dir='./logs'),
+      keras.callbacks.ModelCheckpoint("./keras_checkpoints", monitor='val_loss', save_best_only=True),
+      keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
+  ]
+  model.compile(optimizer=keras.optimizers.Adadelta(0.1), loss='categorical_crossentropy', metrics=['accuracy'])
+  model.fit_generator(train_img_gen, validation_data=val_img_gen, epochs=50, callbacks=callbacks, verbose=1, workers=10)
+  ```
+  ```sh
+  toco --saved_model_dir ./keras_checkpoints --output_file foo.tflite
+  ```
+  ```py
+  from tensorflow_model_optimization.sparsity import keras as sparsity
+  batch_size = 4
+  end_step = np.ceil(train_img_gen.classes.shape[0] / batch_size).astype(np.int32) * 55
+  pruning_params = {
+      "pruning_schedule": sparsity.PolynomialDecay(
+          initial_sparsity=0.5,
+          final_sparsity=0.9,
+          begin_step=2000,
+          end_step=end_step,
+          frequency=100)
+  }
+
+  pruned_model = tf.keras.Sequential([
+      layers.Input(shape=img_shape),
+      # sparsity.prune_low_magnitude(keras.applications.ResNet50V2(include_top=False, weights='imagenet'), **pruning_params),
+      keras.applications.ResNet50V2(include_top=False, weights='imagenet'),
+      sparsity.prune_low_magnitude(layers.Conv2D(512, 1, padding='same', activation='relu', kernel_regularizer=keras.regularizers.l2(0.00001)), **pruning_params),
+      layers.Dropout(0.5),
+      layers.GlobalAveragePooling2D(),
+      layers.Flatten(),
+      sparsity.prune_low_magnitude(layers.Dense(133, activation='softmax', kernel_regularizer=keras.regularizers.l2(0.00001)), **pruning_params)
+  ])
+  ```
+  ```py
+  import glob2
+  from skimage.io import imread
+  from skimage.transform import resize
+  imm = glob2.glob('./dogImages/test/*/*')
+  xx = np.array([resize(imread(ii), (224, 224)) for ii in imm])
+  ixx = tf.convert_to_tensor(xx, dtype='float32')
+  # ixx = tf.convert_to_tensor(xx, dtype=tf.uint8)
+  idd = tf.data.Dataset.from_tensor_slices((ixx)).batch(1)
+
+  def representative_data_gen():
+      for ii in idd.take(100):
+          yield [ii]
+  converter = tf.lite.TFLiteConverter.from_saved_model('./keras_checkpoints/')
+  converter.optimizations = [tf.lite.Optimize.DEFAULT]
+  converter.representative_dataset = representative_data_gen
+  tflite_quant_all_model = converter.convert()
+  ```
+***
