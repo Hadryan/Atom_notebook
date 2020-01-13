@@ -864,169 +864,6 @@
 ## Arcface loss
   - **Mxnet Insigntface Arcface loss**
     ```py
-    # def arcface_loss(y_true, y_pred, margin1=1.0, margin2=0.3, margin3=0.2, scale=64.0):
-    def arcface_loss(y_true, y_pred, margin1=0.9, margin2=0.4, margin3=0.15, scale=64.0):
-        norm_logits = y_pred[:, 512:]
-        theta = tf.acos(norm_logits)
-        cond = tf.where(tf.greater(theta * margin1 + margin2, np.pi), tf.zeros_like(y_true), y_true)
-        cond = tf.cast(cond, dtype=tf.bool)
-        m1_theta_plus_m2 = tf.where(cond, theta * margin1 + margin2, theta)
-        cos_m1_theta_plus_m2 = tf.cos(m1_theta_plus_m2)
-        arcface_logits = tf.where(cond, cos_m1_theta_plus_m2 - margin3, cos_m1_theta_plus_m2) * scale
-        tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
-        return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
-    ```
-    **Analysis**
-    ```py
-    margin1 = 1.0
-    margin2 = 0.2
-    margin3 = 0.3
-    tt = cos((np.pi - margin2) / margin1) = -0.9800665778412416
-
-    norm_logits --> aa = [-1, tt, 1]
-    theta = tf.acos(aa).numpy() --> [pi, 2.941593, 0]
-    theta * margin1 + margin2 --> [3.3415928, pi, 0.2]
-    cond --> y_true[theta * margin1 + margin2 < pi] --> y_true[norm_logits > tt]
-    m1_theta_plus_m2[cond] = theta * margin1 + margin2, m1_theta_plus_m2[not cond] = theta
-    cos_m1_theta_plus_m2[cond] = cos(theta * margin1 + margin2), cos_m1_theta_plus_m2[not cond] = norm_logits
-    arcface_logits[cond] = cos(theta * margin1 + margin2) - margin3, arcface_logits[not cond] = norm_logits
-    ```
-    **Plot**
-    ```py
-    def plot_arc_trans(margin_list):
-        xx = np.arange(-1, 1, 0.01)
-        y_true = np.ones_like(xx)
-        fig = plt.figure()
-        for margin1, margin2, margin3 in margin_list:
-            theta = np.frompyfunc(np.math.acos, 1, 1)(xx)
-            cond = np.where(theta * margin1 + margin2 > np.pi, np.zeros_like(y_true), y_true)
-            cond = cond.astype(np.bool)
-            m1_theta_plus_m2 = np.where(cond, theta * margin1 + margin2, theta).astype(np.float)
-            cos_m1_theta_plus_m2 = np.cos(m1_theta_plus_m2)
-            arcface_logits = np.where(cond, cos_m1_theta_plus_m2 - margin3, cos_m1_theta_plus_m2)
-            plt.plot(xx, arcface_logits, label="Margin1, 2, 3 [{}, {}, {}]".format(margin1, margin2, margin3))
-        plt.plot(xx, xx, label="Original")
-        plt.legend()
-        plt.tight_layout()
-    plot_arc_trans([[1.0, 0.2, 0.3], [1.0, 0.3, 0.2], [0.9, 0.4, 0.15], [0.9, 0.15, 0.4]])
-    ```
-    ![](images/arcface_loss_1.png)
-  - **Original Arcface loss**
-    ```py
-    def arcface_loss(y_true, y_pred, scale=64.0, margin=0.45):
-        norm_logits = y_pred[:, 512:]
-        cos_m = tf.math.cos(margin)
-        sin_m = tf.math.sin(margin)
-        mm = sin_m * margin
-        threshold = tf.math.cos(np.pi - margin)
-
-        cos_t2 = tf.square(norm_logits)
-        sin_t2 = tf.subtract(1., cos_t2)
-        sin_t = tf.sqrt(sin_t2)
-        cos_mt = scale * tf.subtract(tf.multiply(norm_logits, cos_m), tf.multiply(sin_t, sin_m), name='cos_mt')
-        cond_v = norm_logits - threshold
-        cond = tf.cast(tf.nn.relu(cond_v), dtype=tf.bool)
-        keep_val = scale * (norm_logits - mm)
-        cos_mt_temp = tf.where(cond, cos_mt, keep_val)
-
-        mask = tf.cast(y_true, tf.float32)
-        inv_mask = tf.subtract(1., mask)
-        s_cos_t = tf.multiply(scale, norm_logits)
-        arcface_logits = tf.add(tf.multiply(s_cos_t, inv_mask), tf.multiply(cos_mt_temp, mask))
-        tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
-        return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
-    ```
-    **Analysis**
-    ```py
-    xx = np.sqrt(1 / ((cos(0.45) / sin(0.45)) ** 2 + 1)) = 0.43496553
-    tt = threshold = cos(np.pi - 0.45) = -0.9004471023526768
-
-    norm_logits --> aa = np.array([-1, tt, 0, xx, 1]) = [-1, -0.9004471, 0, 0.43496553, 1]
-    sin_t = np.sqrt(1 - aa ** 2) --> [0, 0.43496553, 1, 0.9004471, 0]
-    cos_mt = aa * cos(0.45) - sin_t * sin(0.45) --> [-0.9004471, -1, -0.43496553, 0, 0.9004471]
-    cond_v = aa - cos(np.pi - 0.45) --> [-0.0995529, 0, 0.9004471, 1.33541264, 1.9004471]
-    cond = tf.nn.relu(cond_v).numpy() --> [0, 0, 0.9004471, 1.33541264, 1.9004471]
-    cond = cond.astype(np.bool) --> [False, False,  True,  True,  True]
-    keep_val = aa - sin(0.45) * 0.45 --> [-1.19573449, -1.09618159, -0.19573449, 0.23923104, 0.80426551]
-    cos_mt_temp = np.where(cond, cos_mt, keep_val) --> [-1.19573449, -1.09618159, -0.43496553, 0, 0.9004471]
-    arcface_logits[not y_true] = aa * 64, arcface_logits[y_true] = cos_mt_temp * 64
-    ```
-    **Plot**
-    ```py
-    def plot_arc_trans(margin_list):
-        xx = np.arange(-1, 1, 0.01)
-        fig = plt.figure()
-        for margin in margin_list:
-            cos_m = cos(margin)
-            sin_m = sin(margin)
-            mm = sin_m * margin
-            threshold = cos(np.pi - margin)
-
-            cos_t2 = xx ** 2
-            sin_t2 = 1 - cos_t2
-            sin_t = np.sqrt(sin_t2)
-            cos_mt = xx * cos_m - sin_t * sin_m
-            cond_v = xx - threshold
-            cond = cond_v > 0
-            keep_val = xx - mm
-            cos_mt_temp = tf.where(cond, cos_mt, keep_val)
-            plt.plot(xx, cos_mt_temp, label="Margin {}".format(margin))
-        plt.plot(xx, xx, label="Original")
-        plt.legend()
-        plt.tight_layout()
-    plot_arc_trans([0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6])
-    ```
-    ![](images/arcface_loss_2.png)
-## Arcface loss 3
-  ```py
-  def arcface_loss(y_true, y_pred, margin1=0.9, margin2=0.4, margin3=0.15, scale=64.0):
-      norm_logits = y_pred[:, 512:]
-      theta = tf.acos(norm_logits) * margin1 + margin2
-      cond = tf.logical_and(theta < np.pi, tf.cast(y_true, dtype=tf.bool))
-      arcface_logits = tf.where(cond, tf.cos(theta) - margin3, norm_logits) * scale
-      return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
-
-  with strategy.scope():
-      model.compile(optimizer='adamax', loss=arcface_loss, metrics=[logits_accuracy])
-  ```
-  ```py
-  Epoch 1/200
-  43216/43216 [==============================] - 9148s 212ms/step - loss: 34.7171 - accuracy: 0.0088 - val_loss: 14.4753 - val_accuracy: 0.0010
-  Epoch 2/200
-  43216/43216 [==============================] - 8995s 208ms/step - loss: 14.4870 - accuracy: 0.0022 - val_loss: 14.2573 - val_accuracy: 0.0118
-  Epoch 3/200
-  43216/43216 [==============================] - 8966s 207ms/step - loss: 14.5741 - accuracy: 0.0146 - val_loss: 14.6334 - val_accuracy: 0.0156
-  Epoch 4/200
-  43216/43216 [==============================] - 8939s 207ms/step - loss: 14.6519 - accuracy: 0.0175 - val_loss: 14.3232 - val_accuracy: 0.0158
-  Epoch 5/200
-  43216/43216 [==============================] - 9122s 211ms/step - loss: 14.6973 - accuracy: 0.0198 - val_loss: 15.0081 - val_accuracy: 0.0210
-  ```
-  ```py
-  Epoch 00016
-  45490/45490 [==============================] - 7650s 168ms/step - loss: 7.4638 - logits_accuracy: 0.9441
-  45490/45490 [==============================] - 7673s 169ms/step - loss: 6.7531 - logits_accuracy: 0.9505
-  45490/45490 [==============================] - 7673s 169ms/step - loss: 6.2979 - logits_accuracy: 0.9545
-  45490/45490 [==============================] - 7669s 169ms/step - loss: 5.9736 - logits_accuracy: 0.9573
-  45490/45490 [==============================] - 7684s 169ms/step - loss: 5.7335 - logits_accuracy: 0.9594
-  Epoch 00021
-  45490/45490 [==============================] - 7696s 169ms/step - loss: 5.5467 - logits_accuracy: 0.9611
-  45490/45490 [==============================] - 7658s 168ms/step - loss: 5.4025 - logits_accuracy: 0.9623
-  45490/45490 [==============================] - 7704s 169ms/step - loss: 5.2873 - logits_accuracy: 0.9634
-  45490/45490 [==============================] - 7685s 169ms/step - loss: 5.1977 - logits_accuracy: 0.9641
-  45490/45490 [==============================] - 7678s 169ms/step - loss: 5.1219 - logits_accuracy: 0.9648
-  Epoch 00026
-  45490/45490 [==============================] - 7701s 169ms/step - loss: 5.0629 - logits_accuracy: 0.9653
-  45490/45490 [==============================] - 7674s 169ms/step - loss: 5.0147 - logits_accuracy: 0.9657
-  45490/45490 [==============================] - 7674s 169ms/step - loss: 4.9736 - logits_accuracy: 0.9661
-  45490/45490 [==============================] - 7672s 169ms/step - loss: 4.9430 - logits_accuracy: 0.9663
-  45490/45490 [==============================] - 7670s 169ms/step - loss: 4.9173 - logits_accuracy: 0.9665
-  Epoch 00031
-  45490/45490 [==============================] - 7667s 169ms/step - loss: 4.8958 - logits_accuracy: 0.9667
-  45490/45490 [==============================] - 7663s 168ms/step - loss: 4.8778 - logits_accuracy: 0.9669
-  ```
-## Arcface loss 4
-  - **Mxnet Insigntface Arcface loss**
-    ```py
     # def arcface_loss(y_true, y_pred, margin1=0.9, margin2=0.4, margin3=0.15, scale=64.0):
     def arcface_loss(y_true, y_pred, margin1=1.0, margin2=0.5, margin3=0.0, scale=64.0):
         # norm_logits = y_pred[:, 512:]
@@ -1038,7 +875,6 @@
         arcface_logits = (theta_one_hot + norm_logits) * scale
         tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
         return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
-    model.compile(optimizer=keras.optimizers.SGD(learning_rate=0.1, momentum=0.9), loss=arcface_loss, metrics=["accuracy"])
     ```
     **Plot**
     ```py
@@ -1080,7 +916,7 @@
         theta = tf.cos(tf.acos(norm_logits) * margin1 + margin2) - margin3
         cond = tf.logical_and(tf.cast(y_true, dtype=tf.bool), theta < norm_logits)
         arcface_logits = tf.where(cond, theta, norm_logits) * scale
-        tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
+        # tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
         return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
 
     def arcface_loss(y_true, y_pred, margin1=0.9, margin2=0.4, margin3=0.15, scale=64.0):
@@ -1095,6 +931,9 @@
 
     with strategy.scope():
         model.compile(optimizer='nadam', loss=arcface_loss, metrics=["accuracy"])
+
+    with strategy.scope():
+        model.compile(optimizer='adamax', loss=arcface_loss, metrics=[logits_accuracy])
     ```
     **Plot**
     ```py
@@ -1126,12 +965,14 @@
     plot_arc_trans([[1.0, 0.4, ii] for ii in [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35]], new_fig=False)
     plt.title('Margin 3')
     ax = plt.subplot(2, 2, 4)
-      plot_arc_trans(list(insightface_results.values()), new_fig=False)
+    plot_arc_trans(list(insightface_results.values()), new_fig=False)
     plt.title('Insightface')
     fig.tight_layout()
     ```
     ![](images/arcface_loss_limit_values.png)
+  - **Training result**
     ```py
+    # arcface only
     45490/45490 [==============================] - 7573s 166ms/step - loss: 17.2420 - logits_accuracy: 0.0033
     45490/45490 [==============================] - 7558s 166ms/step - loss: 14.9532 - logits_accuracy: 0.0025
     45490/45490 [==============================] - 7551s 166ms/step - loss: 14.9645 - logits_accuracy: 0.0034
@@ -1140,11 +981,30 @@
     45490/45490 [==============================] - 7542s 166ms/step - loss: 14.9266 - logits_accuracy: 0.0060
     ```
     ```py
-    # mobilenet arcface loss
-    Epoch 1/200
-    45490/45490 [==============================] - 6586s 145ms/step - loss: 11.3648 - accuracy: 8.4497e-05
-    45490/45490 [==============================] - 6629s 146ms/step - loss: 10.6558 - accuracy: 1.8840e-04
+    # Fine tune on softmax
+    Epoch 00016
+    45490/45490 [==============================] - 7650s 168ms/step - loss: 7.4638 - logits_accuracy: 0.9441
+    45490/45490 [==============================] - 7673s 169ms/step - loss: 6.7531 - logits_accuracy: 0.9505
+    45490/45490 [==============================] - 7673s 169ms/step - loss: 6.2979 - logits_accuracy: 0.9545
+    45490/45490 [==============================] - 7669s 169ms/step - loss: 5.9736 - logits_accuracy: 0.9573
+    45490/45490 [==============================] - 7684s 169ms/step - loss: 5.7335 - logits_accuracy: 0.9594
+    Epoch 00021
+    45490/45490 [==============================] - 7696s 169ms/step - loss: 5.5467 - logits_accuracy: 0.9611
+    45490/45490 [==============================] - 7658s 168ms/step - loss: 5.4025 - logits_accuracy: 0.9623
+    45490/45490 [==============================] - 7704s 169ms/step - loss: 5.2873 - logits_accuracy: 0.9634
+    45490/45490 [==============================] - 7685s 169ms/step - loss: 5.1977 - logits_accuracy: 0.9641
+    45490/45490 [==============================] - 7678s 169ms/step - loss: 5.1219 - logits_accuracy: 0.9648
+    Epoch 00026
+    45490/45490 [==============================] - 7701s 169ms/step - loss: 5.0629 - logits_accuracy: 0.9653
+    45490/45490 [==============================] - 7674s 169ms/step - loss: 5.0147 - logits_accuracy: 0.9657
+    45490/45490 [==============================] - 7674s 169ms/step - loss: 4.9736 - logits_accuracy: 0.9661
+    45490/45490 [==============================] - 7672s 169ms/step - loss: 4.9430 - logits_accuracy: 0.9663
+    45490/45490 [==============================] - 7670s 169ms/step - loss: 4.9173 - logits_accuracy: 0.9665
+    Epoch 00031
+    45490/45490 [==============================] - 7667s 169ms/step - loss: 4.8958 - logits_accuracy: 0.9667
+    45490/45490 [==============================] - 7663s 168ms/step - loss: 4.8778 - logits_accuracy: 0.9669
     ```
+## Soft arcface
   - **Soft Arcface loss** 直接调整 softmax 值
     ```py
     # def soft_arcface_loss(y_true, y_pred, power=1, scale=0.4):
@@ -1162,14 +1022,8 @@
     with strategy.scope():
         model.compile(optimizer='nadam', loss=soft_arcface_loss, metrics=["accuracy"])
     ```
-    **Plot**
+  - **Plot**
     ```py
-    plot_arc_trans([[0.9, 0.4, 0.15], [1.0, 0.3, 0.2], [1.0, 0, 0.35]], new_fig=True)
-    xx = np.arange(-1, 1, 0.01)
-    plt.plot(xx, ((xx + 1) / 2) ** 2 * 0.8 + ((xx + 1) / 2) - 1, label='xx ** 2')
-    plt.plot(xx, ((xx + 1) / 2) ** 3 * 0.8 + ((xx + 1) / 2) - 1, label='xx ** 3')
-    plt.legend()
-
     xx = np.arange(0, 1, 0.01)
     plt.plot(xx, xx, label="xx")
     plt.plot(xx, xx * 0.8, label="xx * 0.8")
@@ -1189,7 +1043,7 @@
     plt.grid()
     plt.tight_layout()
     ```
-    ![](images/arcface_loss_limit_values.png)
+    ![](images/softarc_loss.png)
   - **Soft Arcface loss train and analysis**
     ```py
     # (xx ** 3 + xx) / 2 * 0.9 ./keras_checkpoints_arc.h5
@@ -1207,6 +1061,7 @@
     >>>> cfp_fp evaluation max accuracy: 0.836286, thresh: 100.552765, overall max accuracy: 0.837286
     >>>> agedb_30 evaluation max accuracy: 0.890667, thresh: 166.642136, overall max accuracy: 0.890667
     ```
+  - **softarc comparing arcface transform**
     ```py
     ee = model.predict(image_batch)
     print((label_batch.numpy().argmax(1) == ee.argmax(1)).sum())
@@ -1226,9 +1081,10 @@
     ```py
     from sklearn.preprocessing import normalize
 
-    margin1, margin2, margin3 = 0.9 ,0.4, 0.15
-    margin1, margin2, margin3 = 1.0 ,0.3, 0.2
-    margin1, margin2, margin3 = 1.0, 0, 0.35
+    # margin1, margin2, margin3 = 0.9 ,0.4, 0.15
+    # margin1, margin2, margin3 = 1.0 ,0.3, 0.2
+    margin1, margin2, margin3 = 1.0 ,0.5, 0
+    # margin1, margin2, margin3 = 1.0, 0, 0.35
     aa = np.random.uniform(-1, 1, (200, 100))
     cc = np.zeros_like(aa)
     dd = np.random.choice(100, 200)
@@ -1274,6 +1130,7 @@
     plt.legend()
     plt.tight_layout()
     ```
+    ![](images/arcface_softarc.png)
 ## Center loss
   ```py
   class Save_Numpy_Callback(tf.keras.callbacks.Callback):

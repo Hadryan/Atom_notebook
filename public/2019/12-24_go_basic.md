@@ -106,6 +106,16 @@
     # lrwxrwxrwx 1 root root     34 十二 25 09:29 /usr/lib/x86_64-linux-gnu/libzmq.so.5 -> /opt/anaconda3/lib/libzmq.so.5.2.1
     # -rw-r--r-- 1 root root 630464 七月  3 22:30 /usr/lib/x86_64-linux-gnu/libzmq.so.5.1.5
     ```
+    ```sh
+    ''' Q
+    go Get https://proxy.golang.org/xxx proxyconnect tcp: net/http: TLS handshake timeout
+    '''
+    ''' A
+    配置 https 代理为 http://xxx
+
+    http_proxy='http://127.0.0.1:8118' https_proxy='http://127.0.0.1:8118' jupyter-notebook --notebook-dir=$HOME/practice_code/jupyter_notebook/
+    '''
+    ```
   - **hello world**
     ```go
     import "fmt"
