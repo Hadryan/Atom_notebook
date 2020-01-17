@@ -503,15 +503,19 @@
   # list_ds = tf.data.Dataset.list_files('/datasets/faces_emore_112x112_folders/*/*')
   list_ds = tf.data.Dataset.from_tensor_slices(image_names)
 
-  def process_path(file_path, classes, img_shape=(112, 112)):
+  def process_path(file_path, classes, img_shape=(112, 112), random_convert=True):
       parts = tf.strings.split(file_path, os.path.sep)[-2]
       label = tf.cast(tf.strings.to_number(parts), tf.int32)
       label = tf.one_hot(label, depth=classes, dtype=tf.int32)
       img = tf.io.read_file(file_path)
       img = tf.image.decode_jpeg(img, channels=3)
       img = tf.image.convert_image_dtype(img, tf.float32)
+      if random_convert:
+          img = tf.image.random_flip_left_right(img)
+          img = tf.image.random_brightness(img, 0.2)
+          img = tf.image.random_crop(img, [100, 100, 3])
       img = tf.image.resize(img, img_shape)
-      img = tf.image.random_flip_left_right(img)
+      img = (img - 0.5) * 2
       return img, label
 
   def prepare_for_training(ds, cache=True, shuffle_buffer_size=None, batch_size=128):
@@ -665,9 +669,13 @@
 
   inputs = xx.inputs[0]
   nn = xx.outputs[0]
-  nn = layers.GlobalAveragePooling2D()(nn)
-  nn = layers.Dropout(0.1)(nn)
-  embedding = layers.Dense(512, name='embedding')(nn)
+  nn = layers.Conv2D(512, 3, use_bias=False)(nn)
+  # BatchNormalization(momentum=0.99, epsilon=0.001)
+  nn = layers.BatchNormalization(momentum=0.9, epsilon=2e-5)(nn)
+  nn = layers.Dropout(0.4)(nn)
+  nn = layers.Flatten()(nn)
+  nn = layers.Dense(512)(nn)
+  embedding = layers.BatchNormalization(momentum=0.9, epsilon=2e-5, name='embedding')(nn)
   # norm_emb = layers.Lambda(tf.nn.l2_normalize, name='norm_embedding', arguments={'axis': 1})(embedding)
   basic_model = keras.models.Model(inputs, embedding)
 
@@ -972,7 +980,7 @@
     ![](images/arcface_loss_limit_values.png)
   - **Training result**
     ```py
-    # arcface only
+    # arcface from scratch
     45490/45490 [==============================] - 7573s 166ms/step - loss: 17.2420 - logits_accuracy: 0.0033
     45490/45490 [==============================] - 7558s 166ms/step - loss: 14.9532 - logits_accuracy: 0.0025
     45490/45490 [==============================] - 7551s 166ms/step - loss: 14.9645 - logits_accuracy: 0.0034
@@ -1194,7 +1202,7 @@
   cent_model = keras.models.Model(model.inputs[0], layers.concatenate([basic_model.outputs[0], model.outputs[0]]))
   with strategy.scope():
       # model.compile(optimizer='adamax', loss=single_center_loss, metrics=[logits_accuracy()])
-      cent_model.compile(optimizer='nadam', loss=center_loss, metrics=[logits_accuracy()])
+      cent_model.compile(optimizer='nadam', loss=center_loss, metrics=[logits_accuracy])
   ```
   ```py
   Epoch 1/200
@@ -1704,6 +1712,32 @@
       return np.dot(normalize(eea), normalize(eeb).T)
 
   model_verification_images(lambda xx: mm.predict(xx), aa / 255, bb / 255)
+  ```
+  ```py
+  from tensorflow.keras import layers
+  basic_model = keras.models.load_model('./keras_checkpoints_mobilenet_hard_63.h5', compile=False)
+  inputs = basic_model.inputs[0]
+  embedding = basic_model.outputs[0]
+  norm_emb = layers.Lambda(tf.nn.l2_normalize, name='norm_embedding', arguments={'axis': 1})(embedding)
+  norm_basic_model = keras.models.Model(inputs, norm_emb)
+  norm_basic_model.summary()
+  tf.saved_model.save(norm_basic_model, './model_mobilenet_norm_hard_63')
+  ```
+  ```py
+  def register_detect(model, regist_image, detect_images):
+      aa = imread(regist_image)
+      bb, cc, pp = model.get_face_location(aa)
+      ee = model.get_embedded_feature(aa, bb, pp)[0]
+      uus = []
+      for ii in detect_images:
+          aa = imread(ii)
+          bb, cc, pp = model.get_face_location(aa)
+          if len(bb) > 0:
+              uus.append(model.get_embedded_feature(aa, bb, pp)[0])
+      unk = normalize(np.vstack(uus))
+      known = normalize(ee)
+      dists = np.dot(unk, known.T)
+      return unk, known, dists
   ```
 ***
 

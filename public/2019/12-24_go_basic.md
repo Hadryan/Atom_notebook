@@ -45,6 +45,7 @@
 ## Install go
   - [Go 指南](http://go-tour-zh.appspot.com/flowcontrol/4)
   - [Getting Started install go](https://golang.org/doc/install)
+  - [The Go Playground](https://play.golang.org/)
   - **hello world**
     ```go
     package main
@@ -140,6 +141,29 @@
     12
     <nil>
     ```
+## gofmt 格式化代码
+  - **参数**
+    - **-s** 开启简化代码，如去除不必要的类型声明，去除迭代时非必要的变量赋值等
+    - **-d** 显示 diff，而不是转化后的结果
+    - **-w** 覆盖源文件
+    - **-l ./*.go** 列出需要格式化的文件
+    - **-r 'a[b:len(a)] -> a[b:]'** 指定替换规则
+  - **示例**
+    ```sh
+    gofmt -s -d test.go
+    gofmt -s -w test.go
+
+    gofmt -s -l ./*.go
+    gofmt -s -d ./*.go
+    gofmt -s -w ./*.go
+    ```
+## go doc 帮助文档
+  ```sh
+  go doc -all fmt | grep -i printf
+
+  go doc -all fmt.Println
+  go doc -src fmt.Println
+  ```
 ***
 
 # 基础语法
@@ -189,6 +213,20 @@
     }
     ```
 ## Go 程序的一般结构
+  - **命名规则**
+    - 一个名字在程序包之外的可见性是由它的首字符 **是否为大写** 来确定的
+    - 按照约定，程序包使用小写，尽量是一个单词的名字，不需要使用下划线或者混合大小写，不用担心会与先前的有冲突，程序包名只是导入的缺省名字
+    - 按照约定，程序包名为其源目录的基础名
+    - 按照约定，单个方法的接口使用方法名加上“er”后缀来命名，如果类型实现的是一个和众所周知的类型具有相同含义的方法，那么就使用相同的名字和签名
+    - Go 约定使用 `MixedCaps` 或者 `mixedCaps` 的形式，而不是下划线来书写多个单词的名字
+  - **注释规则**
+    - 每个程序包都应该有一个 **包注释**，位于 package 子句之前的块注释，对于有多个文件的程序包，包注释只需要出现在一个文件中，任何一个文件都可以
+    - **包注释** 应该用来介绍该程序包，并且提供与整个程序包相关的信息，它将会首先出现在 `godoc` 页面上，并会建立后续的详细文档
+    - 在程序包里面，任何直接位于顶层声明之前的注释，都会作为该 **声明的文档注释**，程序中每一个被导出的名字，都应该有一个文档注释
+    - **文档注释** 作为完整的语句可以工作的最好，可以允许各种自动化的展现，第一条语句应该为一条概括语句，并且 **使用被声明的名字作为开头**
+  - **分号**
+    - Go 的规范语法是使用 **分号** 来终结语句的，但这些分号并不在源码中出现，词法分析器会在扫描时，使用简单的规则自动插入分号
+    - 分号插入规则所导致的一个结果是，不能将控制结构 `if` / `for` / `switch` / `select` 的左大括号放在下一行，如果这样做，则会在大括号之前插入一个分号
   - **Go 程序文件夹结构**
     - 从指定文件夹下导入时，会导入所有的 go 文件
     - 要求该文件夹下的所有 go 文件有统一的包名，包名最好跟文件名相同，避免歧义
@@ -274,6 +312,10 @@
     k := 3
     c, python, java := true, false, "no!"
     ```
+  - 在 `:=` 声明中，变量 `v` 即使已经被声明过，也可以出现，前提是
+    - 该声明和 v 已有的声明在相同的作用域中，如果 v 已经在外面的作用域里被声明了，则该声明将会创建一个新的变量
+    - 初始化中相应的值是可以被赋给 v 的
+    - 并且，声明中 **至少有其它一个变量** 将被声明为一个新的变量
   - **基本类型**
     ```go
     bool
@@ -285,6 +327,7 @@
     float32 float64
     complex64 complex128
     ```
+    其中 `rune` 是 Go 的术语，用于指定一个 **单独的 Unicode 编码点**
     ```go
     import (
         "fmt"
@@ -348,6 +391,34 @@
         sum += sum
     }
     ```
+  - Go 没有逗号操作符，因此如果需要在 for 中运行多个变量，需要使用并行赋值，并且不能使用 `++` / `--` 操作
+    ```go
+    // Reverse a
+    a := []int{1, 2, 3, 4, 5}
+
+    // NOT: for i, j := 0, len(a)-1; i < j; j++, i-- {
+    for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
+        a[i], a[j] = a[j], a[i]
+    }
+    fmt.Println(a)
+    // [5 4 3 2 1]
+    ```
+  - 在嵌套的 `for` 循环中，可以使用 `break` / `continue` 加一个 **标号** 来指定跳出的是 **哪一个循环**
+    ```go
+    sum := 0
+    Loop1:
+    for {
+        for i := 0; i < 5; i++ {
+            fmt.Printf("%d ", i)
+            sum += i
+            if sum > 5 {
+                break Loop1
+            }   
+        }   
+    }   
+    fmt.Println(sum)
+    // 0 1 2 3 6
+    ```
 ## if 条件语句
   - **if 条件** 判断条件 **不使用** `()`，执行语句使用 `{}`
     ```go
@@ -369,6 +440,8 @@
     }
     // 16 >= 10
     ```
+  - **逻辑表达式** 使用 `||` / `&&` / `!`
+  - 当 `if` 语句不会流向下一条语句时，如控制结构体结束于 `break` / `continue` / `goto` / `return`，则通常是省略掉 `else`
 ## switch 语句
   - **switch** 从上到下判断条件，当匹配成功时停止，`fallthrough` 使分支 `case` 继续向下执行，否则终止
     ```go
@@ -386,7 +459,7 @@
         fmt.Printf("%s.", os)
     }
     ```
-  - **没有条件的 switch** 可以用更清晰的形式编写长的 if-else 链
+  - **没有条件的 switch** 则对为 `true` 的条件进行匹配，可以用更清晰的形式编写长的 `if-else` 链
     ```go
     import "time"
     t := time.Now()
@@ -399,10 +472,38 @@
             fmt.Println("Good evening.")
     }
     ```
+  - **case** 可以使用 **逗号分隔的列表**
+    ```go
+    func shouldEscape(c byte) bool {
+        switch c {
+        case ' ', '?', '&', '=', '#', '+', '%':
+            return true
+        }
+        return false
+    }
+    ```
+  - **switch 动态类型判断** 可以用于获得一个 **接口变量** 的动态类型，在括号中使用关键字 **type**
+    ```go
+    var t interface{}
+    t = functionOfSomeType()
+
+    switch t := t.(type) {
+    default:
+        fmt.Printf("unexpected type %T", t)       // %T prints whatever type t has
+    case bool:
+        fmt.Printf("boolean %t\n", t)             // t has type bool
+    case int:
+        fmt.Printf("integer %d\n", t)             // t has type int
+    case *bool:
+        fmt.Printf("pointer to boolean %t\n", *t) // t has type *bool
+    case *int:
+        fmt.Printf("pointer to integer %d\n", *t) // t has type *int
+    }
+    ```
 ## func 函数
   - **函数声明 func**，函数可以没有参数或接受多个参数，类似于变量定义，返回值类型在函数名之后
     ```go
-    func main(argc int, argv []string) int
+    func main(argc int, argv []string) int { ... }
 
     // 由 main 函数作为程序入口点启动
     func main() { // { 不能单独一行
@@ -449,15 +550,33 @@
     // 6 -12
     // 10 -20
     ```
+  - **命名的结果参数** 函数的返回参数可以给定一个名字，并在函数内作为一个普通变量来使用
+    - 当被命名时，它们在函数起始处被初始化为对应类型的零值
+    - 如果函数执行了没有参数的 `return` 语句，则返回 **函数内对应参数的当前值**
+    ```go
+    func nextInt(b []byte, pos int) (value, nextPos int) { ... }
+    ```
+    ```go
+    // io.ReadFull
+    func ReadFull(r Reader, buf []byte) (n int, err error) {
+        for len(buf) > 0 && err == nil {
+            var nr int
+            nr, err = r.Read(buf)
+            n += nr
+            buf = buf[nr:]
+        }
+        return
+    }
+    ```
 ## defer 延迟调用
-  - **defer 语句** 延迟函数的执行在上层函数返回之后，延迟调用的参数会立刻生成，但是在上层函数返回前函数都不会被调用，可以用于释放资源等
+  - **defer 语句** 延期执行，使其在执行 defer 的函数即将返回之前才被运行，延迟调用的 **参数会立刻生成**，可以用于释放资源等，如释放互斥锁或关闭文件
     ```go
     i := 0
     defer fmt.Println(i)
     i++
     // 0
     ```
-  - **defer 栈** 延迟的函数调用被压入一个栈中，当函数返回时，会按照后进先出的顺序调用被延迟的函数调用
+  - **defer 栈 LIFO** 延迟的函数调用被压入一个栈中，当函数返回时，会按照后进先出的顺序调用被延迟的函数调用
     ```go
     fmt.Println("counting")
 
@@ -490,6 +609,7 @@
     fmt.Println(*q / 37)
     // 73, 3
     ```
+  - Go 语言中返回一个 **局部变量的地址** 是绝对没有问题的，变量关联的存储在函数返回之后依然存在
 ## struct 结构体
   - **struct 结构体** 表示一个字段的集合，结构体字段使用 **点号** 来访问，也可以将结构体赋值给指针
     ```go
@@ -524,7 +644,11 @@
     // {1 2} &{1 2} {1 0} {0 0}
     ```
 ## 数组
-  - **`var / const` 变量名 [长度] 类型** 定义一个数组，数组的长度是其类型的一部分，因此不能改变大小
+  - Go 语言中的数组是 **值**，而不是指针
+  - **`var / const` 变量名 [长度] 类型** 定义一个数组
+    - 数组的长度是其类型的一部分，因此不能改变大小，`[10]int` 和 `[20]int` 是不同的
+    - 同类型数组间的 `=` 操作会拷贝所有的元素，在函数中作为参数传递时，也是 **值传递**
+    - 对于数组的操作，通常使用 **切片 slice**
     ```go
     var a [2]string
     a[0] = "Hello"
@@ -533,9 +657,22 @@
     // Hello World
     fmt.Println(a)
     // [Hello World]
+
+    b := []string {"a", "b", "c"}
+    fmt.Printf("%T, %T", a, b)
+    // [2]string, []string
+    ```
+  - **`index`: `value` 初始化文法** 初始化指定位置的值
+    ```go
+    a := [3]int {1:3}
+    b := []int {1:3}
+    fmt.Printf("%T, %v, %T, %v", a, a, b, b)
+    // [3]int, [0 3 0], []int, [0 3]
     ```
 ## slice 切片
-  - **slice** 包含长度信息，指向一个序列的值
+  - **slice 切片**
+    - **切片** 对数组进行封装，提供了一个针对串行数据，更加通用，强大和方便的接口，除了像转换矩阵这样具有显式维度的项，Go 中大多数的数组编程都是通过切片完成
+    - **切片** 包含 **len 长度** / **cap 容量** 信息，以及一个 **底层数组的引用**
     ```go
     p := []int{2, 3, 5, 7, 11, 13}
     fmt.Println(p, p[0])
@@ -545,20 +682,31 @@
         fmt.Printf("p[%d] == %d\n", i, p[i])
     }
     ```
-  - **[low:high] 切片** 选取一个序列中的子序列，包含 `low`，不包含 `high`
+  - **切片间的赋值**
+    - 同类型的两个切片间赋值，将指向同一个底层数组，作为函数参数时，对切片元素的修改，对于调用者是可见的，类似于 **指针传递**
+    - 切片本身是按照 **值传递** 的，即传递切片的 **底层数组指针** / **长度** / **容量** 运行时数据结构
+    ```go
+    p := []int{2, 3, 5, 7, 11, 13}
+    func foo(tt []int) {
+        tt[0], tt[len(tt)-1] = tt[len(tt)-1], tt[0]
+    }
+    foo(p)
+    p  // [13 3 5 7 11 2]
+    ```
+  - **[low:high] 切片** 选取一个切片中的子切片，包含 `low`，不包含 `high`
     ```go
     fmt.Println(p[1:len(p)-1])
     // [3 5 7 11]
     ```
-  - **默认值** slice 的默认值是 `nil`
+  - **零值** slice 的零值是 `nil`，但 `len` / `cap` 调用是合法的，并且返回 `0`
     ```go
     var z []int
     fmt.Println(z == nil, len(z), cap(z))
     // true 0 0
     ```
   - **make 构造 slice**，可以指定 `长度 len` 与 `容量 cap`，`make(type, len, cap)`
-    - **len** 是序列中可用元素的数量，在 **索引** 时会判断长度
-    - **cap** 是序列最大可以包含的元素数量，为了让 slice 提供可变长度，方便扩容，在 **[low:high] 切片** 时会判断容量
+    - **len** 是切片中可用元素的数量，在 **索引** 时会判断长度
+    - **cap** 是切片最大可以包含的元素数量，为了让 slice 提供可变长度，方便扩容，在 **[low:high] 切片** 时会判断容量
     - 如果不指定 `cap`，则 `cap == len`
     ```go
     a := make([]int, 5)
@@ -577,8 +725,8 @@
     // d len=1 cap=3 [0]
     ```
   - **append** 向 slice 添加元素，`func append(s []T, vs ...T) []T`
-    - 如果原数组 s 的 **容量 cap** 足够，则在 s 上添加元素，并返回 s
-    - 如果原数组 s 的 **容量 cap** 不够，则创建一个更大的数组，并返回新的数组
+    - 如果原切片 s 的 **容量 cap** 足够，则在 s 上添加元素，并返回 s
+    - 如果超出了原切片 s 的 **容量 cap**，则切片会被重新分配，然后返回新产生的切片
     - `append(a, b...)` 表示向 a 中添加 b 的所有元素
     ```go
     var z []int
@@ -602,11 +750,19 @@
     fmt.Println(len(c), cap(c), c)
     // 5 5 [John Paul George Ringo Pete]
     ```
-  - **copy** 复制序列，`func copy(dst, src []T) int`，返回复制的元素数量
+  - **copy** 复制切片，`func copy(dst, src []T) int`，返回复制的元素数量，可以用于类型转化，将非固定长度的 **slice** 转化为固定长度的 **array**
     ```go
     s := [3]string{"a", "b", "c"}
     t := make([]string, len(s), (cap(s)+1)*2) // +1 in case cap(s) == 0
-    copy(t, s)  // 1:6: invalid argument: copy expects slice arguments; found t (variable of type []string) and s (variable of type [3]string)
+    fmt.Printf("%T, %T", s, t)
+    // [3]string, []string
+
+    // Error: incompatible types in assignment: []string = [3]string
+    t = s
+
+    // Error: second argument to copy should be slice or string; have s <[3]string>
+    copy(t, s)
+
     copy(t, s[:]) // 3
     fmt.Println(len(s), cap(s), s)
     // 3 3 [a b c]
@@ -614,7 +770,10 @@
     // 3 8 [a b c]
     ```
 ## range 迭代遍历
-  - **range** 在 for 循环中对 slice 或者 map 进行迭代遍历，`range` 给出的是 `元素序号, 元素值`，可以通过 **_** 忽略不用的部分
+  - **range** 在 for 循环中对 `slice` 或者 `map` 进行迭代遍历
+    - `range` 给出的是 **元素序号, 元素值**，`for key, value := range array`
+    - 如果只需要 `range` 中的第一项，则可以丢弃第二个，`for key := range m`
+    - 如果只需要 `range` 中的第二项，则可以使用空白标识符 **_** ，来丢弃第一个，`for _, value := range array`
     ```go
     var pow = []int{1, 2, 4}
 
@@ -638,6 +797,30 @@
     // 1
     // 2
     // 4
+    ```
+  - **字符串的 range 操作**，会通过解析 `UTF-8` 来拆分出 **单个的 Unicode 编码点**，错误的编码会消耗一个字节，产生一个替代的 **符文 rune `U+FFFD`**
+    ```go
+    import "fmt"
+    for pos, char := range "日本\x80語" { // \x80 is an illegal UTF-8 encoding
+        fmt.Printf("character %#U starts at byte position %d\n", char, pos)
+    }
+    // character U+65E5 '日' starts at byte position 0
+    // character U+672C '本' starts at byte position 3
+    // character U+FFFD '�' starts at byte position 6
+    // character U+8A9E '語' starts at byte position 7
+    ```
+  - **数组类型转化**
+    ```go
+    a := []int{1, 2, 3, 4, 5}
+    int2float32 := func(aa []int) []float32 {
+        bb := make([]float32, len(aa))
+        for ii, vv := range(aa) {
+            bb[ii] = float32(vv)
+        }
+        return bb
+    }
+    int2float32(a)
+    // [1 2 3 4 5]
     ```
 ## map 字典
   - **map** 键值对映射，map 必须用 **make** 来创建，使用 `new` 创建的 map 值为 **nil**，不能赋值
@@ -690,6 +873,35 @@
     v, ok := m["Answer"]
     fmt.Println("The value:", v, "Present?", ok)
     // The value: 0 Present? false
+    ```
+## make 与 new
+  - Go 有两个分配原语，内建函数 `new` 和 `make`，它们所做的事情有所不同，并且用于不同的类型
+  - **new** 不初始化内存，只是将其 **置零**，并返回它的地址，`new(T)` 会为 `T` 类型的新项目分配被置零的存储，并返回 **`*T` 的指针**
+    ```go
+    aa := new([3]int)
+    fmt.Println(aa) // &[0 0 0]
+
+    (*aa)[1] = 2
+    fmt.Println(aa) // &[0 2 0]
+    ```
+    对于 `map` / `slice` 类型，对应的零值为 `nil`
+    ```go
+    cc := new([]int)
+    *cc == nil  // true
+
+    dd := new(map[int]int)
+    *dd == nil  // true
+    ```
+  - **make** 只用来创建 `slice` / `map` / `channel`，并且返回一个 **初始化** 的，类型为 **`T` 的值**
+    - 之所以有所不同，是因为这三个类型的背后是象征着，对使用前必须初始化的数据结构的引用
+    - 如，`slice` 是一个三项描述符，包含一个指向数据的指针，长度，以及容量，在这些项被初始化之前，`slice` 都是 `nil` 的
+    - 对于 `slice` / `map` / `channel`，`make` 初始化内部数据结构，并准备好可用的值
+    ```go
+    ee := make([]int, 3)
+    fmt.Println(ee) // [0 0 0]
+
+    ee[2] = 2
+    fmt.Println(ee) // [0 0 2]
     ```
 ***
 
@@ -1162,4 +1374,128 @@
     }
     // ..tick..tick..tick..tick..tick BOOM!
     ```
+## 线程锁
+  - 不加锁时 `goroutine` 是线程不安全的
+    ```go
+    import (
+        "fmt"
+        "time"
+    )
+
+    var count int
+
+    func test1() {
+        aa := time.Now()
+        for i := 0; i < 1000000; i++ {
+            count++
+        }
+        bb := time.Now()
+        fmt.Println("test1: ", float64(bb.Nanosecond() - aa.Nanosecond()) / 1e9)
+    }
+
+    func test2() {
+        aa := time.Now()
+        for i := 0; i < 1000000; i++ {
+            count++
+        }
+        bb := time.Now()
+        fmt.Println("test2: ", float64(bb.Nanosecond() - aa.Nanosecond()) / 1e9)
+    }
+
+    count = 0
+    go test1()
+    go test2()
+
+    fmt.Printf("count=%d\n", count)
+    // count=1046347
+    // test1:  0.037959184
+    // test2:  0.038162785
+    ```
+  - **sync.Mutex 互斥锁** 只能有一个线程获取到资源，其他线程等待，`sync.Mutex` 的零值被定义为一个未加锁的互斥
+    ```go
+    import "sync"
+    var mm sync.Mutex
+    func test1() {
+        aa := time.Now()
+        for i := 0; i < 1000000; i++ {
+            mm.Lock()
+            count ++
+            mm.Unlock()
+        }
+        bb := time.Now()
+        fmt.Println("test1: ", float64(bb.Nanosecond() - aa.Nanosecond()) / 1e9)
+    }
+    func test2() {
+        aa := time.Now()
+        for i := 0; i < 1000000; i++ {
+            mm.Lock()
+            count ++
+            mm.Unlock()
+        }
+        bb := time.Now()
+        fmt.Println("test2: ", float64(bb.Nanosecond() - aa.Nanosecond()) / 1e9)
+    }
+
+    count := 0
+    go test1()
+    go test2()
+
+    fmt.Println(count)
+    // 2000000
+    // test2:  0.298956036
+    // test1:  0.322732425
+    ```
+  - **sync.RWMutex 读写锁**
+    - 当一个线程获取到 **写锁 Lock** 后，其他线程读写都会等待
+    - 当一个线程获取到 **读锁 RLock** 后，其他线程获取写锁会等待，读锁可以继续获得
+    ```go
+    var ww sync.RWMutex
+    func test1() {
+        aa := time.Now()
+        for i := 0; i < 1000000; i++ {
+            ww.Lock()
+            count ++
+            ww.Unlock()
+        }
+        bb := time.Now()
+        fmt.Println("test1: ", float64(bb.Nanosecond() - aa.Nanosecond()) / 1e9)
+    }
+    func test2() {
+        aa := time.Now()
+        for i := 0; i < 1000000; i++ {
+            ww.Lock()
+            count ++
+            ww.Unlock()
+        }
+        bb := time.Now()
+        fmt.Println("test2: ", float64(bb.Nanosecond() - aa.Nanosecond()) / 1e9)
+    }
+    count := 0
+    go test1()
+    go test2()
+    fmt.Println(count)
+    // 2000000
+    // test1:  0.349657722
+    // test2:  0.382042907
+    ```
 ***
+有时候是需要分配一个二维切片的，例如这种情况可见于当扫描像素行的时候。有两种方式可以实现。一种是独立的分配每一个切片；另一种是分配单个数组，为其 指定单独的切片们。使用哪一种方式取决于你的应用。如果切片们可能会增大或者缩小，则它们应该被单独的分配以避免覆写了下一行；如果不会，则构建单个分配 会更加有效。作为参考，这里有两种方式的框架。首先是一次一行：
+```go
+// Allocate the top-level slice.
+picture := make([][]uint8, YSize) // One row per unit of y.
+// Loop over the rows, allocating the slice for each row.
+for i := range picture {
+	picture[i] = make([]uint8, XSize)
+}
+```
+然后是分配一次，被切片成多行：
+```go
+// Allocate the top-level slice, the same as before.
+picture := make([][]uint8, YSize) // One row per unit of y.
+// Allocate one large slice to hold all the pixels.
+pixels := make([]uint8, XSize*YSize) // Has type []uint8 even though picture is [][]uint8.
+// Loop over the rows, slicing each row from the front of the remaining pixels slice.
+for i := range picture {
+	picture[i], pixels = pixels[:XSize], pixels[XSize:]
+}
+```

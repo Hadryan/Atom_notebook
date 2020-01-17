@@ -133,6 +133,42 @@
   CUDA_VISIBLE_DEVICES='1' python3 -u train.py --network vargfacenet --loss arcface --dataset glint --per-batch-size 150 --pretrained ./model
   s/vargfacenet-softmax-emore/model --pretrained-epoch 166 --lr 0.0001 --lr-steps '100000,160000,220000,280000,340000'
   ```
+## Symbol
+  - **fmobilenet GDC**
+    ```py
+    data = data-127.5
+    data = data*0.0078125
+
+    conv_14 = Conv(conv_14_dw, num_filter=bf*32, kernel=(1, 1), pad=(0, 0), stride=(1, 1), name="conv_14") # 7/7
+
+    conv = mx.sym.Convolution(data=conv_14, num_filter=512, kernel=(7,7), num_group=512, stride=(1, 1), pad=(0, 0), no_bias=True, name='%s%s_conv2d' %(name, suffix))
+    bn = mx.sym.BatchNorm(data=conv, name='%s%s_batchnorm' %(name, suffix), fix_gamma=False,momentum=0.9)
+    conv_6_f = mx.sym.FullyConnected(data=bn, num_hidden=512, name='pre_fc1')
+    fc1 = mx.sym.BatchNorm(data=conv_6_f, fix_gamma=True, eps=2e-5, momentum=bn_mom, name='fc1')
+    ```
+  - fresnet E
+    ```py
+    body = mx.sym.BatchNorm(data=body, fix_gamma=False, eps=2e-5, momentum=0.9, name='bn1')
+    body = mx.symbol.Dropout(data=body, p=0.4)
+    fc1 = mx.sym.FullyConnected(data=body, num_hidden=512, name='pre_fc1')
+    fc1 = mx.sym.BatchNorm(data=fc1, fix_gamma=True, eps=2e-5, momentum=0.9, name='fc1')
+    ```
+  - FC
+    ```py
+    body = mx.sym.BatchNorm(data=body, fix_gamma=False, eps=2e-5, momentum=0.9, name='bn1')
+    fc1 = mx.sym.FullyConnected(data=body, num_hidden=512, name='pre_fc1')
+    fc1 = mx.sym.BatchNorm(data=fc1, fix_gamma=True, eps=2e-5, momentum=0.9, name='fc1')
+    ```
+  - margin_softmax
+    ```py
+    _weight = mx.symbol.L2Normalization(_weight, mode='instance')
+    nembedding = mx.symbol.L2Normalization(embedding, mode='instance', name='fc1n_%d'%args._ctxid)
+    fc7 = mx.sym.FullyConnected(data=nembedding, weight = _weight, no_bias = True, num_hidden=args.ctx_num_classes, name='fc7_%d'%args._ctxid)
+    ```
+  - SGD
+    ```py
+    opt = optimizer.SGD(learning_rate=0.1, momentum=0.9, wd=0.0005, rescale_grad=1.0/args.batch_size)
+    ```
 ***
 
 # Highest Accuracy
