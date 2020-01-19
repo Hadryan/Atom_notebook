@@ -10,8 +10,9 @@
   	- [Install gophernotes](#install-gophernotes)
   	- [Install lgo](#install-lgo)
   - [基础语法](#基础语法)
-  	- [foo](#foo)
+  	- [约定规则](#约定规则)
   	- [Go 程序的一般结构](#go-程序的一般结构)
+  	- [import](#import)
   	- [Go 数据类型](#go-数据类型)
   	- [for 循环语句](#for-循环语句)
   	- [if 条件语句](#if-条件语句)
@@ -46,6 +47,9 @@
   - [Go 指南](http://go-tour-zh.appspot.com/flowcontrol/4)
   - [Getting Started install go](https://golang.org/doc/install)
   - [The Go Playground](https://play.golang.org/)
+  - [Effective Go](https://golang.org/doc/effective_go.html)
+  - [Effective Go中文版](https://go-zh.org/doc/effective_go.html)
+  - [Effective Go中文版](https://www.kancloud.cn/kancloud/effective/72199)
   - **hello world**
     ```go
     package main
@@ -167,52 +171,7 @@
 ***
 
 # 基础语法
-## foo
-  - **字符串连接** Go 语言的字符串可以通过 + 实现
-    ```go
-    package main
-    import "fmt"
-    func main() {
-        fmt.Println("Google" + "Runoob")
-    }
-    ```
-  当两个或多个连续的函数命名参数是同一类型，则除了最后一个类型之外，其他都可以省略
-  命名返回值
-  Go 的返回值可以被命名，并且像变量那样使用。
-
-  返回值的名称应当具有一定的意义，可以作为文档使用。
-
-  没有参数的 return 语句返回结果的当前值。也就是`直接`返回。
-
-  直接返回语句仅应当用在像下面这样的短函数中。在长的函数中它们会影响代码的可读性。
-  ```go
-  package main
-  import "fmt"
-
-  func split(sum int) (x, y int) {
-      x = sum * 4 / 9
-      y = sum - x
-      return
-  }
-
-  func main() {
-      fmt.Println(split(17))
-  }
-  ```
-  - 图片
-    ```go
-    package main
-
-    import "code.google.com/p/go-tour/pic"
-
-    func Pic(dx, dy int) [][]uint8 {
-    }
-
-    func main() {
-    	pic.Show(Pic)
-    }
-    ```
-## Go 程序的一般结构
+## 约定规则
   - **命名规则**
     - 一个名字在程序包之外的可见性是由它的首字符 **是否为大写** 来确定的
     - 按照约定，程序包使用小写，尽量是一个单词的名字，不需要使用下划线或者混合大小写，不用担心会与先前的有冲突，程序包名只是导入的缺省名字
@@ -227,6 +186,11 @@
   - **分号**
     - Go 的规范语法是使用 **分号** 来终结语句的，但这些分号并不在源码中出现，词法分析器会在扫描时，使用简单的规则自动插入分号
     - 分号插入规则所导致的一个结果是，不能将控制结构 `if` / `for` / `switch` / `select` 的左大括号放在下一行，如果这样做，则会在大括号之前插入一个分号
+  - **空白标识符 _**
+    - **多赋值语句** 需要多个左值，但如果其中某个左值在程序中并没有被使用到，那么就需要用 **空白标识符** 来占位，以避免引入一个新的无用变量
+    - **未使用的导入和变量** 如果在程序中导入了一个包或声明了一个变量，却没有使用的话，会引起编译错误，可以将包 / 变量赋值给 `_` 禁止编译错误
+    - **只调用导入包的 init 函数** 有时需要导入一些包，但不实际使用，只是调用其中的 `init` 函数
+## Go 程序的一般结构
   - **Go 程序文件夹结构**
     - 从指定文件夹下导入时，会导入所有的 go 文件
     - 要求该文件夹下的所有 go 文件有统一的包名，包名最好跟文件名相同，避免歧义
@@ -267,6 +231,81 @@
     go run test.go
     # Hello World! 2 0
     ```
+  - **项目目录** 一般包含三个文件夹，分别为 `src` / `pkg` / `bin`
+    - **src** 存放 golang 源码
+    - **pkg** 存放编译后的文件
+    - **bin** 存放编译后可执行的文件
+## import
+  - **包 package / import** Go 程序是通过 package 来组织的
+    - 只有 **package** 名称为 **main** 的包可以包含 main 函数，一个可执行程序有且仅有一个 main 包
+    - 通过 **import** 关键字来导入其他非 main 包，使用 `<PackageName>.<FunctionName>` 调用
+    - 文件名 / 文件夹名与包名没有直接关系，不需要一致，但按照惯例，最好一致，同一个文件夹下的文件只能有一个包名，否则编译报错
+    - 可以使用 **()** 打包导入多个
+    ```go
+    package main  // 当前程序的包名
+    import "fmt"  // 导入其他包
+    import (  // 同时导入多个
+        "fmt"
+        "math/rand"
+    )
+    import fmt2 "fmt" // package 别名
+    import . "fmt"  // 表示省略调用，调用该模块里面的函数可以不写模块名
+    ```
+  - **相对导入** 导入当前文件夹下的某个 module 的文件夹
+    ```go
+    import (
+        "./test1"
+        "../test2"
+    )
+    ```
+  - **绝对导入** 将目标项目添加到 `$GOPATH` 环境变量中
+    ```sh
+    export GOPATH=$GOPATH:$HOME/practice_code/go
+    ```
+    ```go
+    import (
+        "project/module1"
+        "project/module2/t"
+    )
+    ```
+  - **别名** 重命名导入的包
+    ```go
+    import f "fmt"
+    f.Println("test")
+    ```
+  - **.** 导入包后，调用时省略包名
+    ```go
+    import . "fmt"
+    Println("test")
+    ```
+  - **_** 导入包，但不直接使用包中的函数，而是调用包中的 `init` 函数
+    ```go
+    // module/module1.go
+    package module1
+    import "fmt"
+
+    func init() {
+       fmt.Println("this is module1")
+    }
+    ```
+    ```go
+    // main.go
+    package main
+    import (
+        "fmt"
+        _ "module"
+    )
+
+    func main() {
+        fmt.Println("this is a test")
+    }
+    ```
+    **Run**
+    ```sh
+    $ go run main.go
+    this is module1
+    this is a test
+    ```
 ## Go 数据类型
   - Go语言中，使用 **大小写** 来决定该常量、变量、类型、接口、结构或函数是否可以被外部包所调用，即 private / public
   - Go 中的字符串只能使用 **双引号**
@@ -275,28 +314,13 @@
     fmt.Printf("%T", aa)
     // string6
     ```
-  - **包 package / import** Go 程序是通过 package 来组织的
-    - 只有 **package** 名称为 **main** 的包可以包含 main 函数，一个可执行程序有且仅有一个 main 包
-    - 通过 **import** 关键字来导入其他非 main 包，使用 `<PackageName>.<FunctionName>` 调用
-    - 文件名 / 文件夹名与包名没有直接关系，不需要一致，但按照惯例，最好时一致，同一个文件夹下的文件只能有一个包名，否则编译报错
-    - 可以使用 **()** 打包导入多个
-    ```go
-    package main  // 当前程序的包名
-    import . "fmt"  // 导入其他包
-    import (  // 同时导入多个
-        "fmt"
-        "math/rand"
-    )
-    import fmt2 "fmt" // package 别名
-    import . "fmt"  // 表示省略调用，调用该模块里面的函数可以不写模块名
-    ```
   - **数据定义 const / var / type**
     - Go 语言的 **类型** 在 **变量名之后**
     - `var` 语句可以定义在包或函数级别，即在函数外或函数内
-    - 变量在没有初始化时默认为 `0` 值，数值类型为 `0`，布尔类型为 `false`，字符串为 `""` 空字符串
-    - **const** 关键字定义常量
-    - **var** 关键字定义变量，在函数体外部使用则定义的是全局变量
-    - **type** 关键字定义结构 struct 和接口 interface
+    - 变量在没有初始化时默认为 **零值**，数值类型为 `0`，布尔类型为 `false`，字符串为 `""` 空字符串
+    - **const** 关键字定义常量，常量是在 **编译时** 被创建，即使是函数内部的局部常量，常量的表达式必须为能被编译器求值的常量表达式
+    - **var** 关键字定义变量，在函数体外部使用则定义的是 **全局变量**，初始值可以为 **运行时** 计算的通用表达式
+    - **type** 关键字定义一般类型，如结构 struct / 接口 interface
     ```go
     const PI = 3.14 // 常量
     var name = "gopher" // 变量的声明和赋值
@@ -367,6 +391,38 @@
     i := 42
     f := float64(i)
     u := uint(f)
+    ```
+  - **type 定义的类型转化** 对于 type 定义的类型，如果忽略类型名，两个类型是相同的，则类型转换是合法的，该转换并不创建新值，只是暂时使现有的值具有一个新的类型
+    ```go
+    type Sequence []int
+    aa := Sequence{1, 3, 5, 2, 4}
+    bb := []int(aa)
+    fmt.Printf("%T, %T", aa, bb)
+    // []int, []int
+    ```
+  - **interface {} 类型** 在函数定义与签名中，`interface {}` 类型可以用于接受 / 返回任意类型
+    ```go
+    func interfier(ii interface{}) interface{} {
+        return ii
+    }
+
+    bb := interfier([]int{1, 2, 3})
+    fmt.Printf("%T", bb) // []int
+    ```
+    类型转化使用 `(interface {}).(type)`，如果实际类型与 `type` 相同，则返回 `value, true`，否则返回 `zero_velue, false`
+    ```go
+    []int(bb) // cannot convert interface{} to []int: bb
+
+    bb.([]int)  // [1 2 3] true
+    bb.([4]int) // [0 0 0 0] false
+
+    str, ok := bb.(string)
+    if ok {
+        fmt.Printf("string value is: %q\n", str)
+    } else {
+        fmt.Printf("value is not a string\n")
+    }
+    // value is not a string
     ```
 ## for 循环语句
   - **for 循环** Go 只有一种循环结构
@@ -484,8 +540,12 @@
     ```
   - **switch 动态类型判断** 可以用于获得一个 **接口变量** 的动态类型，在括号中使用关键字 **type**
     ```go
+    func interfier(ii interface{}) interface{} {
+        return ii
+    }
+
     var t interface{}
-    t = functionOfSomeType()
+    t = interfier(true)
 
     switch t := t.(type) {
     default:
@@ -499,6 +559,7 @@
     case *int:
         fmt.Printf("pointer to integer %d\n", *t) // t has type *int
     }
+    // boolean true
     ```
 ## func 函数
   - **函数声明 func**，函数可以没有参数或接受多个参数，类似于变量定义，返回值类型在函数名之后
@@ -589,6 +650,25 @@
     // counting
     // done
     // 9876543210
+    ```
+## init 函数
+  - **init 初始化函数** 每个源文件可以定义一个或多个不带参数的 `(niladic)init` 函数
+    - **init** 是在程序包以及导入的程序包中，所有变量声明都被初始化后才被调用
+    - 除了用于无法通过声明来表示的初始化以外，init 函数的一个常用法是在真正执行之前进行验证或者修复程序状态的正确性
+    ```go
+    func init() {
+        if user == "" {
+            log.Fatal("$USER not set")
+        }
+        if home == "" {
+            home = "/home/" + user
+        }
+        if gopath == "" {
+            gopath = home + "/go"
+        }
+        // gopath may be overridden by --gopath flag on command line.
+        flag.StringVar(&gopath, "gopath", gopath, "override default GOPATH")
+    }
     ```
 ***
 
@@ -727,7 +807,10 @@
   - **append** 向 slice 添加元素，`func append(s []T, vs ...T) []T`
     - 如果原切片 s 的 **容量 cap** 足够，则在 s 上添加元素，并返回 s
     - 如果超出了原切片 s 的 **容量 cap**，则切片会被重新分配，然后返回新产生的切片
-    - `append(a, b...)` 表示向 a 中添加 b 的所有元素
+    ```go
+    func append(slice []T, elements ...T) []T
+    ```
+    其中 `T` 为任意给定类型的占位符，在 Go 中是无法写出一个类型 T 由调用者来确定的函数的，因此 append 是内建函数，它需要编译器的支持
     ```go
     var z []int
     zz := append(z, 1)
@@ -743,6 +826,7 @@
     fmt.Printf("%d, %d, %v", len(zz), cap(zz), zz)
     // 4, 4, [1 2 3 4]
     ```
+    `append(a, b...)` 表示向 a 中添加 b 的所有元素
     ```go
     a := []string{"John", "Paul"}
     b := []string{"George", "Ringo", "Pete"}
@@ -823,7 +907,10 @@
     // [1 2 3 4 5]
     ```
 ## map 字典
-  - **map** 键值对映射，map 必须用 **make** 来创建，使用 `new` 创建的 map 值为 **nil**，不能赋值
+  - **map** 键值对映射
+    - map 必须用 **make** 来创建，使用 `new` 创建的 map 值为 **nil**，不能赋值
+    - map 的 key 可以为任何定义了 **等于操作符** 的类型，如整数 / 浮点 / 复数 / 字符串 / 指针 / 接口/ 结构体 / 数组，切片不能作为 key，因为没有定义等于操作
+    - 和切片类似，map 持有对底层数据结构的引用，传递给函数时，对 map 内容的改变，对调用者是可见的
     ```go
     type Vertex struct {
         Lat, Long float64
@@ -855,9 +942,8 @@
     ```
   - **map 元素操作**
     - **增加 / 修改元素** `m[key] = elem`
-    - **删除元素** `delete(m, key)`
-    - **双赋值检测某个键是否存在** `elem, ok = m[key]`，如果 `key` 在 `m` 中，`ok` 为 true，否则为 `false`，且 `elem` 为 **map 元素类型的零值**
-    - 取不存在的键值时为零值，`m[not_a_key] == 0`
+    - **delete 删除元素** `delete(m, key)`
+    - 取不存在的键值 key 对应的值时，值为 value 类型对应的零值，`m[not_a_key] == 0`
     ```go
     m := make(map[string]int)
     m["Answer"] = 42
@@ -869,10 +955,23 @@
     delete(m, "Answer")
     fmt.Println("The value:", m["Answer"])
     // The value: 0
-
+    ```
+  - **comma ok 双赋值检测某个键是否存在** `elem, ok = m[key]`
+    - 如果 `key` 在 `m` 中，`ok` 为 true
+    - 如果 `key` 不在 `m` 中，`ok` 为 `false`，且 `elem` 为 **map 元素类型的零值**
+    ```go
     v, ok := m["Answer"]
     fmt.Println("The value:", v, "Present?", ok)
     // The value: 0 Present? false
+    ```
+    ```go
+    func offset(tz string) int {
+        if seconds, ok := timeZone[tz]; ok {
+            return seconds
+        }
+        log.Println("unknown time zone:", tz)
+        return 0
+    }
     ```
 ## make 与 new
   - Go 有两个分配原语，内建函数 `new` 和 `make`，它们所做的事情有所不同，并且用于不同的类型
@@ -902,6 +1001,23 @@
 
     ee[2] = 2
     fmt.Println(ee) // [0 0 2]
+    ```
+## 枚举常量
+  - **枚举常量** 使用 `iota` 枚举器来创建，由于 `iota` 可以为表达式的一部分，并且表达式可以被隐式的重复，所以很容易创建复杂的值集
+    ```go
+    type ByteSize float64
+
+    const (
+        _           = iota // ignore first value by assigning to blank identifier
+        KB ByteSize = 1 << (10 * iota)
+        MB
+        GB
+        TB
+        PB
+        EB
+    )
+    fmt.Println(KB, MB, GB, TB, PB, EB)
+    // 1024 1.048576e+06 1.073741824e+09 1.099511627776e+12 1.125899906842624e+15 1.152921504606847e+18
     ```
 ***
 
@@ -989,6 +1105,7 @@
   - **接口** 是由一组方法定义的集合，`接口类型的值` 可以存放实现这些方法的任何值
     - Go 的接口为 **隐式接口**，类型通过实现指定的方法来实现接口，没有显式声明的必要
     - 隐式接口解藕了实现接口的包和定义接口的包，两者互不依赖
+    - 接口为指定对象的行为提供了一种方式，**如果事情可以这样做，那么它就可以在这里使用**
     ```go
     // 定义接口类型 Abser
     type Abser interface {
@@ -1047,6 +1164,8 @@
     }
     ```
     ```go
+    package main
+    import "fmt"
     type Person struct {
         Name string
         Age  int
@@ -1056,10 +1175,59 @@
         return fmt.Sprintf("%v (%v years)", p.Name, p.Age)
     }
 
-    a := Person{"Arthur Dent", 42}
-    z := Person{"Zaphod Beeblebrox", 9001}
-    fmt.Println(a, z)
+    func main() {
+        a := Person{"Arthur Dent", 42}
+        z := Person{"Zaphod Beeblebrox", 9001}
+        fmt.Println(a, z)
+    }
     // Arthur Dent (42 years) Zaphod Beeblebrox (9001 years)
+    ```
+  - **String 方法** 通常用在自定义的结构体上，但也可用于标量类型，比如 `ByteSize` 这样的浮点类型
+    ```go
+    package main
+    import "fmt"
+
+    type ByteSize float64
+
+    const (
+        _           = iota // ignore first value by assigning to blank identifier
+        KB ByteSize = 1 << (10 * iota)
+        MB
+        GB
+        TB
+        PB
+        EB
+        ZB
+        YB
+    )
+
+    func (b ByteSize) String() string {
+        switch {
+        case b >= YB:
+            return fmt.Sprintf("%.2fYB", b/YB)
+        case b >= ZB:
+            return fmt.Sprintf("%.2fZB", b/ZB)
+        case b >= EB:
+            return fmt.Sprintf("%.2fEB", b/EB)
+        case b >= PB:
+            return fmt.Sprintf("%.2fPB", b/PB)
+        case b >= TB:
+            return fmt.Sprintf("%.2fTB", b/TB)
+        case b >= GB:
+            return fmt.Sprintf("%.2fGB", b/GB)
+        case b >= MB:
+            return fmt.Sprintf("%.2fMB", b/MB)
+        case b >= KB:
+            return fmt.Sprintf("%.2fKB", b/KB)
+        }
+        return fmt.Sprintf("%.2fB", b)
+    }
+    func main() {
+        fmt.Println(TB)
+        fmt.Println(ByteSize(1e13))
+    }
+    // 1.00TB
+    // 9.09TB
     ```
 ## Error 错误接口
   - **error 类型** 是一个内建接口，Go 使用 `error` 值来表示错误状态，通常函数会返回一个 error 值，一般 error 为 `nil` 时表示成功，否则表示出错
@@ -1130,8 +1298,85 @@
     ```
   - Go 标准库包含了这个接口的许多 [实现](https://golang.org/search?q=Read#Global)，包括文件 / 网络连接 / 压缩 / 加密等
   - 一个常见模式是 `io.Reader` 包裹另一个 `io.Reader`，然后通过某种形式修改数据流，如 `gzip.NewReader` 函数接受压缩的数据流 `io.Reader`，并且返回同样实现了 `io.Reader` 的解压缩后的数据流 `*gzip.Reader`
+## write 接口
+  - 一个实现了 `Write` 接口的类型，可以用于 `Fprintf` 的输出
+  ```go
+  package main
+
+  import "fmt"
+
+  type ByteSlice []byte
+  func (p *ByteSlice) Write(data []byte) (n int, err error) {
+      slice := *p
+      // Again as above.
+      slice = append(slice, data...)
+      *p = slice
+      return len(data), nil
+  }
+
+  func (p ByteSlice) String() string {
+      return string(p)
+  }
+
+  func main() {
+      var b ByteSlice
+      fmt.Fprintf(&b, "Hello, ")
+      fmt.Println(b)
+      fmt.Fprintf(&b, "This hour has %d days", 7)
+      fmt.Println(b)
+  }
+  // Hello,
+  // Hello, This hour has 7 days
+  ```
+## sort 接口
+  - **sort.Interface** 需要实现 `Len()` / `Less(i, j int) bool` / `Swap(i, j int)` 三个接口
+    ```go
+    package main
+    import (
+        "fmt"
+        "sort"
+    )
+
+    type Sequence []int
+
+    // Methods required by sort.Interface.
+    func (s Sequence) Len() int {
+        return len(s)
+    }
+    func (s Sequence) Less(i, j int) bool {
+        return s[i] < s[j]
+    }
+    func (s Sequence) Swap(i, j int) {
+        s[i], s[j] = s[j], s[i]
+    }
+
+    // Method for printing - sorts the elements before printing.
+    func (s Sequence) String() string {
+        sort.Sort(s)
+        str := "["
+        for i, elem := range s {
+            if i > 0 {
+                str += " "
+            }   
+            str += fmt.Sprint(elem)
+        }   
+        return str + "]"
+    }
+
+    func main() {
+        aa := Sequence{1, 3, 2, 5, 4}
+        fmt.Println(aa)
+    }
+    // [1 2 3 4 5]
+    ```
+    该示例中，可以直接使用 `sort.IntSlice` 使 `Sequence` 作为 `[]int` 类型用于平自序
+    ```go
+    aa := Sequence{1, 3, 2, 5, 4}
+    sort.IntSlice(aa).Sort()
+    fmt.Println(aa)
+    ```
 ## Web 服务器
-  - [包 http](https://golang.org/pkg/net/http/) 通过任何实现了 **`http.Handler`** 的值来响应 HTTP 请求
+  - [包 http](https://golang.org/pkg/net/http/) 通过任何实现了 **`http.Handler` 接口** 的值来响应 HTTP 请求
     ```go
     package http
 
@@ -1479,6 +1724,168 @@
     // test2:  0.382042907
     ```
 ***
+
+## 打印输出
+  Go中的格式化打印使用了与C中printf家族类似的风格，不过更加丰富和通用。这些函数位于fmt程序包中，并具有大写的名字：fmt.Printf，fmt.Fprintf，fmt.Sprintf等等。字符串函数（Sprintf等）返回一个字符串，而不是填充到提供的缓冲里。
+
+  你不需要提供一个格式串。对每个Printf，Fprintf和Sprintf，都有另外一对相应的函数，例如Print和Println。这些函数不接受格式串，而是为每个参数生成一个缺省的格式。Println版本还会在参数之间插入一个空格，并添加一个换行，而Print版本只有当两边的操作数都不是字符串的时候才增加一个空格。在这个例子中，每一行都会产生相同的输出。
+  ```go
+  fmt.Printf("Hello %d\n", 23)
+  fmt.Fprint(os.Stdout, "Hello ", 23, "\n")
+  fmt.Println("Hello", 23)
+  fmt.Println(fmt.Sprint("Hello ", 23))
+  ```
+  格式化打印函数fmt.Fprint等，接受的第一个参数为任何一个实现了io.Writer接口的对象；变量os.Stdout和os.Stderr是常见的实例。
+
+  接下来这些就和C不同了。首先，数字格式，像%d，并不接受正负号和大小的标记；相反的，打印程序使用参数的类型来决定这些属性。
+  ```go
+  var x uint64 = 1<<64 - 1
+  fmt.Printf("%d %x; %d %x\n", x, x, int64(x), int64(x))
+  ```
+  会打印出
+  ```go
+  18446744073709551615 ffffffffffffffff; -1 -1
+  ```
+  如果只是想要缺省的转换，像十进制整数，你可以使用通用格式%v（代表“value”）；这正是Print和Println所产生的结果。而且，这个格式可以打印任意的的值，甚至是数组，切片，结构体和map。这是一个针对前面章节中定义的时区map的打印语句
+  ```go
+  fmt.Printf("%v\n", timeZone)  // or just fmt.Println(timeZone)
+  ```
+  其会输出
+  ```go
+  map[CST:-21600 PST:-28800 EST:-18000 UTC:0 MST:-25200]
+  ```
+  当然，map的key可能会按照任意顺序被输出。当打印一个结构体时，带修饰的格式%+v会将结构体的域使用它们的名字进行注解，对于任意的值，格式%#v会按照完整的Go语法打印出该值。
+  ```go
+  type T struct {
+      a int
+      b float64
+      c string
+  }
+  t := &T{ 7, -2.35, "abc\tdef" }
+  fmt.Printf("%v\n", t)
+  fmt.Printf("%+v\n", t)
+  fmt.Printf("%#v\n", t)
+  fmt.Printf("%#v\n", timeZone)
+  ```
+  会打印出
+  ```go
+  &{7 -2.35 abc   def}
+  &{a:7 b:-2.35 c:abc     def}
+  &main.T{a:7, b:-2.35, c:"abc\tdef"}
+  map[string] int{"CST":-21600, "PST":-28800, "EST":-18000, "UTC":0, "MST":-25200}
+  ```
+  （注意符号&）还可以通过%q来实现带引号的字符串格式，用于类型为string或[]byte的值。格式%#q将尽可能的使用反引号。（格式%q还用于整数和符文，产生一个带单引号的符文常量。）还有，%x用于字符串，字节数组和字节切片，以及整数，生成一个长的十六进制字符串，并且如果在格式中有一个空格（% x），其将会在字节中插入空格。
+
+  另一个方便的格式是%T，其可以打印出值的类型。
+  ```go
+  fmt.Printf("%T\n", timeZone)
+  ```
+  会打印出
+  ```go
+  map[string] int
+  ```
+  如果你想控制自定义类型的缺省格式，只需要对该类型定义一个签名为String() string的方法。对于我们的简单类型T，看起来可能是这样的。
+  ```go
+  func (t *T) String() string {
+      return fmt.Sprintf("%d/%g/%q", t.a, t.b, t.c)
+  }
+  fmt.Printf("%v\n", t)
+  ```
+  会按照如下格式打印
+  ```go
+  7/-2.35/"abc\tdef"
+  ```
+  （如果你需要打印类型为T的值，同时需要指向T的指针，那么String的接收者必须为值类型的；这个例子使用了指针，是因为这对于结构体类型更加有效和符合语言习惯。更多信息参见下面的章节pointers vs. value receivers）
+
+  我们的String方法可以调用Sprintf，是因为打印程序是完全可重入的，并且可以按这种方式进行包装。然而，对于这种方式，有一个重要的细节需要明白：不要将调用Sprintf的String方法构造成无穷递归。如果Sprintf调用尝试将接收者直接作为字符串进行打印，就会导致再次调用该方法，发生这样的情况。这是一个很常见的错误，正如这个例子所示。
+  ```go
+  type MyString string
+
+  func (m MyString) String() string {
+      return fmt.Sprintf("MyString=%s", m) // Error: will recur forever.
+  }
+  ```
+  这也容易修改：将参数转换为没有方法函数的，基本的字符串类型。
+  ```go
+  type MyString string
+  func (m MyString) String() string {
+      return fmt.Sprintf("MyString=%s", string(m)) // OK: note conversion.
+  }
+  ```
+  在初始化章节，我们将会看到另一种避免该递归的技术。
+
+  另一种打印技术，是将一个打印程序的参数直接传递给另一个这样的程序。Printf的签名使用了类型...interface{}作为最后一个参数，来指定在格式之后可以出现任意数目的（任意类型的）参数。
+  ```go
+  func Printf(format string, v ...interface{}) (n int, err error) { ... }
+  ```
+  在函数Printf内部，v就像是一个类型为[]interface{}的变量，但是如果其被传递给另一个可变参数的函数，其就像是一个正常的参数列表。这里有一个对我们上面用到的函数log.Println的实现。其将参数直接传递给fmt.Sprintln来做实际的格式化。
+  ```go
+  // Println prints to the standard logger in the manner of fmt.Println.
+  func Println(v ...interface{}) {
+      std.Output(2, fmt.Sprintln(v...))  // Output takes parameters (int, string)
+  }
+  ```
+  我们在嵌套调用Sprintln中v的后面使用了...来告诉编译器将v作为一个参数列表；否则，其会只将v作为单个切片参数进行传递。
+
+  除了我们这里讲到的之外，还有很多有关打印的技术。详情参见godoc文档中对fmt的介绍。
+
+  顺便说下，...参数可以为一个特定的类型，例如...int，可以用于最小值函数，来选择整数列表中的最小值：
+  ```go
+  func Min(a ...int) int {
+      min := int(^uint(0) >> 1)  // largest int
+      for _, i := range a {
+          if i < min {
+              min = i
+          }
+      }
+      return min
+  }
+  ```
+## foo
+  - **字符串连接** Go 语言的字符串可以通过 + 实现
+    ```go
+    package main
+    import "fmt"
+    func main() {
+        fmt.Println("Google" + "Runoob")
+    }
+    ```
+  当两个或多个连续的函数命名参数是同一类型，则除了最后一个类型之外，其他都可以省略
+  命名返回值
+  Go 的返回值可以被命名，并且像变量那样使用。
+
+  返回值的名称应当具有一定的意义，可以作为文档使用。
+
+  没有参数的 return 语句返回结果的当前值。也就是`直接`返回。
+
+  直接返回语句仅应当用在像下面这样的短函数中。在长的函数中它们会影响代码的可读性。
+  ```go
+  package main
+  import "fmt"
+
+  func split(sum int) (x, y int) {
+      x = sum * 4 / 9
+      y = sum - x
+      return
+  }
+
+  func main() {
+      fmt.Println(split(17))
+  }
+  ```
+  - 图片
+    ```go
+    package main
+
+    import "code.google.com/p/go-tour/pic"
+
+    func Pic(dx, dy int) [][]uint8 {
+    }
+
+    func main() {
+    	pic.Show(Pic)
+    }
+    ```
 有时候是需要分配一个二维切片的，例如这种情况可见于当扫描像素行的时候。有两种方式可以实现。一种是独立的分配每一个切片；另一种是分配单个数组，为其 指定单独的切片们。使用哪一种方式取决于你的应用。如果切片们可能会增大或者缩小，则它们应该被单独的分配以避免覆写了下一行；如果不会，则构建单个分配 会更加有效。作为参考，这里有两种方式的框架。首先是一次一行：
 ```go
 // Allocate the top-level slice.

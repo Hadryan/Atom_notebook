@@ -1227,6 +1227,38 @@
   >>>> lfw evaluation max accuracy: 0.992667, thresh: 0.207485, overall max accuracy: 0.993500, improved = False
   43216/43216 [==============================] - 9145s 212ms/step - loss: 2.4826 - logits_accuracy: 0.9015 - val_loss: 2.3668 - val_logits_accuracy: 0.8881
   ```
+  ```py
+  # soft_center_loss Renet50 II from scratch
+  45490/45490 [==============================] - 9407s 207ms/step - loss: 2.1294 - logits_accuracy: 0.7163
+  >>>> lfw evaluation max accuracy: 0.983833, thresh: 0.355683, overall max accuracy: 0.983833
+  >>>> cfp_fp evaluation max accuracy: 0.896714, thresh: 0.223122, overall max accuracy: 0.896714
+  >>>> agedb_30 evaluation max accuracy: 0.884667, thresh: 0.310732, overall max accuracy: 0.884667
+
+  45490/45490 [==============================] - 9352s 206ms/step - loss: 1.3088 - logits_accuracy: 0.8440
+  45490/45490 [==============================] - 9325s 205ms/step - loss: 1.0394 - logits_accuracy: 0.8849
+  45490/45490 [==============================] - 9285s 204ms/step - loss: 0.8652 - logits_accuracy: 0.9085
+  45490/45490 [==============================] - 9259s 204ms/step - loss: 0.7653 - logits_accuracy: 0.9232
+  Epoch 6/200
+  45490/45490 [==============================] - 9251s 203ms/step - loss: 0.7063 - logits_accuracy: 0.9330
+  45490/45490 [==============================] - 9262s 204ms/step - loss: 0.6590 - logits_accuracy: 0.9405
+  45490/45490 [==============================] - 9232s 203ms/step - loss: 0.6210 - logits_accuracy: 0.9463
+  45490/45490 [==============================] - 9260s 204ms/step - loss: 0.5877 - logits_accuracy: 0.9510
+  45490/45490 [==============================] - 9262s 204ms/step - loss: 0.5556 - logits_accuracy: 0.9550
+  Epoch 11/200
+  45490/45490 [==============================] - 9261s 204ms/step - loss: 0.5293 - logits_accuracy: 0.9584
+  45490/45490 [==============================] - 9224s 203ms/step - loss: 0.4924 - logits_accuracy: 0.9646
+  45490/45490 [==============================] - 9209s 202ms/step - loss: 0.4654 - logits_accuracy: 0.9693
+  45490/45490 [==============================] - 9264s 204ms/step - loss: 0.4427 - logits_accuracy: 0.9730
+  45490/45490 [==============================] - 9283s 204ms/step - loss: 0.4229 - logits_accuracy: 0.9762
+  Epoch 16/200
+  45490/45490 [==============================] - 9275s 204ms/step - loss: 0.4058 - logits_accuracy: 0.9789
+  45490/45490 [==============================] - 9280s 204ms/step - loss: 0.3896 - logits_accuracy: 0.9812
+  45490/45490 [==============================] - 9288s 204ms/step - loss: 0.3733 - logits_accuracy: 0.9832
+  45490/45490 [==============================] - 10228s 225ms/step - loss: 0.3562 - logits_accuracy: 0.9849
+  >>>> lfw evaluation max accuracy: 0.993667, thresh: 0.190155, overall max accuracy: 0.994000
+  >>>> cfp_fp evaluation max accuracy: 0.941857, thresh: 0.110804, overall max accuracy: 0.941857
+  >>>> agedb_30 evaluation max accuracy: 0.942000, thresh: 0.133505, overall max accuracy: 0.942000
+  ```
 ## Offline Triplet loss train SUB
   ```py
   import pickle
@@ -1491,14 +1523,18 @@
           images, labels = tf.map_fn(self.process_single_path, image_names, dtype=(tf.float32, tf.int32))
           return images, labels
 
-      def process_single_path(self, img_name):
+      def process_single_path(self, img_name, random_convert=True):
           parts = tf.strings.split(img_name, os.path.sep)[-2]
           label = tf.cast(tf.strings.to_number(parts), tf.int32)
           img = tf.io.read_file(img_name)
           img = tf.image.decode_jpeg(img, channels=self.channels)
           img = tf.image.convert_image_dtype(img, tf.float32)
+          if random_convert:
+              img = tf.image.random_flip_left_right(img)
+              img = tf.image.random_brightness(img, 0.2)
+              img = tf.image.random_crop(img, [100, 100, 3])
           img = tf.image.resize(img, self.img_shape)
-          img = tf.image.random_flip_left_right(img)
+          img = (img - 0.5) * 2
           return img, label
 
   def batch_hard_triplet_loss(labels, embeddings, alpha=0.3):
