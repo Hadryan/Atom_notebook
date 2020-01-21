@@ -1255,9 +1255,20 @@
   45490/45490 [==============================] - 9280s 204ms/step - loss: 0.3896 - logits_accuracy: 0.9812
   45490/45490 [==============================] - 9288s 204ms/step - loss: 0.3733 - logits_accuracy: 0.9832
   45490/45490 [==============================] - 10228s 225ms/step - loss: 0.3562 - logits_accuracy: 0.9849
-  >>>> lfw evaluation max accuracy: 0.993667, thresh: 0.190155, overall max accuracy: 0.994000
-  >>>> cfp_fp evaluation max accuracy: 0.941857, thresh: 0.110804, overall max accuracy: 0.941857
-  >>>> agedb_30 evaluation max accuracy: 0.942000, thresh: 0.133505, overall max accuracy: 0.942000
+  45490/45490 [==============================] - 9454s 208ms/step - loss: 0.3402 - logits_accuracy: 0.9864
+  Epoch 21/200
+  45490/45490 [==============================] - 9306s 205ms/step - loss: 0.3249 - logits_accuracy: 0.9876
+  45490/45490 [==============================] - 9417s 207ms/step - loss: 0.3103 - logits_accuracy: 0.9887
+  45490/45490 [==============================] - 9239s 203ms/step - loss: 0.2961 - logits_accuracy: 0.9897
+  45490/45490 [==============================] - 9227s 203ms/step - loss: 0.2821 - logits_accuracy: 0.9905
+  45490/45490 [==============================] - 9337s 205ms/step - loss: 0.2684 - logits_accuracy: 0.9912
+  Epoch 26/200
+  45490/45490 [==============================] - 9204s 202ms/step - loss: 0.2559 - logits_accuracy: 0.9918
+  45490/45490 [==============================] - 9225s 203ms/step - loss: 0.2442 - logits_accuracy: 0.9924
+  45490/45490 [==============================] - 9346s 205ms/step - loss: 0.2320 - logits_accuracy: 0.9928
+  >>>> lfw evaluation max accuracy: 0.993167, thresh: 0.203878, overall max accuracy: 0.994333
+  >>>> cfp_fp evaluation max accuracy: 0.944000, thresh: 0.105898, overall max accuracy: 0.944857
+  >>>> agedb_30 evaluation max accuracy: 0.942333, thresh: 0.146463, overall max accuracy: 0.943667
   ```
 ## Offline Triplet loss train SUB
   ```py

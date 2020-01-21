@@ -308,12 +308,6 @@
     ```
 ## Go 数据类型
   - Go语言中，使用 **大小写** 来决定该常量、变量、类型、接口、结构或函数是否可以被外部包所调用，即 private / public
-  - Go 中的字符串只能使用 **双引号**
-    ```go
-    aa := "aa"
-    fmt.Printf("%T", aa)
-    // string6
-    ```
   - **数据定义 const / var / type**
     - Go 语言的 **类型** 在 **变量名之后**
     - `var` 语句可以定义在包或函数级别，即在函数外或函数内
@@ -380,6 +374,64 @@
     // 1:25: Big (untyped int constant 1267650600228229401496703205376) overflows int
     fmt.Printf("Big: %e, %T\n", Big * 1.0, Big * 1.0)
     // Big: 1.267651e+30, float64
+    ```
+  - **常量组** 在定义常量组时，如果不提供初始值，则使用上一行的表达式
+    ```go
+    const (
+        a = 1
+        b
+        c = 2
+        d
+    )
+    fmt.Println(a, b, c, d)
+    // 1 1 2 2
+    ```
+  - **枚举常量** 使用 `iota` 枚举器来创建
+    - `iota` 可以认为是一个可以被编译器修改的常量
+    - 由于 `iota` 可以为表达式的一部分，并且表达式可以被隐式的重复，所以很容易创建复杂的值集
+    - 在 `const` 常量数组定义中，每增加一个常量，`iota` 自增 `1`，在新的 `const` 关键字出现时被重置为 `0`
+    ```go
+    type ByteSize float64
+
+    const (
+        _           = iota // ignore first value by assigning to blank identifier
+        KB ByteSize = 1 << (10 * iota)
+        MB  // 1 << (10 * 2)
+        GB  // 1 << (10 * 3)
+        TB
+        PB
+        EB
+    )
+    fmt.Println(KB, MB, GB, TB, PB, EB)
+    // 1024 1.048576e+06 1.073741824e+09 1.099511627776e+12 1.125899906842624e+15 1.152921504606847e+18
+    ```
+    ```go
+    import "fmt"    
+    const (
+        a = iota   //0
+        b          //1
+        c          //2
+        d = "ha"   //独立值，iota += 1
+        e          //"ha"   iota += 1
+        f = 100    //iota +=1
+        g          //100  iota +=1
+        h = iota   //7,恢复计数
+        i          //8
+    )
+    const j, k = iota, iota
+    fmt.Println(a, b, c, d, e, f, g, h, i, j, k)
+    // 0 1 2 ha ha 100 100 7 8 0 0
+    ```
+  - **字符串** Go 中的字符串只能使用 **双引号**
+    ```go
+    aa := "aa"
+    fmt.Printf("%T", aa)
+    // string6
+    ```
+    **字符串连接** 可以通过 + 实现
+    ```go
+    import "fmt"
+    fmt.Println("Hello " + "world")
     ```
   - **类型转换** Go 在不同类型之间的项目赋值时，需要 **显式转换**
     ```go
@@ -591,6 +643,14 @@
     fmt.Println(hypot(3, 4))
     // 5
     ```
+    ```go
+    type callback func(int) int
+
+    func foo(aa int) int {
+        return aa + 1
+    }
+    callback(foo)(3)  // 4
+    ```
   - **函数的闭包** 函数的返回值是另一个函数
     ```go
     func adder() func(int) int {
@@ -614,8 +674,15 @@
   - **命名的结果参数** 函数的返回参数可以给定一个名字，并在函数内作为一个普通变量来使用
     - 当被命名时，它们在函数起始处被初始化为对应类型的零值
     - 如果函数执行了没有参数的 `return` 语句，则返回 **函数内对应参数的当前值**
+    - 直接返回语句仅应当用在函数中，在长的函数中会影响代码的可读性
     ```go
-    func nextInt(b []byte, pos int) (value, nextPos int) { ... }
+    func split(sum int) (x, y int) {
+        x = sum * 4 / 9
+        y = sum - x
+        return
+    }
+
+    fmt.Println(split(17))
     ```
     ```go
     // io.ReadFull
@@ -627,6 +694,18 @@
             buf = buf[nr:]
         }
         return
+    }
+    ```
+  - **... 参数** 指定为任意数量的参数
+    ```go
+    func Min(a ...int) int {
+        min := int(^uint(0) >> 1)  // largest int
+        for _, i := range a {
+            if i < min {
+                min = i
+            }
+        }
+        return min
     }
     ```
 ## defer 延迟调用
@@ -669,6 +748,86 @@
         // gopath may be overridden by --gopath flag on command line.
         flag.StringVar(&gopath, "gopath", gopath, "override default GOPATH")
     }
+    ```
+## fmt 打印输出
+  - **fmt.Printf / fmt.Fprintf / fmt.Sprintf**
+    - 对每个 Printf / Fprintf / Sprintf，都有另外一对相应的函数，如 **Print / Println**，这些函数不接受格式串，而是为每个参数生成一个缺省的格式
+    - **Println** 会在参数之间插入一个空格，并添加一个换行，而 **Print** 只有当两边的操作数都不是字符串的时候才增加一个空格
+    - 字符串函数 **Sprintf 等** 返回一个字符串，而不是填充到提供的缓冲里
+    - **io.Writer 接口对象** 格式化打印函数接受的第一个参数为任何一个实现了 `io.Writer 接口` 的对象，变量 `os.Stdout` / `os.Stderr` 是常见的实例
+    ```go
+    // 每一行都会产生相同的输出
+    fmt.Printf("Hello %d\n", 23)
+    fmt.Fprint(os.Stdout, "Hello ", 23, "\n")
+    fmt.Println("Hello", 23)
+    fmt.Println(fmt.Sprint("Hello ", 23))
+    ```
+  - **数字格式 %d** 打印程序使用参数的类型来决定打印的属性，不接受正负号和大小的标记
+    ```go
+    var x uint64 = 1<<64 - 1
+    fmt.Printf("%d %x; %d %x\n", x, x, int64(x), int64(x))
+    // 18446744073709551615 ffffffffffffffff; -1 -1
+    ```
+  - **通用格式 %v** 缺省的转换，这个格式可以打印任意的的值，包括数组 / 切片 / 结构体 / map，这也是 `Print` / `Println` 所产生的结果
+    ```go
+    fmt.Printf("%v\n", timeZone)  // or just fmt.Println(timeZone)
+    // map[CST:-21600 PST:-28800 EST:-18000 UTC:0 MST:-25200]
+    ```
+    - **%+v** 会将结构体的域使用它们的名字进行注解
+    - **%#v** 会按照完整的 Go 语法打印出该值
+    ```go
+    type T struct {
+        a int
+        b float64
+        c string
+    }
+    t := &T{ 7, -2.35, "abc\tdef" }
+    fmt.Printf("%v\n", t) // &{7 -2.35 abc   def}
+    fmt.Printf("%+v\n", t)  // &{a:7 b:-2.35 c:abc     def}
+    fmt.Printf("%#v\n", t)  // &main.T{a:7, b:-2.35, c:"abc\tdef"}
+    fmt.Printf("%#v\n", timeZone) // map[string] int{"CST":-21600, "PST":-28800, "EST":-18000, "UTC":0, "MST":-25200}
+    ```
+  - **%q** 用于类型为 string / []byte 的值，实现带引号的字符串格式
+    - **%#q** 将尽可能的使用反引号
+    - **%q** 还用于整数 / 符文 rune，产生一个带单引号的符文常量
+  - **%x** 用于字符串 / 字节数组 / 字节切片 / 整数，生成一个长的 **十六进制字符串**，如果在格式中有一个空格 `% x`，其将会在字节中插入空格
+  - **%T** 打印出值的类型
+    ```go
+    fmt.Printf("%T\n", timeZone)
+    // map[string] int
+    ```
+    如果需要控制自定义类型的缺省格式，可以对该类型定义一个签名为 `String() string` 的方法
+    ```go
+    func (t *T) String() string {
+        return fmt.Sprintf("%d/%g/%q", t.a, t.b, t.c)
+    }
+    fmt.Printf("%v\n", t)
+    // 7/-2.35/"abc\tdef"
+    ```
+    对于 `string` 类型的值，应避免无穷递归
+    ```go
+    type MyString string
+
+    func (m MyString) String() string {
+        return fmt.Sprintf("MyString=%s", m) // Error: will recur forever.
+    }
+    ```
+    ```go
+    type MyString string
+    func (m MyString) String() string {
+        return fmt.Sprintf("MyString=%s", string(m)) // OK: note conversion.
+    }
+    ```
+  - **Printf 的签名** `...interface{}` 指定可以出现 **任意数目** 的 **任意类型** 的参数
+    ```go
+    func Printf(format string, v ...interface{}) (n int, err error) { ... }
+    ```
+    在作为参数传递给另一个函数时，可以使用 `v...` 指定为一个参数列表，直接使用 `v` 将作为一个切片 `[]interface{}` 来传递
+    ```go
+    // Println prints to the standard logger in the manner of fmt.Println.
+    func Println(v ...interface{}) {
+        std.Output(2, fmt.Sprintln(v...))  // Output takes parameters (int, string)
+    }  
     ```
 ***
 
@@ -1002,23 +1161,6 @@
     ee[2] = 2
     fmt.Println(ee) // [0 0 2]
     ```
-## 枚举常量
-  - **枚举常量** 使用 `iota` 枚举器来创建，由于 `iota` 可以为表达式的一部分，并且表达式可以被隐式的重复，所以很容易创建复杂的值集
-    ```go
-    type ByteSize float64
-
-    const (
-        _           = iota // ignore first value by assigning to blank identifier
-        KB ByteSize = 1 << (10 * iota)
-        MB
-        GB
-        TB
-        PB
-        EB
-    )
-    fmt.Println(KB, MB, GB, TB, PB, EB)
-    // 1024 1.048576e+06 1.073741824e+09 1.099511627776e+12 1.125899906842624e+15 1.152921504606847e+18
-    ```
 ***
 
 # 方法和接口
@@ -1229,13 +1371,14 @@
     // 1.00TB
     // 9.09TB
     ```
-## Error 错误接口
-  - **error 类型** 是一个内建接口，Go 使用 `error` 值来表示错误状态，通常函数会返回一个 error 值，一般 error 为 `nil` 时表示成功，否则表示出错
+## Error 接口
+  - **错误信息** 向调用者返回的错误信息通常用内置接口 `error` 类型表示
     ```go
     type error interface {
         Error() string
     }
     ```
+    一般 error 为 `nil` 时表示成功，否则表示出错
     ```go
     import "strconv"
     i, err := strconv.Atoi("42")
@@ -1244,27 +1387,52 @@
     }
     fmt.Println("Converted integer:", i)
     ```
-  - **自定义 error**
+  - **自定义 error** 通过实现 `Error` 可以自定义输出错误信息，描述错误的字符串应包括足够的信息，如文件名 / 包名 / 操作类型 / 以及系统错误信息等
     ```go
-    import "time"
+    package main
 
-    type MyError struct {
-        When time.Time
-        What string
+    import (
+        "os"
+        "fmt"
+        "time"
+    )
+
+    // PathError records an error and the operation and file path that caused it.
+    type PathError struct {
+        when time.Time
+        Op string    // "open", "unlink", etc.
+        Path string  // The associated file.
+        Err error // Returned by the system call.
     }
 
-    func (e *MyError) Error() string {
-        return fmt.Sprintf("at %v, %s", e.When, e.What)
+    func (e *PathError) Error() string {
+        return e.when.String() + e.Op + " " + e.Path + ": " + e.Err.Error()
     }
 
-    func run() error {
-        return &MyError{time.Now(), "it didn't work"}
+    func test_run() error {
+        return &PathError{time.Now(), "Open", "/etc/passwx", os.ErrNotExist}
     }
 
-    if err := run(); err != nil {
-        fmt.Println(err)
+    func main() {
+        if err := test_run(); err != nil {
+            fmt.Println(err)
+        }   
     }
-    // at 2020-01-03 15:38:38.157514149 +0800 CST m=+105783.750721763, it didn't work
+    // 2020-01-21 14:02:39.306986699 +0800 CST m=+0.000429514Open /etc/passwx: file does not exist
+    ```
+    通过 **类型断言** 的方式可以精确分析错误的类型，对于 `PathErrors` 类型，`Err` 字段还包含了其他的细节信息
+    ```go
+    for try := 0; try < 2; try++ {
+        file, err = os.Create(filename)
+        if err == nil {
+            return
+        }
+        if e, ok := err.(*os.PathError); ok && e.Err == syscall.ENOSPC {
+            deleteTempFiles()  // Recover some space.
+            continue
+        }
+        return
+    }
     ```
 ## Readers 接口
   - [io 包](https://golang.org/pkg/io/)中定义了 **io.Reader 接口**，表示 **从数据流结尾读取数据**
@@ -1470,8 +1638,13 @@
 ***
 
 # 并发
-## goroutine
-  - **goroutine** 是由 Go 运行时环境管理的轻量级线程，goroutine 在相同的地址空间中运行，因此访问共享内存必须进行同步，`sync` 提供了这种可能，不过在 Go 中并不经常用到，因为有其他的办法
+## Goroutine
+  - **Goroutine** 是由 Go 运行时环境管理的轻量级线程
+    - Goroutine 不是一般意义的线程 / 协程，而是一个并发的函数执行线索，在多个并发的 Goroutine 间，资源是共享的
+    - Goroutine 非常轻量，创建的开销不会比栈空间分配的开销大多少，其初始栈空间很小，在后续执行中，会根据需要在堆空间分配 / 释放额外的栈空间
+    - Goroutine 在相同的地址空间中运行，因此访问共享内存必须进行同步，`sync` 提供了这种可能，不过在 Go 中并不经常用到，因为有其他的办法
+    - Goroutine 与操作系统线程间采用 **多到多** 的映射方式，因此如果一个 Goroutine 因某种原因阻塞，其他 Goroutine 可以继续执行
+  - **go 关键字** 用于创建一个 Goroutine 并调用该函数或方法，当该函数执行结束，Goroutine 也随之隐式退出
     ```go
     // 开启一个新的 goroutine 执行，f / x / y / z 是当前 goroutine 中定义的，但是在新的 goroutine 中运行 f
     go f(x, y, z)
@@ -1499,10 +1672,18 @@
     // world
     // hello
     ```
+    ```go
+    func Announce(message string, delay time.Duration) {
+        go func() {
+            time.Sleep(delay)
+            fmt.Println(message)
+        }()  // Note the parentheses - must call the function.
+    }
+    ```
 ## channel
   - **channel** 是有类型的管道
     - 可以用 channel 操作符 `<-` 对其发送或者接收值
-    - channel 使用前 **必须创建**
+    - 与 map 类似，channel 也是通过 **make** 进行分配的，其返回值实际上是一个指向底层相关数据结构的引用
     - 默认情况下，在另一端准备好之前，发送和接收都会阻塞，这使得 goroutine 可以在没有明确的锁或竞态变量的情况下进行同步
     ```go
     ch := make(chan int)
@@ -1723,169 +1904,285 @@
     // test1:  0.349657722
     // test2:  0.382042907
     ```
+## 以通信实现共享
+  - Go 语言鼓励的共享方式是，将共享变量通过 Channel 相互传递，使得在任意时刻，仅有一个 Goroutine 可以访问某个变量，从而在设计上规避数据竞争问题
+  - **CSP 模型 Communicating Sequential Processes** Go 语言的并发模型源自 Hoare 的 CSP 模型，也可以被看成是一种类型安全的，一般化的 Unix 管道
+  - **无缓冲的 channel 用于同步** 通过使用 channel，让发起操作的 Gorouine 等待操作的完成
+    ```go
+    c := make(chan int)  // Allocate a channel.
+    // Start the sort in a goroutine; when it completes, signal on the channel.
+    go func() {
+        list.Sort()
+        c <- 1  // Send a signal; value does not matter.
+    }()
+    doSomethingForAWhile()
+    <-c   // Wait for sort to finish; discard sent value.
+    ```
+  - **带缓冲区的 channel 模拟信号量** 完成如限制吞吐率等功能，使用 channel 的缓冲区容量限制并发调用的上限，获取信号量的操作必须实现在 channel 的接收阶段，而不是发送阶段
+    ```go
+    var sem = make(chan int, MaxOutstanding)
+
+    func handle(r *Request) {
+        <-sem          // Wait for active queue to drain.
+        process(r)     // May take a long time.
+        sem <- 1       // Done; enable next request to run.
+    }
+
+    func init() {
+        for i := 0; i < MaxOutstanding; i++ {
+            sem <- 1
+        }
+    }
+
+    func Serve(queue chan *Request) {
+        for {
+            req := <-queue
+            go handle(req)  // Don't wait for handle to finish.
+        }
+    }
+    ```
+    这种实现在请求到来速度过快时，会分配过多的 Goroutine，并处于阻塞状态，可以通过修改 `Serve` 来对 `Goroutine` 的创建进行限制
+    ```go
+    func Serve(queue chan *Request) {
+        for req := range queue {
+            <-sem
+            go func() {
+                process(req) // Buggy; see explanation below.
+                sem <- 1
+            }()
+        }
+    }
+    ```
+    此时其中的 `req` 变量在所有 `Goroutine` 间是共享的，可以以函数参数形式，创建新的私有变量
+    ```go
+    func Serve(queue chan *Request) {
+        for req := range queue {
+            <-sem
+            go func(req *Request) {
+                process(req)
+                sem <- 1
+            }(req)
+        }
+    }
+    ```
+    另一种解决方案是创建一个新的同名变量
+    ```go
+    func Serve(queue chan *Request) {
+        for req := range queue {
+            <-sem
+            req := req // Create new instance of req for the goroutine.
+            go func() {
+                process(req)
+                sem <- 1
+            }()
+        }
+    }
+    ```
+  - **带缓冲区的 channel 启动固定数量的 handle Goroutine** 每个 Goroutine 都直接从 channel 中读取请求，`Serve` 函数还需要一个额外的 `channel` 参数，用来实现退出通知
+    ```go
+    func handle(queue chan *Request) {
+        for r := range queue {
+            process(r)
+        }
+    }
+
+    func Serve(clientRequests chan *Request, quit chan bool) {
+        // Start handlers
+        for i := 0; i < MaxOutstanding; i++ {
+            go handle(clientRequests)
+        }
+        <-quit  // Wait to be told to exit.
+    }
+    ```
+  - **Channel 类型的 Channel** 添加一个用来响应的 channel，返回 Goroutine 处理结果，不使用任何显式的互斥语法，完成并行的调用
+    ```go
+    // 客户端提供了一个函数及其参数，以及一个内部的 channel 变量用来接收回答消息
+    type Request struct {
+        args        []int
+        f           func([]int) int
+        resultChan  chan int
+    }
+
+    func sum(a []int) (s int) {
+        for _, v := range a {
+            s += v
+        }
+        return
+    }
+
+    request := &Request{[]int{3, 4, 5}, sum, make(chan int)}
+    // Send request
+    clientRequests <- request
+    // Wait for response.
+    fmt.Printf("answer: %d\n", <-request.resultChan)
+    ```
+    服务器端处理函数
+    ```go
+    func handle(queue chan *Request) {
+        for req := range queue {
+            req.resultChan <- req.f(req.args)
+        }
+    }
+    ```
+## 并行
+  - **并行化处理** 将计算划分为不同的可独立执行的部分，任务算可能以任意次序完成，并通过一个 channel 发送结束信号
+    ```go
+    type Vector []float64
+
+    // Apply the operation to v[i], v[i+1] ... up to v[n-1].
+    func (v Vector) DoSome(i, n int, u Vector, c chan int) {
+        for ; i < n; i++ {
+            v[i] += u.Op(v[i])
+        }
+        c <- 1    // signal that this piece is done
+    }
+
+    const NCPU = 4  // number of CPU cores
+
+    func (v Vector) DoAll(u Vector) {
+        c := make(chan int, NCPU)  // Buffering optional but sensible.
+        for i := 0; i < NCPU; i++ {
+            go v.DoSome(i*len(v)/NCPU, (i+1)*len(v)/NCPU, u, c)
+        }
+        // Drain the channel.
+        for i := 0; i < NCPU; i++ {
+            <-c    // wait for one task to complete
+        }
+        // All done.
+    }
+    ```
+  - **GOMAXPROCS 环境变量**
+    - 目前的 Go runtime 实现中，对于用户态任务，默认仅提供 **一个物理 CPU** 进行处理，未来可能会将其设计的更加智能
+    - 目前必须通过设置 `GOMAXPROCS` 环境变量，或者导入 `runtime` 包并调用 `runtime.GOMAXPROCS(NCPU)` 来设置运行时系统最大并行执行的 Goroutine 数目
+    - 通过 `runtime.NumCPU()` 可以获得当前运行系统的逻辑核数
+## Leaky Buffer 示例
+  - 并发编程的工具甚至可以更简单的表达一些非并发的想法，示例是从 `RPC` 的一个包里抽象而来的
+    - **客户端** 从某些源循环接收数据，为了避免频繁的分配 / 释放内存缓冲，程序在内部实现了一个空闲链表，并用一个 Buffer 指针型 channel 将其封装
+    - 客户端会尝试从空闲链表 `freeList` 中获取 `Buffer` 对象，如果没有可用对象，则分配一个新的，一旦消息缓冲就绪，它就会被经由 `serverChan` 发送到服务器端
+    - **服务器端** 循环从客户端接收并处理每个消息，并将用完的 `Buffer` 对象 `b` 加入到空闲链表 `freeList` 中，如果链表已满，则将 `b` 丢弃
+    - **select** 语句中的 `default` 分支会在没有其他 `case` 分支满足条件时执行，这意味着 `select` 语句块不会阻塞
+    ```go
+    var freeList = make(chan *Buffer, 100)
+    var serverChan = make(chan *Buffer)
+
+    func client() {
+        for {
+            var b *Buffer
+            // Grab a buffer if available; allocate if not.
+            select {
+            case b = <-freeList:
+                // Got one; nothing more to do.
+            default:
+                // None free, so allocate a new one.
+                b = new(Buffer)
+            }
+            load(b)              // Read next message from the net.
+            serverChan <- b      // Send to server.
+        }
+    }
+
+    func server() {
+        for {
+            b := <-serverChan    // Wait for work.
+            process(b)
+            // Reuse buffer if there's room.
+            select {
+            case freeList <- b:
+                // Buffer on free list; nothing more to do.
+            default:
+                // Free list full, just carry on.
+            }
+        }
+    }
+    ```
 ***
 
-## 打印输出
-  Go中的格式化打印使用了与C中printf家族类似的风格，不过更加丰富和通用。这些函数位于fmt程序包中，并具有大写的名字：fmt.Printf，fmt.Fprintf，fmt.Sprintf等等。字符串函数（Sprintf等）返回一个字符串，而不是填充到提供的缓冲里。
+# Panic 与 Recover
+  - **panic** 在发生不可恢复的错误时，创建一个运行时错误并结束当前程序，在实际的库设计中，应尽量从错误中恢复，避免使用 `panic`
+    ```go
+    var user = os.Getenv("USER")
 
-  你不需要提供一个格式串。对每个Printf，Fprintf和Sprintf，都有另外一对相应的函数，例如Print和Println。这些函数不接受格式串，而是为每个参数生成一个缺省的格式。Println版本还会在参数之间插入一个空格，并添加一个换行，而Print版本只有当两边的操作数都不是字符串的时候才增加一个空格。在这个例子中，每一行都会产生相同的输出。
-  ```go
-  fmt.Printf("Hello %d\n", 23)
-  fmt.Fprint(os.Stdout, "Hello ", 23, "\n")
-  fmt.Println("Hello", 23)
-  fmt.Println(fmt.Sprint("Hello ", 23))
-  ```
-  格式化打印函数fmt.Fprint等，接受的第一个参数为任何一个实现了io.Writer接口的对象；变量os.Stdout和os.Stderr是常见的实例。
+    func init() {
+        if user == "" {
+            panic("no value for $USER")
+        }
+    }
+    ```
+    `panic` 触发时，将立刻中断当前函数的执行，并展开当前 `Goroutine` 的调用栈，依次执行之前注册的 `defer` 函数，当栈展开操作达到该 `Goroutine` 栈顶端时，程序将终止
+  - **Recover 恢复** 从 `panic` 中恢复正常执行状态
+    - `recover` 会 **终止栈展开操作** 并返回之前传递给 `panic` 方法的参数
+    - `panic` 在栈展开过程中，只有 `defer` 型函数会被执行，因此 `recover` 的调用 **必须置于 defer 函数内** 才有效
+    ```go
+    func server(workChan <-chan *Work) {
+        for work := range workChan {
+            go safelyDo(work)
+        }
+    }
 
-  接下来这些就和C不同了。首先，数字格式，像%d，并不接受正负号和大小的标记；相反的，打印程序使用参数的类型来决定这些属性。
-  ```go
-  var x uint64 = 1<<64 - 1
-  fmt.Printf("%d %x; %d %x\n", x, x, int64(x), int64(x))
-  ```
-  会打印出
-  ```go
-  18446744073709551615 ffffffffffffffff; -1 -1
-  ```
-  如果只是想要缺省的转换，像十进制整数，你可以使用通用格式%v（代表“value”）；这正是Print和Println所产生的结果。而且，这个格式可以打印任意的的值，甚至是数组，切片，结构体和map。这是一个针对前面章节中定义的时区map的打印语句
-  ```go
-  fmt.Printf("%v\n", timeZone)  // or just fmt.Println(timeZone)
-  ```
-  其会输出
-  ```go
-  map[CST:-21600 PST:-28800 EST:-18000 UTC:0 MST:-25200]
-  ```
-  当然，map的key可能会按照任意顺序被输出。当打印一个结构体时，带修饰的格式%+v会将结构体的域使用它们的名字进行注解，对于任意的值，格式%#v会按照完整的Go语法打印出该值。
-  ```go
-  type T struct {
-      a int
-      b float64
-      c string
-  }
-  t := &T{ 7, -2.35, "abc\tdef" }
-  fmt.Printf("%v\n", t)
-  fmt.Printf("%+v\n", t)
-  fmt.Printf("%#v\n", t)
-  fmt.Printf("%#v\n", timeZone)
-  ```
-  会打印出
-  ```go
-  &{7 -2.35 abc   def}
-  &{a:7 b:-2.35 c:abc     def}
-  &main.T{a:7, b:-2.35, c:"abc\tdef"}
-  map[string] int{"CST":-21600, "PST":-28800, "EST":-18000, "UTC":0, "MST":-25200}
-  ```
-  （注意符号&）还可以通过%q来实现带引号的字符串格式，用于类型为string或[]byte的值。格式%#q将尽可能的使用反引号。（格式%q还用于整数和符文，产生一个带单引号的符文常量。）还有，%x用于字符串，字节数组和字节切片，以及整数，生成一个长的十六进制字符串，并且如果在格式中有一个空格（% x），其将会在字节中插入空格。
+    func safelyDo(work *Work) {
+        defer func() {
+            if err := recover(); err != nil {
+                log.Println("work failed:", err)
+            }
+        }()
+        do(work)
+    }
+    ```
+    如果 `do(work)` 调用发生了 `panic`，则会调用 `defer` 中的 `recover` 函数，其结果将被记录且发生错误的那个 Goroutine 将干净的退出，不会干扰其他 Goroutine
+  - **regexp 包中的错误恢复函数**
+    - 如果 `doParse` 方法触发 `panic`，错误恢复代码会将返回值置为 `nil`
+    - 错误恢复代码会对返回的错误类型进行 **类型断言**，如果类型断言失败，则会引发运行时错误，并继续进行栈展开，最后终止程序
+    ```go
+    // Error is the type of a parse error; it satisfies the error interface.
+    type Error string
+    func (e Error) Error() string {
+        return string(e)
+    }
 
-  另一个方便的格式是%T，其可以打印出值的类型。
-  ```go
-  fmt.Printf("%T\n", timeZone)
-  ```
-  会打印出
-  ```go
-  map[string] int
-  ```
-  如果你想控制自定义类型的缺省格式，只需要对该类型定义一个签名为String() string的方法。对于我们的简单类型T，看起来可能是这样的。
-  ```go
-  func (t *T) String() string {
-      return fmt.Sprintf("%d/%g/%q", t.a, t.b, t.c)
-  }
-  fmt.Printf("%v\n", t)
-  ```
-  会按照如下格式打印
-  ```go
-  7/-2.35/"abc\tdef"
-  ```
-  （如果你需要打印类型为T的值，同时需要指向T的指针，那么String的接收者必须为值类型的；这个例子使用了指针，是因为这对于结构体类型更加有效和符合语言习惯。更多信息参见下面的章节pointers vs. value receivers）
+    // error is a method of *Regexp that reports parsing errors by
+    // panicking with an Error.
+    func (regexp *Regexp) error(err string) {
+        panic(Error(err))
+    }
 
-  我们的String方法可以调用Sprintf，是因为打印程序是完全可重入的，并且可以按这种方式进行包装。然而，对于这种方式，有一个重要的细节需要明白：不要将调用Sprintf的String方法构造成无穷递归。如果Sprintf调用尝试将接收者直接作为字符串进行打印，就会导致再次调用该方法，发生这样的情况。这是一个很常见的错误，正如这个例子所示。
-  ```go
-  type MyString string
+    // Compile returns a parsed representation of the regular expression.
+    func Compile(str string) (regexp *Regexp, err error) {
+        regexp = new(Regexp)
+        // doParse will panic if there is a parse error.
+        defer func() {
+            if e := recover(); e != nil {
+                regexp = nil    // Clear return value.
+                err = e.(Error) // Will re-panic if not a parse error.
+            }
+        }()
+        return regexp.doParse(str), nil
+    }
+    ```
+    在使用时，可以直接调用 `error` 方法触发 `panic`，无需费心去考虑手工处理栈展开过程的复杂问题
+    ```go
+    if pos == 0 {
+        re.error("'*' illegal at start of expression")
+    }
+    ```
+  - **panic - recover 模式** 可以完全被封装在模块的内部，对 `panic` 的调用可以隐藏在 `error` 之中，而不会将 `panics` 信息暴露给外部使用者，这是一个设计良好的编程技巧
+***
 
-  func (m MyString) String() string {
-      return fmt.Sprintf("MyString=%s", m) // Error: will recur forever.
-  }
-  ```
-  这也容易修改：将参数转换为没有方法函数的，基本的字符串类型。
-  ```go
-  type MyString string
-  func (m MyString) String() string {
-      return fmt.Sprintf("MyString=%s", string(m)) // OK: note conversion.
-  }
-  ```
-  在初始化章节，我们将会看到另一种避免该递归的技术。
-
-  另一种打印技术，是将一个打印程序的参数直接传递给另一个这样的程序。Printf的签名使用了类型...interface{}作为最后一个参数，来指定在格式之后可以出现任意数目的（任意类型的）参数。
-  ```go
-  func Printf(format string, v ...interface{}) (n int, err error) { ... }
-  ```
-  在函数Printf内部，v就像是一个类型为[]interface{}的变量，但是如果其被传递给另一个可变参数的函数，其就像是一个正常的参数列表。这里有一个对我们上面用到的函数log.Println的实现。其将参数直接传递给fmt.Sprintln来做实际的格式化。
-  ```go
-  // Println prints to the standard logger in the manner of fmt.Println.
-  func Println(v ...interface{}) {
-      std.Output(2, fmt.Sprintln(v...))  // Output takes parameters (int, string)
-  }
-  ```
-  我们在嵌套调用Sprintln中v的后面使用了...来告诉编译器将v作为一个参数列表；否则，其会只将v作为单个切片参数进行传递。
-
-  除了我们这里讲到的之外，还有很多有关打印的技术。详情参见godoc文档中对fmt的介绍。
-
-  顺便说下，...参数可以为一个特定的类型，例如...int，可以用于最小值函数，来选择整数列表中的最小值：
-  ```go
-  func Min(a ...int) int {
-      min := int(^uint(0) >> 1)  // largest int
-      for _, i := range a {
-          if i < min {
-              min = i
-          }
-      }
-      return min
-  }
-  ```
 ## foo
-  - **字符串连接** Go 语言的字符串可以通过 + 实现
-    ```go
-    package main
-    import "fmt"
-    func main() {
-        fmt.Println("Google" + "Runoob")
-    }
-    ```
-  当两个或多个连续的函数命名参数是同一类型，则除了最后一个类型之外，其他都可以省略
-  命名返回值
-  Go 的返回值可以被命名，并且像变量那样使用。
-
-  返回值的名称应当具有一定的意义，可以作为文档使用。
-
-  没有参数的 return 语句返回结果的当前值。也就是`直接`返回。
-
-  直接返回语句仅应当用在像下面这样的短函数中。在长的函数中它们会影响代码的可读性。
-  ```go
-  package main
-  import "fmt"
-
-  func split(sum int) (x, y int) {
-      x = sum * 4 / 9
-      y = sum - x
-      return
-  }
-
-  func main() {
-      fmt.Println(split(17))
-  }
-  ```
-  - 图片
-    ```go
-    package main
-
-    import "code.google.com/p/go-tour/pic"
-
-    func Pic(dx, dy int) [][]uint8 {
-    }
-
-    func main() {
-    	pic.Show(Pic)
-    }
-    ```
+当两个或多个连续的函数命名参数是同一类型，则除了最后一个类型之外，其他都可以省略
+初始化二维数组
+多维数组可通过大括号来初始值。以下实例为一个 3 行 4 列的二维数组：
+```go
+a = [3][4]int{  
+ {0, 1, 2, 3} ,   /*  第一行索引为 0 */
+ {4, 5, 6, 7} ,   /*  第二行索引为 1 */
+ {8, 9, 10, 11},   /* 第三行索引为 2 */
+}
+注意：以上代码中倒数第二行的 } 必须要有逗号，因为最后一行的 } 不能单独一行，也可以写成这样：
+a = [3][4]int{  
+ {0, 1, 2, 3} ,   /*  第一行索引为 0 */
+ {4, 5, 6, 7} ,   /*  第二行索引为 1 */
+ {8, 9, 10, 11}}   /* 第三行索引为 2 */
+```
 有时候是需要分配一个二维切片的，例如这种情况可见于当扫描像素行的时候。有两种方式可以实现。一种是独立的分配每一个切片；另一种是分配单个数组，为其 指定单独的切片们。使用哪一种方式取决于你的应用。如果切片们可能会增大或者缩小，则它们应该被单独的分配以避免覆写了下一行；如果不会，则构建单个分配 会更加有效。作为参考，这里有两种方式的框架。首先是一次一行：
 ```go
 // Allocate the top-level slice.
