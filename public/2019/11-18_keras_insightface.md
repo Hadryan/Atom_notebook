@@ -663,16 +663,17 @@
   ''' Basic model '''
   # xx = keras.applications.ResNet101V2(include_top=False, weights='imagenet')
   # xx = tf.keras.applications.MobileNetV2(input_shape=(112, 112, 3), include_top=False, weights=None)
+  # xx = keras.applications.NASNetMobile(input_shape=(112, 112, 3), include_top=False, weights=None)
   # xx = tf.keras.applications.ResNet50V2(include_top=False, weights='imagenet')
   xx = tf.keras.applications.ResNet50V2(input_shape=(112, 112, 3), include_top=False, weights='imagenet')
   xx.trainable = True
 
   inputs = xx.inputs[0]
   nn = xx.outputs[0]
-  nn = layers.Conv2D(512, 3, use_bias=False)(nn)
+  nn = layers.Conv2D(512, 4, use_bias=False)(nn)
   # BatchNormalization(momentum=0.99, epsilon=0.001)
   nn = layers.BatchNormalization(momentum=0.9, epsilon=2e-5)(nn)
-  nn = layers.Dropout(0.4)(nn)
+  # nn = layers.Dropout(0.4)(nn)
   nn = layers.Flatten()(nn)
   nn = layers.Dense(512)(nn)
   embedding = layers.BatchNormalization(momentum=0.9, epsilon=2e-5, name='embedding')(nn)
@@ -882,6 +883,17 @@
         theta_one_hot = tf.expand_dims(theta - y_pred_vals, 1) * tf.cast(y_true, dtype=tf.float32)
         arcface_logits = (theta_one_hot + norm_logits) * scale
         tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
+        return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
+
+    def arcface_loss(y_true, y_pred, margin1=1.0, margin2=0.5, margin3=0.0, scale=64.0):
+        # norm_logits = y_pred[:, 512:]
+        norm_logits = y_pred
+        y_pred_vals = norm_logits[tf.cast(y_true, dtype=tf.bool)]
+        y_pred_vals = tf.clip_by_value(y_pred_vals, clip_value_min=-1.0, clip_value_max=1.0)
+        theta = tf.cos(tf.acos(y_pred_vals) + margin2)
+        theta_one_hot = tf.expand_dims(theta - y_pred_vals, 1) * tf.cast(y_true, dtype=tf.float32)
+        arcface_logits = (theta_one_hot + norm_logits) * scale
+        # tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
         return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
     ```
     **Plot**
@@ -1516,18 +1528,26 @@
           self.channels = img_shape[2] if len(img_shape) > 2 else 3
           print("The final train_dataset batch will be %s" % ([batch_size * image_per_class, * self.img_shape, self.channels]))
 
-      def random_init_triplet_dataset(self):
-          shuffle_dataset = self.image_dataframe.map(self.split_func)
-          tt = np.vstack(shuffle_dataset.values)
-          total = len(tt)
-          print("%d paired images found" % (total))
-          train_dataset = tf.data.Dataset.from_tensor_slices(tt)
-          train_dataset = train_dataset.shuffle(total)
+          image_data = self.image_data_shuffle()
+          self.steps_per_epoch = np.ceil(image_data.shape[0] / self.batch_size)
+
+          train_dataset = tf.data.Dataset.from_generator(self.triplet_datasets_gen, output_types=tf.string, output_shapes=(image_per_class,))
+          # train_dataset = train_dataset.shuffle(total)
           train_dataset = train_dataset.batch(self.batch_size)
           train_dataset = train_dataset.map(self.process_batch_path, num_parallel_calls=self.AUTOTUNE)
-          train_dataset = train_dataset.prefetch(buffer_size=self.AUTOTUNE)
-          steps_per_epoch = np.ceil(total / self.batch_size)
-          return train_dataset, steps_per_epoch
+          self.train_dataset = train_dataset.prefetch(buffer_size=self.AUTOTUNE)
+
+      def triplet_datasets_gen(self):
+          while True:
+              tf.print("Shuffle image data...")
+              image_data = self.image_data_shuffle()
+              for ii in image_data:
+                  yield ii
+
+      def image_data_shuffle(self):
+          shuffle_dataset = self.image_dataframe.map(self.split_func)
+          tt = np.random.permutation(np.vstack(shuffle_dataset.values))
+          return tt
 
       def process_batch_path(self, image_name_batch):
           image_names = tf.reshape(image_name_batch, [-1])
@@ -1548,7 +1568,7 @@
           img = (img - 0.5) * 2
           return img, label
 
-  def batch_hard_triplet_loss(labels, embeddings, alpha=0.3):
+  def batch_hard_triplet_loss(labels, embeddings, alpha=0.35):
       labels = tf.squeeze(labels)
       labels.set_shape([None])
       pos_mask = tf.equal(tf.expand_dims(labels, 0), tf.expand_dims(labels, 1))
@@ -1563,7 +1583,7 @@
       basic_loss = hardest_neg_dist - hardest_pos_dist + alpha
       return tf.reduce_mean(tf.maximum(basic_loss, 0.0))
 
-  def batch_all_triplet_loss(labels, embeddings, alpha=0.3):
+  def batch_all_triplet_loss(labels, embeddings, alpha=0.35):
       labels = tf.squeeze(labels)
       labels.set_shape([None])
       pos_mask = tf.equal(tf.expand_dims(labels, 0), tf.expand_dims(labels, 1))
@@ -1582,6 +1602,8 @@
   basic_model.compile(optimizer='nadam', loss=batch_all_triplet_loss)
   basic_model.compile(optimizer='nadam', loss=batch_hard_triplet_loss)
   triplet_datasets = Triplet_datasets(image_names, image_classes, batch_size=48, image_per_class=4)
+  basic_model.fit(triplet_datasets.train_dataset, epochs=200, verbose=1, callbacks=callbacks, steps_per_epoch=triplet_datasets.steps_per_epoch, initial_epoch=0)
+
   gg = Gently_stop_callback()
   for epoch in range(0, 100):
       train_dataset, steps_per_epoch = triplet_datasets.random_init_triplet_dataset()
@@ -1835,36 +1857,4 @@
     - 第一部分是初始化，通过mtcnn的人脸检测找出第一帧的人脸位置然后将其结果对人脸跟踪进行初始化
     - 第二部分是更新，利用模板匹配进行人脸目标位置的初步预判，再结合mtcnn中的onet来对人脸位置进行更加精细的定位，最后通过mtcnn中的rnet的置信度来判断跟踪是否为人脸，防止当有手从面前慢慢挥过去的话，框会跟着手走而无法跟踪到真正的人脸
     - 第三部分是定时检测，通过在更新的部分中加入一个定时器来做定时人脸检测，从而判断中途是否有新人脸的加入，本项目在定时人脸检测中使用了一个trick就是将已跟踪的人脸所在位置利用蒙版遮蔽起来，避免了人脸检测的重复检测，减少其计算量，从而提高了检测速度
-***
-
-# ncnn
-  - [Github Tencent/ncnn](https://github.com/Tencent/ncnn)
-  ```sh
-  cd local_bin/
-  wget https://sdk.lunarg.com/sdk/download/1.1.126.0/linux/vulkansdk-linux-x86_64-1.1.126.0.tar.gz?Human=true -O vulkansdk-linux-x86_64-1.1.126.0.tar.gz
-  tar xvf vulkansdk-linux-x86_64-1.1.126.0.tar.gz
-  export VULKAN_SDK=`pwd`/1.1.126.0/x86_64
-  cd workspace/ncnn
-
-  cd build-android-armv7/
-  rm ./* -rf
-  cmake -DCMAKE_TOOLCHAIN_FILE=/home/leondgarse/Android/Sdk/ndk/20.0.5594570/build/cmake/android.toolchain.cmake -DANDROID_ABI="armeabi-v7a" -DANDROID_ARM_NEON=ON -DANDROID_PLATFORM=android-24 -DNCNN_VULKAN=ON ..
-  make -j4
-  make install
-
-  cd ../build-android-aarch64/
-  cmake -DCMAKE_TOOLCHAIN_FILE=/home/leondgarse/Android/Sdk/ndk/20.0.5594570/build/cmake/android.toolchain.cmake -DANDROID_ABI="arm64-v8a" -DANDROID_PLATFORM=android-24 -DNCNN_VULKAN=ON ..
-  make -j4
-  make install
-
-  cd ../ncnn-android-vulkan-lib
-  rm include/ arm64-v8a/libncnn.a armeabi-v7a/libncnn.a -rf
-  cd ..
-
-  cp build-android-aarch64/install/include/ ncnn-android-vulkan-lib/ -r
-  cp build-android-armv7/install/lib/libncnn.a ncnn-android-vulkan-lib/armeabi-v7a/
-  cp build-android-aarch64/install/lib/libncnn.a ncnn-android-vulkan-lib/arm64-v8a/
-  rm ../ncnn-android-squeezenet/app/src/main/jni/ncnn-android-vulkan-lib -r
-  cp ncnn-android-vulkan-lib/ ../ncnn-android-squeezenet/app/src/main/jni/ -r
-  ```
 ***

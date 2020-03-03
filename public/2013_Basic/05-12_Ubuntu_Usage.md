@@ -1277,7 +1277,7 @@
     socks5  127.0.0.1 8080
 
     # curl 测试
-    proxychain curl www.google.com
+    proxychains curl www.google.com
     ```
   - **privoxy** 将 http 请求转发到 socks5 端口，配置全局代理
     ```sh
@@ -1679,6 +1679,14 @@
   mplayer -tv driver=v4l2:width=352:height=288:device=/dev/video0 tv://
   mplayer -tv device=/dev/video0 tv://
   ```
+## 每次开机时弹出 System problem report detected
+  - Ubuntu 有一个内建的实用程序叫做 **Apport**, 当一个程序崩溃时，可以进行通知
+  - **crash 文件** 生成的错误报告，删除后避免每次重启都弹出提示
+    ```sh
+    ls /var/crash/*
+    sudo rm /var/crash/*
+    ```
+  - **Approt 配置文件** `/etc/default/apport`，将 `enabled=1` 修改为 `0` 可以禁止 `approt` 服务
 ***
 
 # 系统备份恢复

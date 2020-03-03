@@ -53,7 +53,7 @@
     import tensorflow as tf
     converter = tf.lite.TFLiteConverter.from_saved_model(saved_model_dir)
     converter.optimizations = [tf.lite.Optimize.OPTIMIZE_FOR_SIZE]
-    tflite_quant_model = converter.convert()    
+    tflite_quant_model = converter.convert()
     ```
   - **权重和激活的全整数量化 Full integer quantization of weights and activations** 需要提供一个小的表示数据集 representative data set，模型的输入输出依然可以是浮点值
     ```py
@@ -67,7 +67,7 @@
     converter = tf.lite.TFLiteConverter.from_saved_model(saved_model_dir)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
     converter.representative_dataset = representative_dataset_gen
-    tflite_quant_model = converter.convert()    
+    tflite_quant_model = converter.convert()
     ```
 ## MNIST 权重量化
   - 训练 keras MNIST 模型[Keras MNIST](https://github.com/leondgarse/Atom_notebook/blob/master/public/2018/09-06_tensorflow_tutotials.md#keras-mnist)

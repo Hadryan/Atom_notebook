@@ -510,7 +510,7 @@
   - 关键字参数后面只能是关键字参数
     ```python
     def func(a, b=5, c=10):
-      print 'a is', a, 'and b is', b, 'and c is', c
+      print('a is', a, 'and b is', b, 'and c is', c)
 
     func(3, 7)
     func(25, c=24)
@@ -526,7 +526,7 @@
 
       The two values must be integers.'''
 
-    print printMax.__doc__
+    print(printMax.__doc__)
     ```
   - help()会抓取函数的__doc__属性，然后展示
   - 可以在程序中调用如： help(func)
@@ -1312,7 +1312,7 @@
 ### 集合关系运算
   - 关系运算符
     ```python
-    &amp; / &amp;=：∩，交集
+    & / &=：∩，交集
     | / |=：∪，并集
     - / -=：差集
     ^ / ^=：Δ，对称差

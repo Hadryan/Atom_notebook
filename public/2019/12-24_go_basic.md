@@ -67,10 +67,8 @@
     ```go
     package main
 
-    import "fmt"
-
     func main() {
-      fmt.Printf("hello, world\n")
+        println("Hello", "world")
     }
     ```
     ```sh
@@ -78,12 +76,28 @@
     # Or
     go build hello.go
     ./hello
-    # hello, world
+    # Hello world
     ```
 ## Install gophernotes
   - [Jupyter kernels](https://github.com/jupyter/jupyter/wiki/Jupyter-kernels)
   - [gophernotes - Use Go in Jupyter notebooks and interact](https://github.com/gopherdata/gophernotes)
     ```sh
+    env GO111MODULE=on go get -u github.com/gopherdata/gophernotes
+    mkdir -p ~/.local/share/jupyter/kernels/gophernotes
+    cd ~/.local/share/jupyter/kernels/gophernotes
+    rm ./* -f
+    cp "$(go env GOPATH)"/pkg/mod/github.com/gopherdata/gophernotes@v0.6.1/kernel/*  "."
+    chmod +w ./kernel.json # when copied kernel.json has no write permission
+    sed "s|gophernotes|$(go env GOPATH)/bin/gophernotes|" < kernel.json.in > kernel.json
+
+    cd "$(go env GOPATH)"/src/github.com/gopherdata/gophernotes
+    env GO111MODULE=on go install
+    mkdir -p ~/.local/share/jupyter/kernels/gophernotes
+    rm ~/.local/share/jupyter/kernels/gophernotes/* -f
+    cp kernel/* ~/.local/share/jupyter/kernels/gophernotes
+    cd ~/.local/share/jupyter/kernels/gophernotes
+    sed "s|gophernotes|$(go env GOPATH)/bin/gophernotes|" < kernel.json.in > kernel.json
+
     jupyter-notebook --> New --> Go
     ```
   - **Q / A**
@@ -91,8 +105,13 @@
     ''' Q
     Package libzmq was not found in the pkg-config search path
     '''
-    ''' A
-    Add libzmq.pc path to PKG_CONFIG_PATH env
+    ''' A 1
+    Install libzmq3-dev
+    '''
+    sudo apt install libzmq3-dev
+
+    ''' A 2
+    Or add libzmq.pc path to PKG_CONFIG_PATH env
     '''
     locate libzmq
     # /opt/anaconda3/lib/libzmq.so.5.2.1
@@ -159,7 +178,7 @@
     <nil>
     ```
 ## gofmt 格式化代码
-  - **参数**
+  - **参数** 可以指定文件或目录
     - **-s** 开启简化代码，如去除不必要的类型声明，去除迭代时非必要的变量赋值等
     - **-d** 显示 diff，而不是转化后的结果
     - **-w** 覆盖源文件
@@ -181,6 +200,15 @@
   go doc -all fmt.Println
   go doc -src fmt.Println
   ```
+## go 运行时 runtime
+  - **runtime**
+    - 尽管 Go 编译器产生的是本地可执行代码，这些代码仍旧运行在 Go 的 **runtime** 当中，类似 Java 和 .NET 语言所用到的虚拟机
+    - **runtime** 是每个 Go 包的最顶级包，负责管理包括内存分配 / 垃圾回收 / 栈处理 / goroutine / channel / 切片 slice / map / 反射 reflection 等等
+    - Go 的 runtime 嵌入到了每一个可执行文件当中，因此 Go 的可执行文件都比相对应的源代码文件要大很多
+    - Go 程序在部署时，不需要依赖任何其它文件，只需要一个单独的静态文件
+  - **垃圾回收器** Go 拥有简单却高效的 **标记-清除** 回收器
+    - 主要思想来源于 IBM 的可复用垃圾回收器，旨在打造一个高效、低延迟的并发回收器，目前 gccgo 还没有回收器，同时适用 gc 和 gccgo 的新回收器正在研发中
+    - 使用一门具有垃圾回收功能的编程语言不代表可以避免内存分配所带来的问题，分配和回收内容都是消耗 CPU 资源的一种行为
 ***
 
 # 基础语法
@@ -842,6 +870,18 @@
         std.Output(2, fmt.Sprintln(v...))  // Output takes parameters (int, string)
     }  
     ```
+## os 与 runtime 获取运行环境
+  ```go
+  import (
+    "os"
+    "runtime"
+    "fmt"
+  )
+  os.Getenv("HOME")
+  // /home/leondgarse
+  fmt.Println(runtime.GOOS, runtime.GOARCH, runtime.GOROOT(), runtime.Version())
+  // linux amd64 /usr/local/go go1.13.7
+  ```
 ***
 
 # 数据结构
@@ -920,6 +960,13 @@
     b := []int {1:3}
     fmt.Printf("%T, %v, %T, %v", a, a, b, b)
     // [3]int, [0 3 0], []int, [0 3]
+    ```
+  - **二维数组** 多维数组可通过大括号来初始值
+    ```go
+    a = [3][4]int{  
+        {0, 1, 2, 3} ,   /*  第一行索引为 0 */
+        {4, 5, 6, 7} ,   /*  第二行索引为 1 */
+        {8, 9, 10, 11}}   /* 第三行索引为 2 */
     ```
 ## slice 切片
   - **slice 切片**
@@ -1024,6 +1071,27 @@
     // 3 3 [a b c]
     fmt.Println(len(t), cap(t), t)
     // 3 8 [a b c]
+    ```
+  - **二维切片** 可以每行单独分配每一行，或者分配一个一维切片，然后切分成多行
+    ```go
+    import "fmt"
+    // 每行单独分配每一行
+    xx, yy := 8, 12
+    pp_1 := make([][]uint8, yy)
+    for ii := range pp_1 {
+        pp_1[ii] = make([]uint8, xx)
+    }
+    fmt.Println(len(pp_1), len(pp_1[0]))
+    // 12 8
+
+    // 分配一次，切分成多行
+    pp_2 := make([][]uint8, yy)
+    pixels := make([]uint8, xx * yy)
+    for ii := range pp_2 {
+        pp_2[ii], pixels = pixels[:xx], pixels[xx:]
+    }
+    fmt.Println(len(pp_2), len(pp_2[0]))
+    // 12 8
     ```
 ## range 迭代遍历
   - **range** 在 for 循环中对 `slice` 或者 `map` 进行迭代遍历
@@ -2179,40 +2247,3 @@
     ```
   - **panic - recover 模式** 可以完全被封装在模块的内部，对 `panic` 的调用可以隐藏在 `error` 之中，而不会将 `panics` 信息暴露给外部使用者，这是一个设计良好的编程技巧
 ***
-
-## foo
-当两个或多个连续的函数命名参数是同一类型，则除了最后一个类型之外，其他都可以省略
-初始化二维数组
-多维数组可通过大括号来初始值。以下实例为一个 3 行 4 列的二维数组：
-```go
-a = [3][4]int{  
- {0, 1, 2, 3} ,   /*  第一行索引为 0 */
- {4, 5, 6, 7} ,   /*  第二行索引为 1 */
- {8, 9, 10, 11},   /* 第三行索引为 2 */
-}
-注意：以上代码中倒数第二行的 } 必须要有逗号，因为最后一行的 } 不能单独一行，也可以写成这样：
-a = [3][4]int{  
- {0, 1, 2, 3} ,   /*  第一行索引为 0 */
- {4, 5, 6, 7} ,   /*  第二行索引为 1 */
- {8, 9, 10, 11}}   /* 第三行索引为 2 */
-```
-有时候是需要分配一个二维切片的，例如这种情况可见于当扫描像素行的时候。有两种方式可以实现。一种是独立的分配每一个切片；另一种是分配单个数组，为其 指定单独的切片们。使用哪一种方式取决于你的应用。如果切片们可能会增大或者缩小，则它们应该被单独的分配以避免覆写了下一行；如果不会，则构建单个分配 会更加有效。作为参考，这里有两种方式的框架。首先是一次一行：
-```go
-// Allocate the top-level slice.
-picture := make([][]uint8, YSize) // One row per unit of y.
-// Loop over the rows, allocating the slice for each row.
-for i := range picture {
-	picture[i] = make([]uint8, XSize)
-}
-```
-然后是分配一次，被切片成多行：
-```go
-// Allocate the top-level slice, the same as before.
-picture := make([][]uint8, YSize) // One row per unit of y.
-// Allocate one large slice to hold all the pixels.
-pixels := make([]uint8, XSize*YSize) // Has type []uint8 even though picture is [][]uint8.
-// Loop over the rows, slicing each row from the front of the remaining pixels slice.
-for i := range picture {
-	picture[i], pixels = pixels[:XSize], pixels[XSize:]
-}
-```

@@ -133,41 +133,136 @@
   CUDA_VISIBLE_DEVICES='1' python3 -u train.py --network vargfacenet --loss arcface --dataset glint --per-batch-size 150 --pretrained ./model
   s/vargfacenet-softmax-emore/model --pretrained-epoch 166 --lr 0.0001 --lr-steps '100000,160000,220000,280000,340000'
   ```
-## Symbol
-  - **fmobilenet GDC**
+## 代码分析
+  - **config**
     ```py
-    data = data-127.5
-    data = data*0.0078125
+    # config.py
+    config.bn_mom = 0.9
+    config.net_output = 'E'
+    config.ce_loss = True
+    config.fc7_lr_mult = 1.0
+    config.fc7_wd_mult = 1.0
+    config.fc7_no_bias = False
 
-    conv_14 = Conv(conv_14_dw, num_filter=bf*32, kernel=(1, 1), pad=(0, 0), stride=(1, 1), name="conv_14") # 7/7
+    network.m1.net_name = 'fmobilenet'
+    network.m1.emb_size = 256
+    network.m1.net_output = 'GDC'
+    network.m1.net_multiplier = 1.0
 
-    conv = mx.sym.Convolution(data=conv_14, num_filter=512, kernel=(7,7), num_group=512, stride=(1, 1), pad=(0, 0), no_bias=True, name='%s%s_conv2d' %(name, suffix))
-    bn = mx.sym.BatchNorm(data=conv, name='%s%s_batchnorm' %(name, suffix), fix_gamma=False,momentum=0.9)
-    conv_6_f = mx.sym.FullyConnected(data=bn, num_hidden=512, name='pre_fc1')
-    fc1 = mx.sym.BatchNorm(data=conv_6_f, fix_gamma=True, eps=2e-5, momentum=bn_mom, name='fc1')
+    network.vargfacenet.net_name = 'vargfacenet'
+    network.vargfacenet.net_multiplier = 1.25
+    network.vargfacenet.emb_size = 512
+    network.vargfacenet.net_output='J'
+
+    loss.arcface.loss_name = 'margin_softmax'
+    loss.arcface.loss_s = 64.0
+    loss.arcface.loss_m1 = 1.0
+    loss.arcface.loss_m2 = 0.5
+    loss.arcface.loss_m3 = 0.0
+
+    loss.triplet.loss_name = 'triplet'
+    loss.triplet.images_per_identity = 5
+    loss.triplet.triplet_alpha = 0.3
+    loss.triplet.triplet_bag_size = 7200
+    loss.triplet.triplet_max_ap = 0.0
+    loss.triplet.per_batch_size = 60
+    loss.triplet.lr = 0.05
     ```
-  - fresnet E
+  - **symbol**
     ```py
-    body = mx.sym.BatchNorm(data=body, fix_gamma=False, eps=2e-5, momentum=0.9, name='bn1')
-    body = mx.symbol.Dropout(data=body, p=0.4)
-    fc1 = mx.sym.FullyConnected(data=body, num_hidden=512, name='pre_fc1')
-    fc1 = mx.sym.BatchNorm(data=fc1, fix_gamma=True, eps=2e-5, momentum=0.9, name='fc1')
+    # symbol_utils.py
+    def Linear(data, num_filter=1, kernel=(1, 1), stride=(1, 1), pad=(0, 0), num_group=1, name=None, suffix=''):
+        conv = mx.sym.Convolution(data=data, num_filter=num_filter, kernel=kernel, num_group=num_group, stride=stride, pad=pad, no_bias=True, name='%s%s_conv2d' %(name, suffix))
+        bn = mx.sym.BatchNorm(data=conv, name='%s%s_batchnorm' %(name, suffix), fix_gamma=False,momentum=bn_mom)    
+        return bn
+
+    def get_fc1(last_conv, num_classes, fc_type, input_channel=512):
+      elif fc_type=='E':
+        body = mx.sym.BatchNorm(data=body, fix_gamma=False, eps=2e-5, momentum=bn_mom, name='bn1')
+        body = mx.symbol.Dropout(data=body, p=0.4)
+        fc1 = mx.sym.FullyConnected(data=body, num_hidden=num_classes, name='pre_fc1')
+        fc1 = mx.sym.BatchNorm(data=fc1, fix_gamma=True, eps=2e-5, momentum=bn_mom, name='fc1')
+      elif fc_type=='FC':
+        body = mx.sym.BatchNorm(data=body, fix_gamma=False, eps=2e-5, momentum=bn_mom, name='bn1')
+        fc1 = mx.sym.FullyConnected(data=body, num_hidden=num_classes, name='pre_fc1')
+        fc1 = mx.sym.BatchNorm(data=fc1, fix_gamma=True, eps=2e-5, momentum=bn_mom, name='fc1')
+      elif fc_type=="GDC": #mobilefacenet_v1
+        conv_6_dw = Linear(last_conv, num_filter=input_channel, num_group=input_channel, kernel=(7,7), pad=(0, 0), stride=(1, 1), name="conv_6dw7_7")  
+        conv_6_f = mx.sym.FullyConnected(data=conv_6_dw, num_hidden=num_classes, name='pre_fc1')
+        fc1 = mx.sym.BatchNorm(data=conv_6_f, fix_gamma=True, eps=2e-5, momentum=bn_mom, name='fc1')
+      elif fc_type=='J':
+        fc1 = mx.sym.FullyConnected(data=body, num_hidden=num_classes, name='pre_fc1')
+        fc1 = mx.sym.BatchNorm(data=fc1, fix_gamma=True, eps=2e-5, momentum=bn_mom, name='fc1')
     ```
-  - FC
+  - **fmobilenet**
     ```py
-    body = mx.sym.BatchNorm(data=body, fix_gamma=False, eps=2e-5, momentum=0.9, name='bn1')
-    fc1 = mx.sym.FullyConnected(data=body, num_hidden=512, name='pre_fc1')
-    fc1 = mx.sym.BatchNorm(data=fc1, fix_gamma=True, eps=2e-5, momentum=0.9, name='fc1')
+    # fmobilenet.py
+    def get_symbol():
+      conv_14 = Conv(conv_14_dw, num_filter=bf*32, kernel=(1, 1), pad=(0, 0), stride=(1, 1), name="conv_14") # 7/7
+      body = conv_14
+      fc1 = symbol_utils.get_fc1(body, num_classes, fc_type)
+      return fc1
     ```
-  - margin_softmax
+  - **train_parall**
     ```py
-    _weight = mx.symbol.L2Normalization(_weight, mode='instance')
-    nembedding = mx.symbol.L2Normalization(embedding, mode='instance', name='fc1n_%d'%args._ctxid)
-    fc7 = mx.sym.FullyConnected(data=nembedding, weight = _weight, no_bias = True, num_hidden=args.ctx_num_classes, name='fc7_%d'%args._ctxid)
-    ```
-  - SGD
-    ```py
-    opt = optimizer.SGD(learning_rate=0.1, momentum=0.9, wd=0.0005, rescale_grad=1.0/args.batch_size)
+    # train_parall.py
+    def get_symbol_embedding():
+      embedding = eval(config.net_name).get_symbol()
+      all_label = mx.symbol.Variable('softmax_label')
+      #embedding = mx.symbol.BlockGrad(embedding)
+      all_label = mx.symbol.BlockGrad(all_label)
+      out_list = [embedding, all_label]
+      out = mx.symbol.Group(out_list)
+      return out
+
+    def get_symbol_arcface(args):
+      embedding = mx.symbol.Variable('data')
+      all_label = mx.symbol.Variable('softmax_label')
+      gt_label = all_label
+      is_softmax = True
+      #print('call get_sym_arcface with', args, config)
+      _weight = mx.symbol.Variable("fc7_%d_weight"%args._ctxid, shape=(args.ctx_num_classes, config.emb_size),
+          lr_mult=config.fc7_lr_mult, wd_mult=config.fc7_wd_mult)
+      if config.loss_name=='softmax': #softmax
+        fc7 = mx.sym.FullyConnected(data=embedding, weight = _weight, no_bias = True, num_hidden=args.ctx_num_classes, name='fc7_%d'%args._ctxid)
+      elif config.loss_name=='margin_softmax':
+        _weight = mx.symbol.L2Normalization(_weight, mode='instance')
+        nembedding = mx.symbol.L2Normalization(embedding, mode='instance', name='fc1n_%d'%args._ctxid)
+        fc7 = mx.sym.FullyConnected(data=nembedding, weight = _weight, no_bias = True, num_hidden=args.ctx_num_classes, name='fc7_%d'%args._ctxid)
+        if config.loss_m1!=1.0 or config.loss_m2!=0.0 or config.loss_m3!=0.0:
+          gt_one_hot = mx.sym.one_hot(gt_label, depth = args.ctx_num_classes, on_value = 1.0, off_value = 0.0)
+          if config.loss_m1==1.0 and config.loss_m2==0.0:
+            _one_hot = gt_one_hot*args.margin_b
+            fc7 = fc7-_one_hot
+          else:
+            fc7_onehot = fc7 * gt_one_hot
+            cos_t = fc7_onehot
+            t = mx.sym.arccos(cos_t)
+            if config.loss_m1!=1.0:
+              t = t*config.loss_m1
+            if config.loss_m2!=0.0:
+              t = t+config.loss_m2
+            margin_cos = mx.sym.cos(t)
+            if config.loss_m3!=0.0:
+              margin_cos = margin_cos - config.loss_m3
+            margin_fc7 = margin_cos
+            margin_fc7_onehot = margin_fc7 * gt_one_hot
+            diff = margin_fc7_onehot - fc7_onehot
+            fc7 = fc7+diff
+        fc7 = fc7*config.loss_s
+
+      out_list = []
+      out_list.append(fc7)
+      if config.loss_name=='softmax': #softmax
+        out_list.append(gt_label)
+      out = mx.symbol.Group(out_list)
+      return out
+
+    def train_net(args):
+      esym = get_symbol_embedding()
+      asym = get_symbol_arcface
+
+      opt = optimizer.SGD(learning_rate=base_lr, momentum=base_mom, wd=base_wd, rescale_grad=_rescale)
     ```
 ***
 
