@@ -231,24 +231,28 @@
   calc '1 + 2 * 3 / 4'  # 2.5
   ```
 ## awk内置变量
-  ```
-  # ARGC        命令行参数个数
-  # ARGV        命令行参数排列
-  # ENVIRON      支持队列中系统环境变量的使用
-  # FILENAME      awk浏览的文件名
-  # FNR        浏览文件的记录数
-  # FS         设置输入域分隔符，等价于命令行 -F选项
-  # NF         浏览记录的域的个数，$NF 可以表示最后一个域
-  # NR         已读的记录数
-  # OFS        输出域分隔符
-  # ORS        输出记录分隔符
-  # RS         控制记录分隔符
-  ```
-  ```
+  | 变量名   |                                            |
+  | -------- | ------------------------------------------ |
+  | ARGC     | 命令行参数个数                             |
+  | ARGV     | 命令行参数排列                             |
+  | ENVIRON  | 支持队列中系统环境变量的使用               |
+  | FILENAME | awk浏览的文件名                            |
+  | FNR      | 浏览文件的记录数                           |
+  | FS       | 设置输入域分隔符，等价于命令行 -F选项      |
+  | NF       | 浏览记录的域的个数，$NF 可以表示最后一个域 |
+  | NR       | 已读的记录数                               |
+  | OFS      | 输出域分隔符                               |
+  | ORS      | 输出记录分隔符                             |
+  | RS       | 控制记录分隔符                             |
+
+  ```sh
   awk -F ':' '{print "filename:" FILENAME ",linenumber:" NR ",columns:" NF ",linecontent:"$0}' /etc/passwd
 
-  printf version:
+  # printf version:
   awk -F ':' '{printf("filename: %-15s linenumber: %-3s columns: %-3s linecontent: %s\n",FILENAME,NR,NF,$0)}' /etc/passwd
+
+  # 打印第 1 行的第 5 个元素
+  awk -F ':' 'NR==1 {print $5}' /etc/passwd
   ```
 ## awk自定义变量
   ```
@@ -278,6 +282,9 @@
 
     # 查找当前文件夹下大小为 0 的文件
     find ./* -type f -exec ls -l {} \;  | awk '{if ($5 == 0) print $0}'
+
+    # 解析 tsv 文件，NR > 1 跳过表头，NF>4 表示一行中元素数量大于 4，$1 ~/^[0-9]/ 表示第一个数据是数字开头的
+    awk -F '\t' 'NR > 1 {if (NF>4 && $1 ~/^[0-9]/) print $2" "$3" "$4" "$5}' SSS.tsv
     ```
   - **while 循环 / for 循环 / special for 循环**
     ```sh
@@ -407,17 +414,17 @@
     | srand( [Expr] ) | 将 rand 函数的种子值设置为 Expr 参数的值，或如果省略 Expr 参数则使用某天的时间。返回先前的种子值 |
   - 举例说明：
     ```
-    [chengmo@centos5 ~]$ awk 'BEGIN{OFMT="%.3f";fs=sin(1);fe=exp(10);fl=log(10);fi=int(3.1415);print fs,fe,fl,fi;}'
+    $ awk 'BEGIN{OFMT="%.3f";fs=sin(1);fe=exp(10);fl=log(10);fi=int(3.1415);print fs,fe,fl,fi;}'
     0.841 22026.466 2.303 3
     OFMT 设置输出数据格式是保留3位小数
     ```
     获得随机数：
     ```
-    [chengmo@centos5 ~]$ awk 'BEGIN{srand();fr=int(100*rand());print fr;}'
+    $ awk 'BEGIN{srand();fr=int(100*rand());print fr;}'
     78
-    [chengmo@centos5 ~]$ awk 'BEGIN{srand();fr=int(100*rand());print fr;}'
+    $ awk 'BEGIN{srand();fr=int(100*rand());print fr;}'
     31
-    [chengmo@centos5 ~]$ awk 'BEGIN{srand();fr=int(100*rand());print fr;}'
+    $ awk 'BEGIN{srand();fr=int(100*rand());print fr;}'
     41
     ```
 ## 字符串函数
@@ -438,30 +445,30 @@
     | sprintf(Format, Expr, Expr, . . . )  | 根据 Format 参数指定的 printf 子例程格式字符串来格式化 Expr 参数指定的表达式并返回最后生成的字符串 |
   - gsub,sub使用
     ```
-    [chengmo@centos5 ~]$ awk 'BEGIN{info="this is a test2010test!";gsub(/[0-9]+/,"!",info);print info}'  
+    $ awk 'BEGIN{info="this is a test2010test!";gsub(/[0-9]+/,"!",info);print info}'  
     this is a test!test!
     在 info中查找满足正则表达式，/[0-9]+/ 用””替换，并且替换后的值，赋值给info 未给info值，默认是$0
     ```
   - 查找字符串（index使用）
     ```
-    [wangsl@centos5 ~]$ awk 'BEGIN{info="this is a test2010test!";print index(info,"test")?"ok":"no found";}'   
+    $ awk 'BEGIN{info="this is a test2010test!";print index(info,"test")?"ok":"no found";}'   
     ok
     未找到，返回0
     ```
   - 正则表达式匹配查找(match使用）
     ```
-    [wangsl@centos5 ~]$ awk 'BEGIN{info="this is a test2010test!";print match(info,/[0-9]+/)?"ok":"no found";}'          
+    $ awk 'BEGIN{info="this is a test2010test!";print match(info,/[0-9]+/)?"ok":"no found";}'          
     ok
     ```
   - 截取字符串(substr使用）
     ```
-    [wangsl@centos5 ~]$ awk 'BEGIN{info="this is a test2010test!";print substr(info,4,10);}'                        
+    $ awk 'BEGIN{info="this is a test2010test!";print substr(info,4,10);}'                        
     s is a tes
     从第 4个 字符开始，截取10个长度字符串
     ```
   - 字符串分割（split使用）
     ```
-    [chengmo@centos5 ~]$ awk 'BEGIN{info="this is a test";split(info,tA," ");print length(tA);for(k in tA){print k,tA[k];}}'
+    $ awk 'BEGIN{info="this is a test";split(info,tA," ");print length(tA);for(k in tA){print k,tA[k];}}'
     4
     4 test
     1 this
@@ -487,8 +494,8 @@
     | %o  | 无符号以八进制表示的整数 |
     # | %g  | 自动选择合适的表示法 |
   - 举例说明：
-    ```
-    [chengmo@centos5 ~]$ awk 'BEGIN{n1=124.113;n2=-1.224;n3=1.2345; printf("%.2f,%.2u,%.2g,%X,%o\n",n1,n2,n3,n1,n1);}'
+    ```sh
+    $ awk 'BEGIN{n1=124.113;n2=-1.224;n3=1.2345; printf("%.2f,%.2u,%.2g,%X,%o\n",n1,n2,n3,n1,n1);}'
     124.11,18446744073709551615,1.2,7C,174
     ```
 ## 一般函数
@@ -500,30 +507,26 @@
   | getline [ Variable ] < Expression  | 从 Expression 参数指定的文件读取输入的下一个记录，并将 Variable 参数指定的变量设置为该记录的值。只要流保留打开且 Expression 参数对同一个字符串求值，则对 getline 函数的每次后续调用读取另一个记录。如果未指定 Variable 参数，则 $0 记录变量和 NF 特殊变量设置为从流读取的记录 |
   | getline [ Variable ]  | 将 Variable 参数指定的变量设置为从当前输入文件读取的下一个输入记录。如果未指定 Variable 参数，则 $0 记录变量设置为该记录的值，还将设置 NF、NR 和 FNR 特殊变量 |
   - 打开外部文件（close用法）
-    ```
-    [chengmo@centos5 ~]$ awk 'BEGIN{while("cat /etc/passwd"|getline){print $0;};close("/etc/passwd");}'
+    ```sh
+    $ awk 'BEGIN{while("cat /etc/passwd"|getline){print $0;};close("/etc/passwd");}'
     root:x:0:0:root:/root:/bin/bash
     bin:x:1:1:bin:/bin:/sbin/nologin
     daemon:x:2:2:daemon:/sbin:/sbin/nologin
     ```
   - 逐行读取外部文件(getline使用方法）
-    ```
-    [chengmo@centos5 ~]$ awk 'BEGIN{while(getline < "/etc/passwd"){print $0;};close("/etc/passwd");}'
+    ```sh
+    $ awk 'BEGIN{while(getline < "/etc/passwd"){print $0;};close("/etc/passwd");}'
     root:x:0:0:root:/root:/bin/bash
     bin:x:1:1:bin:/bin:/sbin/nologin
     daemon:x:2:2:daemon:/sbin:/sbin/nologin
-    [chengmo@centos5 ~]$ awk 'BEGIN{print "Enter your name:";getline name;print name;}'
+
+    $ awk 'BEGIN{print "Enter your name:";getline name;print name;}'
     Enter your name:
-    chengmo
-    chengmo
     ```
   - 调用外部应用程序(system使用方法）
-    ```
-    [chengmo@centos5 ~]$ awk 'BEGIN{b=system("ls -al");print b;}'
-    total 42092
-    drwxr-xr-x 14 chengmo chengmo     4096 09-30 17:47 .
-    drwxr-xr-x 95 root   root       4096 10-08 14:01 ..
-    b返回值，是执行结果。 
+    ```sh
+    $ awk 'BEGIN{b=system("ls -al");print b;}'
+    b返回值，是执行结果
     ```
 ## 时间函数
   | 函数名  | 说明 |
@@ -532,13 +535,13 @@
   | strftime([format [, timestamp]])  | 格式化时间输出，将时间戳转为时间字符串, 具体格式，见下表. |
   | systime()  | 得到时间戳,返回从1970年1月1日开始到当前时间(不计闰年)的整秒数 |
   - 创建指定时间(mktime使用）
-    ```
-    [chengmo@centos5 ~]$ awk 'BEGIN{tstamp=mktime("2001 01 01 12 12 12");print strftime("%c",tstamp);}'
+    ```sh
+    $ awk 'BEGIN{tstamp=mktime("2001 01 01 12 12 12");print strftime("%c",tstamp);}'
     2001年01月01日 星期一 12时12分12秒 
-    [chengmo@centos5 ~]$ awk 'BEGIN{tstamp1=mktime("2001 01 01 12 12 12");tstamp2=mktime("2001 02 01 0 0 0");print tstamp2-tstamp1;}'
+    $ awk 'BEGIN{tstamp1=mktime("2001 01 01 12 12 12");tstamp2=mktime("2001 02 01 0 0 0");print tstamp2-tstamp1;}'
     2634468
     求2个时间段中间时间差,介绍了strftime使用方法 
-    [chengmo@centos5 ~]$ awk 'BEGIN{tstamp1=mktime("2001 01 01 12 12 12");tstamp2=systime();print tstamp2-tstamp1;}'
+    $ awk 'BEGIN{tstamp1=mktime("2001 01 01 12 12 12");tstamp2=systime();print tstamp2-tstamp1;}'
     308201392 
     ```
   - strftime日期和时间格式说明符

@@ -82,7 +82,7 @@
     echo $greeting" now with spaces: $greeting"
     # >output: Hello world! now with spaces: Hello    world!
     ```
-  - \`\`或$() \`在~下面，将变量值替换为命令输出内容
+  - \`\`或$() \`在 `~` 下面，将变量值替换为命令输出内容
     ```shell
     FILELIST=`ls`
     echo "$FILELIST"
@@ -426,10 +426,11 @@
     ```shell
     case "$variable" in
       "$condition1" )
-        command...
+        command1
+        commnad2
       ;;
       "$condition2" )
-        command...
+        command1;conmand2
       ;;
     esac
     ```
@@ -456,7 +457,7 @@
 ***
 
 # for while until 循环
-  - for 语法：
+  - **for**
     ```shell
     # basic construct
     for arg in [list]
@@ -464,7 +465,7 @@
       command(s)...
     done
     ```
-  - for 示例：
+    **示例**
     ```shell
     for FILE in $(ls); do
       echo "File is : $FILE"
@@ -481,7 +482,7 @@
     # 或使用
     for ((i=0; $i<${#NUMBERS[*]}; i=$i+1)); do echo ${NUMBERS[i]}; done
     ```
-  - 字符串数组与 for 循环
+  - **字符串数组与 for 循环**
     ```shell
     FOO=(`ls`)  # 字符串数组
     echo $FOO   # 输出第一个元素
@@ -495,9 +496,25 @@
     echo ${#FOO}  # --> 775，字符串中的字符数量 [ ? ]
     echo ${#FOO[@]} # --> 92，字符串的单词数量
     for FILE in $FOO; do echo $FILE; done  # 遍历输出全部元素，第一个元素是全部字符
+
     for ((i=0; $i<${#FOO[@]}; i=$i+1)); do echo ${FOO[i]}; done # [ ? ]
     ```
-  - while 语法：
+    ```sh
+    lines=( $(awk -F '\t' 'NR > 1 {if (NF>4 && $1 ~/^[0-9]/) print $2"\n"$3"\n"$5"\n"$4}' SSS.tsv) )
+
+    IFS_BAK="$IFS"; IFS=$'\n' # 必须在 awk 之前，并不是 awk 命令需要，是在生成数组时的分割符
+    lines=( $(awk -F ':' '{print $1"\n"$5"\n"$6"\n"$7}' /etc/passwd) )
+    IFS=$IFS_BAK
+
+    for (( i=0 ; $i<${#lines[@]} ; i=$i+4 )); do
+        User=${lines[$i+0]}
+        Group=${lines[$i+1]}
+        Home=${lines[$i+2]}
+        Bash=${lines[$i+3]}
+        echo "User=$User, Group=$Group, Home=$Home, Bash=$Bash"
+    done
+    ```
+  - **while**
     ```shell
     # basic construct
     while [ condition ]
@@ -505,7 +522,7 @@
       command(s)...
     done
     ```
-  - while 示例：
+    **示例**
     ```shell
     COUNT=4
     while [ $COUNT -gt 0 ]; do
@@ -513,7 +530,7 @@
       COUNT=$(($COUNT - 1))
     done
     ```
-  - until 语法：
+  - **until**
     ```shell
     # basic construct
     until [ condition ]
@@ -521,7 +538,7 @@
       command(s)...
     done
     ```
-  - until 示例：
+    **示例**
     ```shell
     COUNT=1
     until [ $COUNT -gt 5 ]; do
@@ -529,7 +546,7 @@
       COUNT=$(($COUNT + 1))
     done
     ```
-  - break / continue：
+  - **break / continue**
     ```shell
     # Prints out only odd numbers - 1,3,5,7,9
     COUNT=0
@@ -542,9 +559,27 @@
       echo $COUNT
     done
     ```
-  - for / while 读取文件
+  - **按行遍历** 通过设置 `IFS` 指定分割方式
+    ```sh
+    for aa in `ls -l /etc/passwd`; do echo "Elem: $aa"; done
+    # Elem: -rw-r--r--
+    # Elem: 1
+    # Elem: root
+    # Elem: root
+    # Elem: 2961
+    # Elem: 一月
+    # Elem: 10
+    # Elem: 14:09
+    # Elem: /etc/passwd
+
+    IFS_BAK="$IFS"; IFS=$'\n'; for aa in `ls -l /etc/passwd`; do echo "Elem: $aa"; done; IFS=$IFS_BAK
+    # Elem: -rw-r--r-- 1 root root 2961 一月 10 14:09 /etc/passwd
+    ```
+  - **for / while 读取文件**
     ```shell
-    for ee in $(cat /etc/passwd); do echo $ee; done # 按照 换行符 / 空格划分 [ ??? ]
+    for ee in $(cat /etc/passwd); do echo $ee; done # 按照 换行符 / 空格划分
+    IFS_BAK="$IFS"; IFS=$'\n'; for ee in $(cat /etc/passwd); do echo $ee; done; IFS=$IFS_BAK  # 按照换行符划分
+
     while read line; do echo $line; done < /etc/passwd  # 按照换行符划分
     ```
 ***
