@@ -255,7 +255,7 @@
   awk -F ':' 'NR==1 {print $5}' /etc/passwd
   ```
 ## awk自定义变量
-  ```
+  ```sh
   # 统计/etc/passwd的账户人数
   awk 'BEGIN {count=0;print "[start]user count is ", count} {count=count+1;print $0;} END{print "[end]user count is ", count}' /etc/passwd
 

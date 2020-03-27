@@ -361,21 +361,6 @@
 ***
 
 # Keras Insightface
-## tf-insightface train
-  - [Github Fei-Wang/insightface](https://github.com/Fei-Wang/insightface)
-  - Arcface loss
-    ```py
-    epoch: 25, step: 60651, loss = 15.109766960144043, logit_loss = 15.109766960144043, center_loss = 0
-    epoch: 25, step: 60652, loss = 17.565662384033203, logit_loss = 17.565662384033203, center_loss = 0
-    Saving checkpoint for epoch 25 at /home/tdtest/workspace/tf_insightface/recognition/mymodel-26
-    Time taken for epoch 25 is 8373.555536031723 sec
-    ```
-  - Arcface center loss
-    ```py
-    epoch: 0, step: 60652, loss = 11.264640808105469, logit_loss = 11.262413024902344, center_loss = 0.002227420685812831
-    Saving checkpoint for epoch 0 at /home/tdtest/workspace/tf_insightface/recognition/mymodel-1
-    Time taken for epoch 0 is 8373.187638521194 sec
-    ```
 ## MXnet record to folder
   - [Insightface Dataset Zoo](https://github.com/deepinsight/insightface/wiki/Dataset-Zoo)
   - **转化 faces_emore 训练数据集**
@@ -488,12 +473,12 @@
   image_names = np.random.permutation(image_names).tolist()
   image_classes = [int(os.path.basename(os.path.dirname(ii))) for ii in image_names]
 
-  with open('faces_emore_img_class_shuffle.pkl', 'wb') as ff:
+  with open('faces_emore_112x112_folders_shuffle.pkl', 'wb') as ff:
       pickle.dump({'image_names': image_names, "image_classes": image_classes}, ff)
 
   import pickle
   AUTOTUNE = tf.data.experimental.AUTOTUNE
-  with open('faces_emore_img_class_shuffle.pkl', 'rb') as ff:
+  with open('faces_emore_112x112_folders_shuffle.pkl', 'rb') as ff:
       aa = pickle.load(ff)
   image_names, image_classes = aa['image_names'], aa['image_classes']
   classes = np.max(image_classes) + 1
@@ -597,17 +582,14 @@
           acc_max = acc_count[acc_max_indx] / dists.shape[0]
           acc_thresh = ff[acc_max_indx - t_steps]
 
-          tf.print("\n")
+          tf.print("\n>>>> %s evaluation max accuracy: %f, thresh: %f, previous max accuracy: %f" % (self.test_names, acc_max, acc_thresh, self.max_accuracy))
           if acc_max > self.max_accuracy:
-              is_improved = True
+              tf.print(">>>> Improved = %f" % (acc_max - self.max_accuracy))
               self.max_accuracy = acc_max
               if self.save_model:
                   save_path = '%s_%d' % (self.save_model, epoch)
                   tf.print("Saving model to: %s" % (save_path))
                   model.save(save_path)
-          else:
-              is_improved = False
-          tf.print(">>>> %s evaluation max accuracy: %f, thresh: %f, overall max accuracy: %f, improved = %s" % (self.test_names, acc_max, acc_thresh, self.max_accuracy, is_improved))
   ```
   ```py
   class mi_basic_model:
@@ -658,6 +640,10 @@
 ## Basic model
   - [TensorFlow Addons Layers: WeightNormalization](https://www.tensorflow.org/addons/tutorials/layers_weightnormalization)
   ```py
+  mm = keras.models.load_model('keras_checkpoints_mobilenet_v1_II.h5', compile=False)
+  basic_model = keras.models.Model(mm.inputs[0], mm.layers[-3].output)
+  basic_model.trainable = False
+
   from tensorflow.keras import layers
 
   ''' Basic model '''
@@ -665,12 +651,13 @@
   # xx = tf.keras.applications.MobileNetV2(input_shape=(112, 112, 3), include_top=False, weights=None)
   # xx = keras.applications.NASNetMobile(input_shape=(112, 112, 3), include_top=False, weights=None)
   # xx = tf.keras.applications.ResNet50V2(include_top=False, weights='imagenet')
+  # xx = keras.models.load_model('mobilnet_v1_basic_922667.h5', compile=False)
   xx = tf.keras.applications.ResNet50V2(input_shape=(112, 112, 3), include_top=False, weights='imagenet')
   xx.trainable = True
 
   inputs = xx.inputs[0]
   nn = xx.outputs[0]
-  nn = layers.Conv2D(512, 4, use_bias=False)(nn)
+  nn = layers.Conv2D(512, xx.output_shape[1], use_bias=False)(nn)
   # BatchNormalization(momentum=0.99, epsilon=0.001)
   nn = layers.BatchNormalization(momentum=0.9, epsilon=2e-5)(nn)
   # nn = layers.Dropout(0.4)(nn)
@@ -703,9 +690,10 @@
   class NormDense(tf.keras.layers.Layer):
       def __init__(self, units=1000, **kwargs):
           super(NormDense, self).__init__(**kwargs)
+          self.init = keras.initializers.glorot_normal()
           self.units = units
       def build(self, input_shape):
-          self.w = self.add_weight(name='norm_dense_w', shape=(input_shape[-1], self.units), initializer='random_normal', trainable=True)
+          self.w = self.add_weight(name='norm_dense_w', shape=(input_shape[-1], self.units), initializer=self.init, trainable=True)
           super(NormDense, self).build(input_shape)
       def call(self, inputs, **kwargs):
           norm_w = tf.nn.l2_normalize(self.w, axis=0)
@@ -726,7 +714,7 @@
   inputs = basic_model.inputs[0]
   embedding = basic_model.outputs[0]
   # output = NormDense(classes, name='norm_dense')(embedding)
-  output = layers.Dense(classes, name='softmax', activation="softmax")(embedding)
+  output = keras.layers.Dense(classes, name='softmax', activation="softmax")(embedding)
   # concate = layers.concatenate([embedding, output], name='concate')
   # model = keras.models.Model(inputs, concate)
   # model = keras.models.Sequential([basic_model, layers.Dense(classes, name='softmax', activation="softmax")])
@@ -870,6 +858,32 @@
   print(cc.max(1).min())
   # 0.25448152
   ```
+## Arcface loss 2
+```py
+def arcface_loss(y_true, y_pred, margin1=1.0, margin2=0.5, margin3=0.0, scale=64.0):
+    # norm_logits = y_pred[:, 512:]
+    norm_logits = tf.clip_by_value(y_pred, clip_value_min=-1.0, clip_value_max=1.0)
+    theta = tf.cos(tf.acos(norm_logits) * margin1 + margin2) - margin3
+    cond = tf.logical_and(tf.cast(y_true, dtype=tf.bool), theta < norm_logits)
+    arcface_logits = tf.where(cond, theta, norm_logits) * scale
+    # tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
+    return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
+
+class ArcfaceLoss(keras.losses.Loss):
+  def __init__(self, m=0.5, s=64, easy_margin=True):
+    super(Save_Numpy_Callback, self).__init__()
+    self.threshold = np.cos(np.pi - m)  # -0.8775825618903726
+    self.mm = np.sin(np.pi - m) * m # 0.23971276930210156
+    self.m = m
+    self.s = s
+
+  def call(self, y_true, y_pred, margin=0.5, scale=64.0):
+
+    threshold = np.cos(np.pi - margin)
+    cond = tf.logical_and(tf.cast(y_true, dtype=tf.bool), y_pred > threshold)
+    arcface_logits = tf.where(cond, tf.cos(tf.acos(y_pred) + margin), y_pred) * scale
+    return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=False)
+```
 ## Arcface loss
   - **Mxnet Insigntface Arcface loss**
     ```py
@@ -895,6 +909,14 @@
         arcface_logits = (theta_one_hot + norm_logits) * scale
         # tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
         return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
+
+    def arcface_loss(y_true, y_pred, margin=0.5, scale=64.0):
+        # y_pred = tf.clip_by_value(y_pred, clip_value_min=-1.0, clip_value_max=1.0)
+        theta = tf.cos(tf.acos(y_pred) + margin2)
+        cond = tf.logical_and(tf.cast(y_true, dtype=tf.bool), theta < y_pred)
+        arcface_logits = tf.where(cond, theta, y_pred) * scale
+        # tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
+        return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=False)
     ```
     **Plot**
     ```py
@@ -957,6 +979,25 @@
     ```
     **Plot**
     ```py
+    def plot_arc_trans(margin_list, new_fig=True):
+        xx = np.arange(-1, 1, 0.01)
+        y_true = tf.ones_like(xx)
+        if new_fig:
+            fig = plt.figure()
+        for margin1, margin2, margin3 in margin_list:
+            threshold = np.cos((np.pi - margin2) / margin1)
+            y_pred_vals = xx[tf.cast(y_true, dtype=tf.bool)]
+            theta = tf.cos(tf.acos(y_pred_vals) * margin1 + margin2) - margin3
+            # theta_valid = tf.where(y_pred_vals > threshold, theta, y_pred_vals - threshold - 1)
+            theta_valid = tf.where(y_pred_vals > threshold, theta, (-1 - margin3) * 2 - theta)
+            theta_one_hot = (theta_valid - y_pred_vals) * y_true
+            arcface_logits = (theta_one_hot + xx).numpy()
+            plt.plot(xx, arcface_logits, label="Margin1, 2, 3 [{}, {}, {}]".format(margin1, margin2, margin3))
+        plt.plot(xx, xx, label="Original")
+        plt.legend()
+        plt.grid()
+        plt.tight_layout()
+
     def plot_arc_trans(margin_list, new_fig=True):
         xx = np.arange(-1, 1, 0.01)
         y_true = tf.ones_like(xx)
@@ -1202,9 +1243,9 @@
 
   center_loss = Center_loss(classes, factor=1.0, initial_file='./centers.npy', logits_loss=None)
   center_loss = Center_loss(classes, factor=1.0, initial_file='./centers.npy', logits_loss=keras.losses.categorical_crossentropy)
-  center_loss = Center_loss(classes, factor=1.0, initial_file='./centers.npy', logits_loss=soft_arcface_loss)
+  center_loss = Center_loss(classes, factor=1.0, initial_file='./centers.npy', logits_loss=arcface_loss)
 
-  callbacks.append(center_loss.save_centers_callback)
+  callbacks.insert(0, center_loss.save_centers_callback)
 
   ''' Accuracy function '''
   def logits_accuracy(y_true, y_pred):
@@ -1858,3 +1899,288 @@
     - 第二部分是更新，利用模板匹配进行人脸目标位置的初步预判，再结合mtcnn中的onet来对人脸位置进行更加精细的定位，最后通过mtcnn中的rnet的置信度来判断跟踪是否为人脸，防止当有手从面前慢慢挥过去的话，框会跟着手走而无法跟踪到真正的人脸
     - 第三部分是定时检测，通过在更新的部分中加入一个定时器来做定时人脸检测，从而判断中途是否有新人脸的加入，本项目在定时人脸检测中使用了一个trick就是将已跟踪的人脸所在位置利用蒙版遮蔽起来，避免了人脸检测的重复检测，减少其计算量，从而提高了检测速度
 ***
+```py
+import data
+import eval
+import myCallbacks
+import mobile_facenet
+
+train_ds, steps_per_epoch, classes = data.prepare_for_training('/datasets/faces_emore_112x112_folders')
+lfw_eval = eval.epoch_eval_callback('/datasets/faces_emore/lfw.bin', save_model=None, eval_freq=1, flip=True)
+cfp_fp_eval = eval.epoch_eval_callback('/datasets/faces_emore/cfp_fp.bin', save_model=None, eval_freq=1, flip=True)
+agedb_30_eval = eval.epoch_eval_callback('/datasets/faces_emore/agedb_30.bin', save_model=None, eval_freq=1, flip=True)
+callbacks = myCallbacks.basic_callbacks(checkpoint="./keras_checkpoint.h5", lr=0.1)
+callbacks = [lfw_eval, cfp_fp_eval, agedb_30_eval] + callbacks
+basic_model = mobile_facenet.mobile_facenet(256)
+```
+```py
+import mobile_facenet
+import losses
+import train
+
+''' Basic model '''
+# xx = keras.applications.ResNet101V2(include_top=False, weights='imagenet')
+# xx = tf.keras.applications.MobileNetV2(input_shape=(112, 112, 3), include_top=False, weights=None)
+# xx = tf.keras.applications.MobileNet(input_shape=(112, 112, 3), include_top=False, weights=None)
+# xx = keras.applications.NASNetMobile(input_shape=(112, 112, 3), include_top=False, weights=None)
+# xx = tf.keras.applications.ResNet50V2(include_top=False, weights='imagenet')
+# xx = keras.models.load_model('checkpoints/mobilnet_v1_basic_922667.h5', compile=False)
+xx = tf.keras.applications.ResNet50V2(input_shape=(112, 112, 3), include_top=False, weights='imagenet')
+xx.trainable = True
+
+inputs = xx.inputs[0]
+nn = xx.outputs[0]
+nn = keras.layers.Conv2D(512, 3, use_bias=False)(nn)
+# nn = keras.layers.Conv2D(512, 4, use_bias=False)(nn)
+# BatchNormalization(momentum=0.99, epsilon=0.001)
+nn = keras.layers.BatchNormalization(momentum=0.9, epsilon=2e-5)(nn)
+# nn = layers.Dropout(0.4)(nn)
+nn = keras.layers.Flatten()(nn)
+nn = keras.layers.Dense(512)(nn)
+embedding = keras.layers.BatchNormalization(momentum=0.9, epsilon=2e-5, name='embedding')(nn)
+# norm_emb = layers.Lambda(tf.nn.l2_normalize, name='norm_embedding', arguments={'axis': 1})(embedding)
+basic_model = keras.models.Model(inputs, embedding)
+
+basic_model = mobile_facenet.mobile_facenet(128)
+tt = train.TrainNet(basic_model, '/datasets/faces_emore_112x112_folders', ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin'], 'keras_mobilefacenet.h5', lr_base=0.001, random_status=1)
+
+tt.train_model_from_scratch(10, 200, 'nadam', keras.losses.categorical_crossentropy, losses.arcface_loss)
+```
+- **Scratch train**
+  ```py
+  import mobile_facenet
+  import losses
+  import train
+  basic_model = train.buildin_models("MobileNet", dropout=0.4, emb_shape=256)
+  # basic_model = mobile_facenet.mobile_facenet(128)
+  basic_model = mobile_facenet.mobile_facenet(256, dropout=0.4, name="mobile_facenet_256")
+  data_path = '/datasets/faces_emore_112x112_folders'
+  eval_paths = ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin']
+  tt = train.Train(data_path, eval_paths, 'keras_mobilefacenet_256.h5', basic_model=basic_model, model=None, compile=False, lr_base=0.001, batch_size=160, random_status=3)
+  sch = [
+    {"loss": keras.losses.categorical_crossentropy, "optimizer": "nadam", "epoch": 15},
+    {"loss": losses.margin_softmax, "optimizer": None, "epoch": 10},
+    {"loss": losses.ArcfaceLoss(), "optimizer": None, "bottleneckOnly": True, "epoch": 4},
+    {"loss": losses.ArcfaceLoss(), "optimizer": None, "epoch": 15},
+    {"loss": losses.ArcfaceLoss(scale=32.0), "optimizer": None, "epoch": 15},
+    {"loss": losses.batch_hard_triplet_loss, "optimizer": None, "epoch": 30},
+  ]
+  tt.train(sch, 0)
+  ```
+  ```py
+  tt = train.Train(data_path, eval_paths, 'keras_mobilenet_256.h5', basic_model=-2, model="./checkpoints/keras_mobilefacenet_256_II.h5", compile=False, lr_base=0.1, batch_size=160, random_status=3)
+  tt.train([{"loss": losses.ArcfaceLoss(), "optimizer": keras.optimizers.SGD(0.1, momentum=0.9), "type": tt.arcface, "epoch": 10}], 0)
+  ```
+- **Continue train**
+  ```py
+  import losses
+  import train
+  data_path = '/datasets/faces_emore_112x112_folders'
+  eval_paths = ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin']
+  tt = train.Train(data_path, eval_paths, 'keras_mobilefacenet_256_II.h5', basic_model=-2, model='./checkpoints/keras_mobilefacenet_256.h5', compile=True, lr_base=0.001, batch_size=160, random_status=3)
+  ```
+- **Continue Triplet train**
+  ```py
+  import losses
+  import train
+  data_path = '/datasets/faces_emore_112x112_folders'
+  eval_paths = ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin']
+  tt = train.Train(data_path, eval_paths, 'keras_mobilefacenet_256_triplet_III.h5', basic_model='checkpoints/keras_mobilefacenet_triplet.h5', model=None, compile=True, batch_size=128)
+  sch = [
+    {"loss": losses.batch_hard_triplet_loss, "optimizer": None, "type": tt.triplet, "epoch": 30},
+  ]
+  tt.train(sch, 30)
+  ```
+```py
+import insightface
+img = imread('/home/leondgarse/workspace/samba/insightface-master/test_images/4.png')
+det = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+det.prepare(0)  # 685M
+det.detect(img) # 757M
+
+det2 = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+det2.prepare(0) # 879M
+det2.detect(img)  # 951M
+
+det3 = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+det3.prepare(0) # 1039M
+!nvidia-smi | tail -n 3 | head -n 1
+det3.detect(img)  # 1111M
+!nvidia-smi | tail -n 3 | head -n 1
+
+det4 = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+det4.prepare(0) # 1233MiB
+!nvidia-smi | tail -n 3 | head -n 1
+det4.detect(img)  # 1305MiB
+!nvidia-smi | tail -n 3 | head -n 1
+
+det = []
+for ii in range(5):
+  det.append(insightface.model_zoo.face_detection.retinaface_mnet025_v1())
+  det[ii].prepare(0)
+  !nvidia-smi | tail -n 3 | head -n 1
+  det[ii].detect(img)
+  !nvidia-smi | tail -n 3 | head -n 1
+```
+```py
+cd ~/workspace/face_recognition_collection/insightface/deploy
+from mtcnn_detector import MtcnnDetector
+import cv2
+import mxnet as mx
+
+img = cv2.imread('../../test_img/Anthony_Hopkins_0002.jpg')
+det_threshold = [0.6,0.7,0.8]
+mtcnn_path = './mtcnn-model'
+
+det = []
+for ii in range(20):
+  det.append(MtcnnDetector(model_folder=mtcnn_path, num_worker=2, accurate_landmark = False, threshold=det_threshold, minsize=40, ctx=mx.gpu(ii%2)))
+  !nvidia-smi | tail -n 4 | head -n 2
+  det[ii].detect_face(img, det_type=0)
+  !nvidia-smi | tail -n 4 | head -n 2
+```
+```py
+# TF MTCNN
+8.17 ms ± 134 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+
+# MX MTCNN
+25.5 ms ± 260 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
+
+# MX Retinaface
+38.7 ms ± 3.53 ms per loop (mean ± std. dev. of 7 runs, 10 loops each)
+```
+
+# Mobilefacenet Train
+```py
+import mobile_facenet
+import losses
+import train
+# basic_model = train.buildin_models("MobileNet", dropout=0.4, emb_shape=256)
+basic_model = mobile_facenet.mobile_facenet(256, dropout=0.4)
+data_path = '/datasets/faces_emore_112x112_folders'
+eval_paths = ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin']
+tt = train.Train(data_path, eval_paths, 'keras_mobilefacenet_256.h5', basic_model=basic_model, model=None, compile=False, lr_base=0.001, batch_size=160, random_status=3)
+sch = [
+  {"loss": keras.losses.categorical_crossentropy, "optimizer": "nadam", "epoch": 15},    
+  {"loss": losses.margin_softmax, "optimizer": None, "epoch": 10},
+  {"loss": losses.ArcfaceLoss(), "optimizer": None, "bottleneckOnly": True, "epoch": 4},
+  {"loss": losses.ArcfaceLoss(), "optimizer": None, "epoch": 15},
+  {"loss": losses.ArcfaceLoss(scale=32.0), "optimizer": None, "epoch": 15},
+  {"loss": losses.batch_hard_triplet_loss, "optimizer": None, "epoch": 30},
+]                        
+tt.train(sch, 0)
+```
+```py
+import losses
+import train
+data_path = '/datasets/faces_emore_112x112_folders'
+eval_paths = ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin']
+tt = train.Train(data_path, eval_paths, 'keras_mobilefacenet_256_II.h5', basic_model=-2, model='./checkpoints/keras_mobilefacenet_256.h5', compile=True, lr_base=0.001, batch_size=160, random_status=3, custom_objects={'soft_arcface_loss': losses.margin_softmax})
+sch = [
+  # {"loss": keras.losses.categorical_crossentropy, "optimizer": "nadam", "type": tt.softmax, "epoch": 15},
+  {"loss": losses.margin_softmax, "optimizer": None, "epoch": 10},
+  {"loss": losses.ArcfaceLoss(), "optimizer": None, "bottleneckOnly": True, "epoch": 4},
+  {"loss": losses.ArcfaceLoss(), "optimizer": None, "epoch": 15},
+  {"loss": losses.ArcfaceLoss(scale=32.0), "optimizer": None, "epoch": 15},
+  {"loss": losses.batch_hard_triplet_loss, "optimizer": None, "epoch": 30},
+]
+tt.train(sch, 15)
+```
+```py
+emb_shape: 256
+dropout: 0.4
+batch_size: 160
+
+'''
+>>>> Softmax 15
+Epoch 1/15
+36392/36392 [==============================] - 12820s 352ms/step - loss: 5.0583 - accuracy: 0.2964
+'''
+lfw = [0.971500,0.980000,0.986000,0.988000,0.988333,0.989667,0.989000,0.989833,0.988833,0.988500,0.987667,0.988667,0.988833,0.988167,0.989000,]
+cfp_fp = [0.865714,0.893000,0.898857,0.910000,0.908571,0.913857,0.912143,0.913000,0.913143,0.916143,0.920143,0.920857,0.924429,0.921571,0.927429,]
+agedb_30 = [0.829167,0.877500,0.892667,0.903167,0.903500,0.915167,0.910000,0.917167,0.917833,0.919833,0.919833,0.929167,0.920333,0.933333,0.928000,]
+loss = [5.0583, 1.6944, 1.2544, 1.0762, 0.9791, 0.9118, 0.8605, 0.8217, 0.7900, 0.7641, 0.7432, 0.6879, 0.6580, 0.6354, 0.6199,]
+accuracy = [0.2964, 0.6755, 0.7532, 0.7862, 0.8047, 0.8174, 0.8273, 0.8348, 0.8410, 0.8460, 0.8501, 0.8611, 0.8671, 0.8714, 0.8746,]
+
+'''
+>>>> margin_softmax 10
+Epoch 16/25
+36392/36392 [==============================] - 12623s 347ms/step - loss: 0.7236 - accuracy: 0.8861
+'''
+lfw_2 = [0.989000,0.989500,0.989167,0.990333,0.989500,0.991000,0.989667,]
+cfp_fp_2 = [0.925857,0.919571,0.926286,0.929286,0.927000,0.926714,0.926857,]
+agedb_30_2 = [0.932000,0.931333,0.932333,0.933500,0.933333,0.934667,0.933667,]
+loss_2 = [0.7236,0.6785, 0.6545, 0.6401, 0.6290, 0.6199, 0.6115, ]
+accuracy_2 = [0.8861,0.8934, 0.8973, 0.8995, 0.9015, 0.9030, 0.9043, ]
+
+Epoch 21/25
+
+def peak_scatter(ax, array, splits, peak_method, color):
+  for nn, ss in splits.items():
+    if ss[1] == -1:
+      pp = peak_method(array[ss[0]:])
+    else:
+      pp = peak_method(array[ss[0]:ss[1]])
+    ax.scatter(pp + ss[0], array[pp + ss[0]], color=color)
+    ax.text(pp + ss[0], array[pp + ss[0]], str(array[pp + ss[0]]))
+
+def add_plot(lfw, cfp_fp, agedb_30, loss, accuracy, splits, fig=None, axes=None):
+  if fig == None:
+    fig, axes = plt.subplots(1, 3, sharex=True, figsize=(15, 5))
+
+  xx = np.arange(len(loss))
+  for ss, aa, cc in zip(['lfw', 'cfp_fp', 'agedb_30'], [lfw, cfp_fp, agedb_30], ["b", "g", "r"]):
+    axes[0].plot(xx, aa, label=ss, color=cc)
+    peak_scatter(axes[0], aa, splits, np.argmax, cc)
+  axes[0].set_title('eval accuracy')
+  axes[0].legend()
+
+  axes[1].plot(xx, loss, color="b")
+  peak_scatter(axes[1], loss, splits, np.argmin, "b")
+  axes[1].set_title('loss')
+
+  axes[2].plot(xx, accuracy, color="b")
+  peak_scatter(axes[2], accuracy, splits, np.argmax, "b")
+  axes[2].set_title('accuracy')
+
+  for ax in axes:
+    ymin, ymax = ax.get_ylim()
+    mm = (ymax - ymin) * 0.05
+    for nn, ss in splits.items():
+      ax.plot([xx[ss[0]], xx[ss[0]]], [ymin + mm, ymax - mm], color='k', linestyle='--')
+      # ax.text(xx[ss[0]], np.mean(ax.get_ylim()), nn)
+      ax.text(ss[0] + len(xx[ss[0]:ss[1]]) * 0.4, ymin + mm * 4, nn)
+
+  fig.tight_layout()
+
+add_plot(lfw + lfw_2, cfp_fp + cfp_fp_2, agedb_30 + agedb_30_2, loss + loss_2, accuracy + accuracy_2, {"Softmax": [0, 15], "margin_softmax": [15, -1]})
+```
+## Mobilenet Train
+```py
+import losses
+import train
+data_path = '/datasets/faces_emore_112x112_folders'
+eval_paths = ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin']
+tt = train.Train(data_path, eval_paths, 'keras_mobilenet_256_V.h5', basic_model="./checkpoints/keras_mobilenet_256_II_basic_agedb_30_epoch_6_0.900333.h5", model=None, compile=False, lr_base=0.001, batch_size=128, random_status=3)
+
+sch = [{"loss": keras.losses.categorical_crossentropy, "optimizer": "adam", "epoch": 1}]
+sch = [{"loss": losses.margin_softmax, "optimizer": "adam", "epoch": 1}]
+sch = [{"loss": losses.scale_softmax, "optimizer": "adam", "epoch": 1}]
+sch = [{"loss": losses.arcface_loss, "optimizer": "adam", "epoch": 1}]
+sch = [{"loss": losses.arcface_loss, "optimizer": "adam", "centerloss": True, "epoch": 1}]
+sch = [{"loss": losses.batch_hard_triplet_loss, "optimizer": "adam", "epoch": 1}]
+sch = [{"loss": losses.batch_all_triplet_loss, "optimizer": "adam", "epoch": 1}]
+sch = [{"loss": losses.batch_hard_triplet_loss, "optimizer": "adam", "centerloss": True, "epoch": 1}]
+```
+| Loss type                      | loss    | accuracy | lfw      | lfw thresh | cfp_fp   | cfp_fp thresh | agedb_30 | agedb_30 thresh | total time | per step |
+| ------------------------------ | ------- | -------- | -------- | ---------- | -------- | ------------- | -------- | --------------- | ---------- | -------- |
+| **Original Epoch 6**           | 22.6342 | 0.7855   | 0.987833 | 0.307455   | 0.891714 | 0.201755      | 0.900333 | 0.229057        | 5653s      | 124ms    |
+| **Train Epoch 7**              | adam    | lr 0.001 | bs 128   | random 3   |          |               |          |                 |            |          |
+| softmax                        | 1.8196  | 0.6941   | 0.987333 | 0.345970   | 0.895286 | 0.204387      | 0.901667 | 0.265905        | 5677s      | 125ms    |
+| margin_softmax                 | 3.8359  | 0.6294   | 0.989000 | 0.317540   | 0.889000 | 0.210142      | 0.897833 | 0.246658        | 5716s      | 126ms    |
+| scale_softmax                  | 2.2430  | 0.6779   | 0.987333 | 0.340417   | 0.887857 | 0.204122      | 0.900333 | 0.273266        | 5702s      | 125ms    |
+| arcface_loss                   | 22.3337 | 0.7928   | 0.987500 | 0.293580   | 0.886857 | 0.199602      | 0.904833 | 0.247436        | 6133s      | 135ms    |
+| center arcface_loss            | 22.5102 | 0.7924   | 0.987833 | 0.321488   | 0.884000 | 0.200262      | 0.894833 | 0.263254        | 5861s      | 129ms    |
+| batch_hard_triplet_loss        | 0.2276  |          | 0.986333 | 0.386425   | 0.910571 | 0.245836      | 0.891333 | 0.354833        | 4622s      | 156ms    |
+| batch_all_triplet_loss         |         |          |          |            |          |               |          |                 |            |          |
+| center batch_hard_triplet_loss |         |          |          |            |          |               |          |                 |            |          |

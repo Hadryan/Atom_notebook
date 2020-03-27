@@ -82,14 +82,6 @@
   - [Jupyter kernels](https://github.com/jupyter/jupyter/wiki/Jupyter-kernels)
   - [gophernotes - Use Go in Jupyter notebooks and interact](https://github.com/gopherdata/gophernotes)
     ```sh
-    env GO111MODULE=on go get -u github.com/gopherdata/gophernotes
-    mkdir -p ~/.local/share/jupyter/kernels/gophernotes
-    cd ~/.local/share/jupyter/kernels/gophernotes
-    rm ./* -f
-    cp "$(go env GOPATH)"/pkg/mod/github.com/gopherdata/gophernotes@v0.6.1/kernel/*  "."
-    chmod +w ./kernel.json # when copied kernel.json has no write permission
-    sed "s|gophernotes|$(go env GOPATH)/bin/gophernotes|" < kernel.json.in > kernel.json
-
     cd "$(go env GOPATH)"/src/github.com/gopherdata/gophernotes
     env GO111MODULE=on go install
     mkdir -p ~/.local/share/jupyter/kernels/gophernotes
@@ -1072,26 +1064,32 @@
     fmt.Println(len(t), cap(t), t)
     // 3 8 [a b c]
     ```
-  - **二维切片** 可以每行单独分配每一行，或者分配一个一维切片，然后切分成多行
+  - **二维切片** 可以每次单独分配每一行，或者分配一个一维切片，然后切分成多行
     ```go
-    import "fmt"
-    // 每行单独分配每一行
-    xx, yy := 8, 12
+    import (
+      "fmt"
+      "time"
+    )
+
+    // 每次单独分配每一行
+    xx, yy := 800, 1200
+    ss = time.Now()
     pp_1 := make([][]uint8, yy)
     for ii := range pp_1 {
         pp_1[ii] = make([]uint8, xx)
-    }
-    fmt.Println(len(pp_1), len(pp_1[0]))
-    // 12 8
+    }   
+    fmt.Println(len(pp_1), len(pp_1[0]), time.Since(ss))
+    // 1200 800 303.788µs
 
     // 分配一次，切分成多行
+    ss = time.Now()
     pp_2 := make([][]uint8, yy)
     pixels := make([]uint8, xx * yy)
     for ii := range pp_2 {
         pp_2[ii], pixels = pixels[:xx], pixels[xx:]
-    }
-    fmt.Println(len(pp_2), len(pp_2[0]))
-    // 12 8
+    }   
+    fmt.Println(len(pp_2), len(pp_2[0]), time.Since(ss))
+    // 1200 800 87.393µs
     ```
 ## range 迭代遍历
   - **range** 在 for 循环中对 `slice` 或者 `map` 进行迭代遍历
@@ -1578,6 +1576,13 @@
   // Hello, This hour has 7 days
   ```
 ## sort 接口
+  - **sort.IntSlice** 直接用于 `[]int` 类型排序
+    ```go
+    import "sort"
+    aa := []int{1, 3, 2, 5, 4}
+    sort.IntSlice(aa).Sort()
+    fmt.Println(aa)
+    ```
   - **sort.Interface** 需要实现 `Len()` / `Less(i, j int) bool` / `Swap(i, j int)` 三个接口
     ```go
     package main
@@ -1617,12 +1622,6 @@
         fmt.Println(aa)
     }
     // [1 2 3 4 5]
-    ```
-    该示例中，可以直接使用 `sort.IntSlice` 使 `Sequence` 作为 `[]int` 类型用于平自序
-    ```go
-    aa := Sequence{1, 3, 2, 5, 4}
-    sort.IntSlice(aa).Sort()
-    fmt.Println(aa)
     ```
 ## Web 服务器
   - [包 http](https://golang.org/pkg/net/http/) 通过任何实现了 **`http.Handler` 接口** 的值来响应 HTTP 请求
@@ -1881,6 +1880,44 @@
     }
     // ..tick..tick..tick..tick..tick BOOM!
     ```
+  - **判断质数**
+    ```go
+    import (
+      "fmt"
+      "math"
+    )
+    func isPrime(xx int) bool {
+        if xx < 3 {
+            return true
+        }
+        tt := int(math.Sqrt(float64(xx))) + 1
+        for ii := 2; ii < tt; ii++ {
+            if xx % ii == 0 {
+                return false
+            }
+        }
+        return true
+    }
+
+    rr := make(chan int)
+    for ii := 0; ii < 100000; ii++ {
+        go func(xx int) {
+            if isPrime(xx) {
+                rr <- xx
+            }
+        }(ii)
+    }
+
+    LOOP:
+    for {
+        select {
+            case ii := <-rr:
+                fmt.Println(ii)
+            default:
+                break LOOP
+        }
+    }
+    ```
 ## 线程锁
   - 不加锁时 `goroutine` 是线程不安全的
     ```go
@@ -2106,7 +2143,7 @@
     }
     ```
 ## 并行
-  - **并行化处理** 将计算划分为不同的可独立执行的部分，任务算可能以任意次序完成，并通过一个 channel 发送结束信号
+  - **并行化处理** 将计算划分为不同的可独立执行的部分，任务可能以任意次序完成，并通过一个 channel 发送结束信号
     ```go
     type Vector []float64
 

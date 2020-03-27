@@ -499,21 +499,6 @@
 
     for ((i=0; $i<${#FOO[@]}; i=$i+1)); do echo ${FOO[i]}; done # [ ? ]
     ```
-    ```sh
-    lines=( $(awk -F '\t' 'NR > 1 {if (NF>4 && $1 ~/^[0-9]/) print $2"\n"$3"\n"$5"\n"$4}' SSS.tsv) )
-
-    IFS_BAK="$IFS"; IFS=$'\n' # 必须在 awk 之前，并不是 awk 命令需要，是在生成数组时的分割符
-    lines=( $(awk -F ':' '{print $1"\n"$5"\n"$6"\n"$7}' /etc/passwd) )
-    IFS=$IFS_BAK
-
-    for (( i=0 ; $i<${#lines[@]} ; i=$i+4 )); do
-        User=${lines[$i+0]}
-        Group=${lines[$i+1]}
-        Home=${lines[$i+2]}
-        Bash=${lines[$i+3]}
-        echo "User=$User, Group=$Group, Home=$Home, Bash=$Bash"
-    done
-    ```
   - **while**
     ```shell
     # basic construct
@@ -575,12 +560,56 @@
     IFS_BAK="$IFS"; IFS=$'\n'; for aa in `ls -l /etc/passwd`; do echo "Elem: $aa"; done; IFS=$IFS_BAK
     # Elem: -rw-r--r-- 1 root root 2961 一月 10 14:09 /etc/passwd
     ```
+    在将元素作为其他命令的参数执行时，如果出现错误 `option xxx not recognized`，可以尝试恢复原 `IFS` 值 [ ??? ]
   - **for / while 读取文件**
     ```shell
     for ee in $(cat /etc/passwd); do echo $ee; done # 按照 换行符 / 空格划分
     IFS_BAK="$IFS"; IFS=$'\n'; for ee in $(cat /etc/passwd); do echo $ee; done; IFS=$IFS_BAK  # 按照换行符划分
 
     while read line; do echo $line; done < /etc/passwd  # 按照换行符划分
+    ```
+    在处理 `tsv` 文件时，可以通过指定 `IFS=$'\n'` 避免将 `\t` 替换为空格
+    ```sh
+    head -n 2 /etc/passwd | sed 's/:/\t/g' > foo
+    for ee in $(cat foo); do echo $ee; done # 空格 / 换行符分割
+    while read line; do echo $line; done < foo  # 整行处理，分割符替换为空格
+    # root x 0 0 root /root /bin/bash
+    # daemon x 1 1 daemon /usr/sbin /usr/sbin/nologin
+
+    IFS_BAK="$IFS"; IFS=$'\n'; for ee in $(cat foo); do echo $ee; done; IFS=$IFS_BAK  # 整行处理，保留 `\t`
+    IFS_BAK="$IFS"; IFS=$'\n'; while read line; do echo $line; done < foo; IFS=$IFS_BAK # 整行处理，保留 `\t`
+    # root	x	0	0	root	/root	/bin/bash
+    # daemon	x	1	1	daemon	/usr/sbin	/usr/sbin/nologin
+    ```
+  - **for 循环处理包含空格的输出**
+    ```sh
+    IFS_BAK="$IFS"; IFS=$'\n' # 必须在 awk 之前，不是用于 awk 命令，是在生成数组时的分割符
+    lines=( $(awk -F ':' '{print $1" \n"$5" \n"$6" \n"$7" "}' /etc/passwd) ) # 每一项结尾添加一个空格，以处理空字符串
+    IFS=$IFS_BAK
+
+    for (( i=0 ; $i<${#lines[@]} ; i=$i+4 )); do
+        User=${lines[$i+0]:0:-1}
+        Group=${lines[$i+1]:0:-1}
+        Home=${lines[$i+2]:0:-1}
+        Bash=${lines[$i+3]:0:-1}
+        echo "User=$User, Group=$Group, Home=$Home, Bash=$Bash"
+    done
+    ```
+    ```sh
+    lines=$(awk -F ':' '{print $1" \n"$5" \n"$6" \n"$7" "}' /etc/passwd) # 每一项结尾添加一个空格，以处理空字符串
+
+    IFS_BAK="$IFS"; IFS=$'\n'
+    IDX=0
+    for aa in $lines; do
+        case $IDX in
+          0) User=${aa:0:-1}; IDX=$(($IDX+1)); continue;;
+          1) Group=${aa:0:-1}; IDX=$(($IDX+1)); continue;;
+          2) Home=${aa:0:-1}; IDX=$(($IDX+1)); continue;;
+          3) Bash=${aa:0:-1}; IDX=0;;
+        esac
+        echo "User=$User, Group=$Group, Home=$Home, Bash=$Bash"
+    done
+    IFS=$IFS_BAK
     ```
 ***
 

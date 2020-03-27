@@ -1257,8 +1257,13 @@
 ## Shadow socket 代理
   - 安装 shadowsocks 客户端
     ```sh
-    sudo apt install shadowsocks
-    sslocal -h
+    # apt 安装的版本低，不支持 aes-256-gcm 等加密方式
+    # sudo apt install shadowsocks
+
+    # 使用 pip 安装 3.0.0 版本
+    pip install https://github.com/shadowsocks/shadowsocks/archive/master.zip -U
+    sslocal --version
+    # Shadowsocks 3.0.0
     ```
   - [免费上网账号](https://free-ss.site/) 获取 Address / Port / Password
   - 启动 sslocal 本地映射
@@ -1302,6 +1307,14 @@
     # 测试
     curl www.google.com
     ```
+## 每次开机时弹出 System problem report detected
+  - Ubuntu 有一个内建的实用程序叫做 **Apport**, 当一个程序崩溃时，可以进行通知
+  - **crash 文件** 生成的错误报告，删除后避免每次重启都弹出提示
+    ```sh
+    ls /var/crash/*
+    sudo rm /var/crash/*
+    ```
+  - **Approt 配置文件** `/etc/default/apport`，将 `enabled=1` 修改为 `0` 可以禁止 `approt` 服务
 ***
 
 # 软件
@@ -1679,14 +1692,55 @@
   mplayer -tv driver=v4l2:width=352:height=288:device=/dev/video0 tv://
   mplayer -tv device=/dev/video0 tv://
   ```
-## 每次开机时弹出 System problem report detected
-  - Ubuntu 有一个内建的实用程序叫做 **Apport**, 当一个程序崩溃时，可以进行通知
-  - **crash 文件** 生成的错误报告，删除后避免每次重启都弹出提示
+## scrcpy
+  - [Github scrcpy](https://github.com/Genymobile/scrcpy)
+  - **snap 安装** 运行报错 `X Error:  BadWindow`
     ```sh
-    ls /var/crash/*
-    sudo rm /var/crash/*
+    snap insall scrcpy
+
+    ''' Q
+    adb server version (41) doesnt match this client (39)
+    '''
+    ''' A
+    指定 adb 路径
+    export ADB=$HOME/Android/Sdk/platform-tools/adb
+    '''
     ```
-  - **Approt 配置文件** `/etc/default/apport`，将 `enabled=1` 修改为 `0` 可以禁止 `approt` 服务
+  - [手动编译安装](https://github.com/Genymobile/scrcpy/blob/master/BUILD.md#prebuilt-server)
+    ```sh
+    ''' Q
+    libsdl2-dev : Depends: libpulse-dev but it is not going to be installed
+    '''
+    ''' A
+    使用 aptitude 安装，第一个选项 n，使用第二个选项降级其他软件包
+    sudo aptitude install libsdl2-dev
+    '''
+    ```
+  - **参数**
+    ```sh
+    scrcpy --turn-screen-off --push-target /storage/emulated/0/Download
+    # --turn-screen-off 启动时关闭手机屏幕
+    # --push-target 拖拽传输文件时，手机上的存放路径
+
+    alias Scrcpy='nohup scrcpy --turn-screen-off --push-target /storage/emulated/0/Download &'
+    ```
+  - **快捷键**
+    | Action         | Shortcut             |
+    | -------------- | -------------------- |
+    | 切换全屏模式   | `Ctrl`+`f`           |
+    | POWER          | `Ctrl`+`p`           |
+    | HOME           | `Ctrl`+`h`，鼠标中键 |
+    | BACK           | `Ctrl`+`b`，鼠标右键 |
+    | SWITCH         | `Ctrl`+`s`           |
+    | MENU           | `Ctrl`+`m`           |
+    | 点亮屏幕       | `Ctrl`+`p`，鼠标右键 |
+    | 音量升高       | `Ctrl`+`↑`           |
+    | 音量降低       | `Ctrl`+`↓`           |
+    | 关闭手机屏幕   | `Ctrl`+`o`           |
+    | 旋转           | `Ctrl`+`r`           |
+    | 手机复制到电脑 | `Ctrl`+`c`           |
+    | 电脑粘贴到手机 | `Ctrl`+`v`           |
+    | 电脑复制到手机 | `Ctrl`+`Shift`+`v`   |
 ***
 
 # 系统备份恢复
@@ -1877,16 +1931,16 @@
     sudo apt-get update
     sudo apt-get upgrade
 
-    sudo apt-get install git atom
+    sudo apt-get install git atom ssh vim
 
     sudo apt-get install \
     aria2 audacious axel cairo-dock calibre chrome-gnome-shell cscope curl easystroke expect filezilla flat-remix gnome-tweak-tool google-chrome-stable\
     iptux ibus-pinyin java-common minicom mp3info mysql-client mysql-common mysql-server nfs-common nfs-kernel-server numix-gtk-theme numix-icon-theme numix-blue-gtk-theme numix-icon-theme-circle \
-    p7zip-full pidgin python-gtk2 python-vte python-glade2 r-base r-recommended rename rsync samba seahorse shutter ssh stardict synaptic teamviewer telnet testdisk tftp tftpd tmux tree \
-    unrar unzip vim virtualbox virtualbox-ext-pack virtualbox-guest-additions-iso vlc vnc4server wget wireshark zip
+    p7zip-full pidgin python-gtk2 python-vte python-glade2 rename rsync samba seahorse shutter stardict synaptic teamviewer telnet testdisk tftp tftpd tmux tree \
+    unrar unzip virtualbox virtualbox-ext-pack virtualbox-guest-additions-iso vlc vnc4server wget wireshark zip
 
     sudo apt-get install \
-    evolution gksu openjdk-9-jdk
+    evolution gksu openjdk-9-jdk r-base r-recommended
 
     snap install skype --classic
     ```
@@ -1914,7 +1968,7 @@
     cp .ipython/profile_default/ipython_* ~/.ipython/profile_default/
 
     cd .config
-    cp cairo-dock/ audacious/ Atom/ ~/.config/ -rf
+    cp cairo-dock/ audacious/ Atom/ google-chrome/ ~/.config/ -rf
 
     sudo cp /opt/hadoop-2.7.2/ /opt/ -r
     cd && cp workspace/ Ubuntu_share/ ~/ -rf
@@ -1927,9 +1981,9 @@
     sudo cp ~/Wallpapers/167557-1.png /boot/grub/back.png
     ```
   - **Other applications**
-    - [netease cloud music](http://d1.music.126.net/dmusic/netease-cloud-music_1.1.0_amd64_ubuntu.deb)
+    - [netease cloud music](https://music.163.com/#/download) -> 下载全部客户端 -> Linux 版
     - osdlyrics
-    - [tixati](https://download2.tixati.com/download/tixati_2.58-1_amd64.deb)
+    - [tixati](https://download2.tixati.com/download/linux.html)
   - **Other settings**
     - Tweaks -> Apperance / Desktop / Keyboard & Mouse / Startup Applications / Top Bar
     - Settings -> Network -> VPN
