@@ -361,367 +361,74 @@
 ***
 
 # Keras Insightface
-## MXnet record to folder
-  - [Insightface Dataset Zoo](https://github.com/deepinsight/insightface/wiki/Dataset-Zoo)
-  - **转化 faces_emore 训练数据集**
+## Project
+  - [Github Keras_insightface](https://github.com/leondgarse/Keras_insightface)
+## Data
+  - Download from [Insightface Dataset Zoo](https://github.com/deepinsight/insightface/wiki/Dataset-Zoo)
+  - **Data preprocess**
     ```py
-    import os
-    import numpy as np
-    import mxnet as mx
-    from tqdm import tqdm
-
-    # read_dir = '/datasets/faces_glint/'
-    # save_dir = '/datasets/faces_glint_112x112_folders'
-    read_dir = '/datasets/faces_emore'
-    save_dir = '/datasets/faces_emore_112x112_folders'
-    idx_path = os.path.join(read_dir, 'train.idx')
-    bin_path = os.path.join(read_dir, 'train.rec')
-
-    imgrec = mx.recordio.MXIndexedRecordIO(idx_path, bin_path, 'r')
-    rec_header, _ = mx.recordio.unpack(imgrec.read_idx(0))
-
-    # for ii in tqdm(range(1, 10)):
-    for ii in tqdm(range(1, int(rec_header.label[0]))):
-        img_info = imgrec.read_idx(ii)
-        header, img = mx.recordio.unpack(img_info)
-        img_idx = str(int(np.sum(header.label)))
-        img_save_dir = os.path.join(save_dir, img_idx)
-        if not os.path.exists(img_save_dir):
-            os.makedirs(img_save_dir)
-        # print(os.path.join(img_save_dir, str(ii) + '.jpg'))
-        with open(os.path.join(img_save_dir, str(ii) + '.jpg'), 'wb') as ff:
-            ff.write(img)
+    CUDA_VISIBLE_DEVICES='-1' ./prepare_data.py -D /datasets/faces_emore -T lfw.bin cfp_fp.bin agedb_30.bin
     ```
-  - **转化验证数据集 bin files** 有些数据的图片个是不能用 `tf.image.decode_jpeg` 解码
-    ```sh
-    #    bins   | issame_list
-    img_1 img_2 | 1
-    img_3 img_4 | 1
-    img_5 img_6 | 0
-    img_7 img_8 | 0
-    ```
+  - **Loading data by Dataset**
     ```py
-    import io
-    import pickle
-    import tensorflow as tf
-    from skimage.io import imread
+    import data
+    train_ds, steps_per_epoch, classes = data.prepare_for_training('/datasets/faces_emore_112x112_folders/')
+    # 5822653 5822653 85742
 
-    test_bin_files = ['/datasets/faces_emore/agedb_30.bin', '/datasets/faces_emore/cfp_fp.bin']
-    for test_bin_file in test_bin_files:
-        with open(test_bin_file, 'rb') as ff:
-            bins, issame_list = pickle.load(ff, encoding='bytes')
-
-        bb = [tf.image.encode_jpeg(imread(io.BytesIO(ii))) for ii in bins]
-        with open(test_bin_file, 'wb') as ff:
-            pickle.dump([bb, issame_list], ff)
+    image_batch, label_batch = next(iter(train_ds))
+    print(image_batch.shape, label_batch.shape)
+    # (128, 112, 112, 3) (128, 85742)
     ```
-## Loading data by ImageDataGenerator
   - **ImageDataGenerator 加载数据集** 可以应用 **数据增强**，分割 **训练/验证数据集**，但单独使用速度慢，可以结合 `tf.data.Dataset` 使用
-  ```py
-  ''' flow_from_dataframe '''
-  import glob2
-  import pickle
-  image_names = glob2.glob('/datasets/faces_emore_112x112_folders/*/*.jpg')
-  image_names = np.random.permutation(image_names).tolist()
-  image_classes = [int(os.path.basename(os.path.dirname(ii))) for ii in image_names]
+    ```py
+    ''' flow_from_dataframe '''
+    import glob2
+    import pickle
+    image_names = glob2.glob('/datasets/faces_emore_112x112_folders/*/*.jpg')
+    image_names = np.random.permutation(image_names).tolist()
+    image_classes = [int(os.path.basename(os.path.dirname(ii))) for ii in image_names]
 
-  with open('faces_emore_img_class_shuffle.pkl', 'wb') as ff:
-      pickle.dump({'image_names': image_names, "image_classes": image_classes}, ff)
+    with open('faces_emore_img_class_shuffle.pkl', 'wb') as ff:
+        pickle.dump({'image_names': image_names, "image_classes": image_classes}, ff)
 
-  import pickle
-  from keras.preprocessing.image import ImageDataGenerator
-  AUTOTUNE = tf.data.experimental.AUTOTUNE
-  with open('faces_emore_img_class_shuffle.pkl', 'rb') as ff:
-      aa = pickle.load(ff)
-  image_names, image_classes = aa['image_names'], aa['image_classes']
-  image_names = np.random.permutation(image_names).tolist()
-  image_classes = [int(os.path.basename(os.path.dirname(ii))) for ii in image_names]
-  print(len(image_names), len(image_classes))
-  # 5822653 5822653
+    import pickle
+    from keras.preprocessing.image import ImageDataGenerator
+    AUTOTUNE = tf.data.experimental.AUTOTUNE
+    with open('faces_emore_img_class_shuffle.pkl', 'rb') as ff:
+        aa = pickle.load(ff)
+    image_names, image_classes = aa['image_names'], aa['image_classes']
+    image_names = np.random.permutation(image_names).tolist()
+    image_classes = [int(os.path.basename(os.path.dirname(ii))) for ii in image_names]
+    print(len(image_names), len(image_classes))
+    # 5822653 5822653
 
-  data_df = pd.DataFrame({"image_names": image_names, "image_classes": image_classes})
-  data_df.image_classes = data_df.image_classes.map(str)
-  # image_gen = ImageDataGenerator(rescale=1./255, horizontal_flip=True, validation_split=0.1)
-  image_gen = ImageDataGenerator(rescale=1./255, horizontal_flip=True, validation_split=0.05)
-  train_data_gen = image_gen.flow_from_dataframe(data_df, directory=None, x_col='image_names', y_col="image_classes", class_mode='categorical', target_size=(112, 112), batch_size=128, subset='training', validate_filenames=False)
-  # Found 5240388 non-validated image filenames belonging to 85742 classes.
-  val_data_gen = image_gen.flow_from_dataframe(data_df, directory=None, x_col='image_names', y_col="image_classes", class_mode='categorical', target_size=(112, 112), batch_size=128, subset='validation', validate_filenames=False)
-  # Found 582265 non-validated image filenames belonging to 85742 classes.
+    data_df = pd.DataFrame({"image_names": image_names, "image_classes": image_classes})
+    data_df.image_classes = data_df.image_classes.map(str)
+    # image_gen = ImageDataGenerator(rescale=1./255, horizontal_flip=True, validation_split=0.1)
+    image_gen = ImageDataGenerator(rescale=1./255, horizontal_flip=True, validation_split=0.05)
+    train_data_gen = image_gen.flow_from_dataframe(data_df, directory=None, x_col='image_names', y_col="image_classes", class_mode='categorical', target_size=(112, 112), batch_size=128, subset='training', validate_filenames=False)
+    # Found 5240388 non-validated image filenames belonging to 85742 classes.
+    val_data_gen = image_gen.flow_from_dataframe(data_df, directory=None, x_col='image_names', y_col="image_classes", class_mode='categorical', target_size=(112, 112), batch_size=128, subset='validation', validate_filenames=False)
+    # Found 582265 non-validated image filenames belonging to 85742 classes.
 
-  classes = data_df.image_classes.unique().shape[0]
-  steps_per_epoch = np.ceil(len(train_data_gen.classes) / 128)
-  validation_steps = np.ceil(len(val_data_gen.classes) / 128)
+    classes = data_df.image_classes.unique().shape[0]
+    steps_per_epoch = np.ceil(len(train_data_gen.classes) / 128)
+    validation_steps = np.ceil(len(val_data_gen.classes) / 128)
 
-  ''' Convert to tf.data.Dataset '''
-  train_ds = tf.data.Dataset.from_generator(lambda: train_data_gen, output_types=(tf.float32, tf.int32), output_shapes=([None, 112, 112, 3], [None, classes]))
-  # train_ds = train_ds.cache()
-  # train_ds = train_ds.shuffle(buffer_size=128 * 1000)
-  train_ds = train_ds.repeat()
-  train_ds = train_ds.prefetch(buffer_size=AUTOTUNE)
+    ''' Convert to tf.data.Dataset '''
+    train_ds = tf.data.Dataset.from_generator(lambda: train_data_gen, output_types=(tf.float32, tf.int32), output_shapes=([None, 112, 112, 3], [None, classes]))
+    # train_ds = train_ds.cache()
+    # train_ds = train_ds.shuffle(buffer_size=128 * 1000)
+    train_ds = train_ds.repeat()
+    train_ds = train_ds.prefetch(buffer_size=AUTOTUNE)
 
-  val_ds = tf.data.Dataset.from_generator(lambda: val_data_gen, output_types=(tf.float32, tf.int32), output_shapes=([None, 112, 112, 3], [None, classes]))
+    val_ds = tf.data.Dataset.from_generator(lambda: val_data_gen, output_types=(tf.float32, tf.int32), output_shapes=([None, 112, 112, 3], [None, classes]))
 
-  xx, yy = next(iter(train_ds))
-  print(xx.shape, yy.shape)
-  # (128, 112, 112, 3) (128, 85742)
-  ```
-## Loading data by Datasets
-  ```py
-  import glob2
-  import pickle
-  image_names = glob2.glob('/datasets/faces_emore_112x112_folders/*/*.jpg')
-  image_names = np.random.permutation(image_names).tolist()
-  image_classes = [int(os.path.basename(os.path.dirname(ii))) for ii in image_names]
-
-  with open('faces_emore_112x112_folders_shuffle.pkl', 'wb') as ff:
-      pickle.dump({'image_names': image_names, "image_classes": image_classes}, ff)
-
-  import pickle
-  AUTOTUNE = tf.data.experimental.AUTOTUNE
-  with open('faces_emore_112x112_folders_shuffle.pkl', 'rb') as ff:
-      aa = pickle.load(ff)
-  image_names, image_classes = aa['image_names'], aa['image_classes']
-  classes = np.max(image_classes) + 1
-  print(len(image_names), len(image_classes), classes)
-  # 5822653 5822653 85742
-
-  # list_ds = tf.data.Dataset.list_files('/datasets/faces_emore_112x112_folders/*/*')
-  list_ds = tf.data.Dataset.from_tensor_slices(image_names)
-
-  def process_path(file_path, classes, img_shape=(112, 112), random_convert=True):
-      parts = tf.strings.split(file_path, os.path.sep)[-2]
-      label = tf.cast(tf.strings.to_number(parts), tf.int32)
-      label = tf.one_hot(label, depth=classes, dtype=tf.int32)
-      img = tf.io.read_file(file_path)
-      img = tf.image.decode_jpeg(img, channels=3)
-      img = tf.image.convert_image_dtype(img, tf.float32)
-      if random_convert:
-          img = tf.image.random_flip_left_right(img)
-          img = tf.image.random_brightness(img, 0.2)
-          img = tf.image.random_crop(img, [100, 100, 3])
-      img = tf.image.resize(img, img_shape)
-      img = (img - 0.5) * 2
-      return img, label
-
-  def prepare_for_training(ds, cache=True, shuffle_buffer_size=None, batch_size=128):
-      if cache:
-          ds = ds.cache(cache) if isinstance(cache, str) else ds.cache()
-      if shuffle_buffer_size == None:
-          shuffle_buffer_size = batch_size * 100
-
-      ds = ds.shuffle(buffer_size=shuffle_buffer_size)
-      ds = ds.repeat()
-      ds = ds.map(lambda xx: process_path(xx, classes), num_parallel_calls=AUTOTUNE)
-      ds = ds.batch(batch_size)
-      ds = ds.prefetch(buffer_size=AUTOTUNE)
-      return ds
-
-  # train_ds = prepare_for_training(labeled_ds, cache="/tmp/faces_emore.tfcache")
-  batch_size = 128 * len(tf.config.experimental.get_visible_devices('GPU'))
-  train_ds = prepare_for_training(list_ds, cache=False, shuffle_buffer_size=len(image_names), batch_size=batch_size)
-  steps_per_epoch = np.ceil(len(image_names) / batch_size)
-  image_batch, label_batch = next(iter(train_ds))
-  print(image_batch.shape, label_batch.shape)
-  # (128, 112, 112, 3) (128, 85742)
-  ```
-## Evaluate
-  ```py
-  import pickle
-  import io
-  from tqdm import tqdm
-  from skimage.io import imread
-  from sklearn.preprocessing import normalize
-
-  class epoch_eval_callback(tf.keras.callbacks.Callback):
-      def __init__(self, test_bin_file, batch_size=128, save_model=None, eval_freq=1, flip=False):
-          super(epoch_eval_callback, self).__init__()
-          bins, issame_list = np.load(test_bin_file, encoding='bytes', allow_pickle=True)
-          ds = tf.data.Dataset.from_tensor_slices(bins)
-          _imread = lambda xx: tf.image.convert_image_dtype(tf.image.decode_jpeg(xx), dtype=tf.float32)
-          ds = ds.map(_imread)
-          self.ds = ds.batch(batch_size)
-          self.test_issame = np.array(issame_list)
-          self.test_names = os.path.splitext(os.path.basename(test_bin_file))[0]
-          self.max_accuracy = 0
-          self.steps = int(np.ceil(len(bins) / batch_size))
-          self.save_model = save_model
-          self.eval_freq = eval_freq
-          self.flip = flip
-
-      # def on_batch_end(self, batch=0, logs=None):
-      def on_epoch_end(self, epoch=0, logs=None):
-          if epoch % self.eval_freq != 0:
-              return
-          dists = []
-          embs = []
-          tf.print("")
-          for img_batch in tqdm(self.ds, 'Evaluating ' + self.test_names, total=self.steps):
-              emb = basic_model.predict(img_batch)
-              if self.flip:
-                  emb_f = basic_model.predict(tf.image.flip_left_right(img_batch))
-                  emb = (emb + emb_f) / 2
-              embs.extend(emb)
-          embs = np.array(embs)
-          if np.isnan(embs).sum() != 0:
-              tf.print("NAN in embs, not a good one")
-              return
-          embs = normalize(embs)
-          embs_a = embs[::2]
-          embs_b = embs[1::2]
-          dists = (embs_a * embs_b).sum(1)
-
-          tt = np.sort(dists[self.test_issame[:dists.shape[0]]])
-          ff = np.sort(dists[np.logical_not(self.test_issame[:dists.shape[0]])])
-          # self.tt = tt
-          # self.ff = ff
-          # self.embs = embs
-
-          t_steps = int(0.1 * ff.shape[0])
-          acc_count = np.array([(tt > vv).sum() + (ff <= vv).sum() for vv in ff[-t_steps:]])
-          acc_max_indx = np.argmax(acc_count)
-          acc_max = acc_count[acc_max_indx] / dists.shape[0]
-          acc_thresh = ff[acc_max_indx - t_steps]
-
-          tf.print("\n>>>> %s evaluation max accuracy: %f, thresh: %f, previous max accuracy: %f" % (self.test_names, acc_max, acc_thresh, self.max_accuracy))
-          if acc_max > self.max_accuracy:
-              tf.print(">>>> Improved = %f" % (acc_max - self.max_accuracy))
-              self.max_accuracy = acc_max
-              if self.save_model:
-                  save_path = '%s_%d' % (self.save_model, epoch)
-                  tf.print("Saving model to: %s" % (save_path))
-                  model.save(save_path)
-  ```
-  ```py
-  class mi_basic_model:
-      def __init__(self):
-          self.predict = lambda xx: interf(xx)['embedding'].numpy()
-      def save(self, path):
-          print('Saved to %s' % (path))
-  basic_model = mi_basic_model()
-
-  # lfw_eval = epoch_eval_callback('/home/leondgarse/workspace/datasets/faces_emore/lfw.bin')
-  lfw_eval = epoch_eval_callback('/datasets/faces_emore/lfw.bin', save_model=None, flip=True)
-  cfp_fp_eval = epoch_eval_callback('/datasets/faces_emore/cfp_fp.bin', save_model=None, flip=True)
-  agedb_30_eval = epoch_eval_callback('/datasets/faces_emore/agedb_30.bin', save_model=None, flip=True)
-  lfw_eval.on_epoch_end()
-  cfp_fp_eval.on_epoch_end()
-  agedb_30_eval.on_epoch_end()
-  ```
-  ```py
-  # basic_model_centsoft_0_split.h5
-  >>>> lfw evaluation max accuracy: 0.992833, thresh: 0.188595, overall max accuracy: 0.992833
-  >>>> cfp_fp evaluation max accuracy: 0.909571, thresh: 0.119605, overall max accuracy: 0.909571
-  >>>> agedb_30 evaluation max accuracy: 0.887500, thresh: 0.238278, overall max accuracy: 0.887500
-  ```
-  ```py
-  # basic_model_arc_8_split.h5
-  >>>> lfw evaluation max accuracy: 0.994167, thresh: 0.141986, overall max accuracy: 0.994167
-  >>>> cfp_fp evaluation max accuracy: 0.867429, thresh: 0.106673, overall max accuracy: 0.867429
-  >>>> agedb_30 evaluation max accuracy: 0.902167, thresh: 0.128596, overall max accuracy: 0.902167
-  ```
-  ```py
-  # basic_model_arc_split.h5
-  >>>> lfw evaluation max accuracy: 0.993000, thresh: 0.125761, overall max accuracy: 0.993000
-  >>>> cfp_fp evaluation max accuracy: 0.859143, thresh: 0.068290, overall max accuracy: 0.859143
-  >>>> agedb_30 evaluation max accuracy: 0.912667, thresh: 0.084312, overall max accuracy: 0.912667
-  ```
-  ```py
-  # ./keras_checkpoints_arc_2.h5 - Epoch 32 - softmax
-  >>>> lfw evaluation max accuracy: 0.993333, thresh: 0.182575, overall max accuracy: 0.993333
-  >>>> cfp_fp evaluation max accuracy: 0.900571, thresh: 0.095163, overall max accuracy: 0.900571
-  >>>> agedb_30 evaluation max accuracy: 0.936500, thresh: 0.138070, overall max accuracy: 0.936500
-  ```
-  ```py
-  # ./keras_checkpoints_arc_3.h5 - Epoch 32 - arcface
-  >>>> lfw evaluation max accuracy: 0.991167, thresh: 0.109592, overall max accuracy: 0.991167
-  >>>> cfp_fp evaluation max accuracy: 0.851714, thresh: 0.067722, overall max accuracy: 0.851714
-  >>>> agedb_30 evaluation max accuracy: 0.912500, thresh: 0.082330, overall max accuracy: 0.912500
-  ```
-## Basic model
-  - [TensorFlow Addons Layers: WeightNormalization](https://www.tensorflow.org/addons/tutorials/layers_weightnormalization)
-  ```py
-  mm = keras.models.load_model('keras_checkpoints_mobilenet_v1_II.h5', compile=False)
-  basic_model = keras.models.Model(mm.inputs[0], mm.layers[-3].output)
-  basic_model.trainable = False
-
-  from tensorflow.keras import layers
-
-  ''' Basic model '''
-  # xx = keras.applications.ResNet101V2(include_top=False, weights='imagenet')
-  # xx = tf.keras.applications.MobileNetV2(input_shape=(112, 112, 3), include_top=False, weights=None)
-  # xx = keras.applications.NASNetMobile(input_shape=(112, 112, 3), include_top=False, weights=None)
-  # xx = tf.keras.applications.ResNet50V2(include_top=False, weights='imagenet')
-  # xx = keras.models.load_model('mobilnet_v1_basic_922667.h5', compile=False)
-  xx = tf.keras.applications.ResNet50V2(input_shape=(112, 112, 3), include_top=False, weights='imagenet')
-  xx.trainable = True
-
-  inputs = xx.inputs[0]
-  nn = xx.outputs[0]
-  nn = layers.Conv2D(512, xx.output_shape[1], use_bias=False)(nn)
-  # BatchNormalization(momentum=0.99, epsilon=0.001)
-  nn = layers.BatchNormalization(momentum=0.9, epsilon=2e-5)(nn)
-  # nn = layers.Dropout(0.4)(nn)
-  nn = layers.Flatten()(nn)
-  nn = layers.Dense(512)(nn)
-  embedding = layers.BatchNormalization(momentum=0.9, epsilon=2e-5, name='embedding')(nn)
-  # norm_emb = layers.Lambda(tf.nn.l2_normalize, name='norm_embedding', arguments={'axis': 1})(embedding)
-  basic_model = keras.models.Model(inputs, embedding)
-
-  ''' Callbacks '''
-  from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
-
-  # lfw_eval = epoch_eval_callback('/datasets/faces_emore/lfw.bin')
-  lfw_eval = epoch_eval_callback('/datasets/faces_emore/lfw.bin', save_model=None, eval_freq=1, flip=True)
-  cfp_fp_eval = epoch_eval_callback('/datasets/faces_emore/cfp_fp.bin', save_model=None, eval_freq=1, flip=True)
-  agedb_30_eval = epoch_eval_callback('/datasets/faces_emore/agedb_30.bin', save_model=None, eval_freq=1, flip=True)
-
-  # reduce_lr = ReduceLROnPlateau('val_loss', factor=0.1, patience=5, verbose=1)
-  def scheduler(epoch):
-      lr = 0.001 if epoch < 10 else 0.001 * np.exp(0.1 * (10 - epoch))
-      print('\nLearning rate for epoch {} is {}'.format(epoch + 1, lr))
-      return lr
-  lr_scheduler = tf.keras.callbacks.LearningRateScheduler(scheduler)
-
-  model_checkpoint = ModelCheckpoint("./keras_checkpoints.h5", verbose=1)
-  # model_checkpoint = ModelCheckpoint("./keras_checkpoints_res_arcface", 'val_loss', verbose=1, save_best_only=True)
-  callbacks = [lr_scheduler, model_checkpoint, lfw_eval, cfp_fp_eval, agedb_30_eval]
-
-  ''' Model with bottleneck '''
-  class NormDense(tf.keras.layers.Layer):
-      def __init__(self, units=1000, **kwargs):
-          super(NormDense, self).__init__(**kwargs)
-          self.init = keras.initializers.glorot_normal()
-          self.units = units
-      def build(self, input_shape):
-          self.w = self.add_weight(name='norm_dense_w', shape=(input_shape[-1], self.units), initializer=self.init, trainable=True)
-          super(NormDense, self).build(input_shape)
-      def call(self, inputs, **kwargs):
-          norm_w = tf.nn.l2_normalize(self.w, axis=0)
-          inputs = tf.nn.l2_normalize(inputs, axis=1)
-          return tf.matmul(inputs, norm_w)
-      def compute_output_shape(self, input_shape):
-          shape = tf.TensorShape(input_shape).as_list()
-          shape[-1] = self.units
-          return tf.TensorShape(shape)
-      def get_config(self):
-          config = super(NormDense, self).get_config()
-          config.update({'units': self.units})
-          return config
-      @classmethod
-      def from_config(cls, config):
-          return cls(**config)
-
-  inputs = basic_model.inputs[0]
-  embedding = basic_model.outputs[0]
-  # output = NormDense(classes, name='norm_dense')(embedding)
-  output = keras.layers.Dense(classes, name='softmax', activation="softmax")(embedding)
-  # concate = layers.concatenate([embedding, output], name='concate')
-  # model = keras.models.Model(inputs, concate)
-  # model = keras.models.Sequential([basic_model, layers.Dense(classes, name='softmax', activation="softmax")])
-  model = keras.models.Model(inputs, output)
-  # model.load_weights('nn.h5')
-  model.summary()
-  ```
+    xx, yy = next(iter(train_ds))
+    print(xx.shape, yy.shape)
+    # (128, 112, 112, 3) (128, 85742)
+    ```
+## strategy
   ```py
   import multiprocessing as mp
   mp.set_start_method('forkserver')
@@ -757,94 +464,11 @@
       model = keras.models.Model(inputs, concate)
       model.load_weights('nn.h5')
   ```
-## Gently stop fit callbacks
-  ```py
-  import sys
-  import select
-
-  class Gently_stop_callback(keras.callbacks.Callback):
-      def __init__(self, prompt="Continue? (Y/n)", time_out=3):
-          super(Gently_stop_callback, self).__init__()
-          self.yes_or_no = lambda : 'n' not in self.timeout_input(prompt, time_out, default="y")[1].lower()
-      def on_epoch_end(self, epoch, logs={}):
-          print()
-          if not self.yes_or_no():
-              self.model.stop_training = True
-      def timeout_input(self, prompt, timeout=3, default=""):
-          print(prompt, end=': ', flush=True)
-          inputs, outputs, errors = select.select([sys.stdin], [], [], timeout)
-          print()
-          return (0, sys.stdin.readline().strip()) if inputs else (-1, default)
-
-  class My_history(keras.callbacks.Callback):
-      def __init__(self, initial_hist=None):
-          super(My_history, self).__init__()
-          self.history = initial_hist if initial_hist else {}
-      def on_epoch_end(self, epoch, logs=None):
-          logs = logs or {}
-          for k, v in logs.items():
-              self.history.setdefault(k, []).append(v)
-
-  my_history = My_history(None)
-  # my_history = My_history(my_history.history)
-  callbacks.extend([my_history, Gently_stop_callback()])
-  ```
-## Softmax train
   ```py
   with strategy.scope():
       model.compile(optimizer='nadam', loss=keras.losses.categorical_crossentropy, metrics=["accuracy"])
   ```
-  ```py
-  Epoch 1/200
-  43216/43216 [==============================] - 8650s 200ms/step - loss: 3.8481 - accuracy: 0.4496 - val_loss: 2.6660 - val_accuracy: 0.5180
-  Epoch 2/200
-  43216/43216 [==============================] - 8792s 203ms/step - loss: 0.9634 - accuracy: 0.8118 - val_loss: 1.2425 - val_accuracy: 0.7599
-  Epoch 3/200
-  43216/43216 [==============================] - 8720s 202ms/step - loss: 0.6660 - accuracy: 0.8676 - val_loss: 1.3942 - val_accuracy: 0.7380
-  Epoch 4/200
-  43216/43216 [==============================] - 8713s 202ms/step - loss: 0.5394 - accuracy: 0.8920 - val_loss: 0.6720 - val_accuracy: 0.8733
-  Epoch 5/200
-  43216/43216 [==============================] - 8873s 205ms/step - loss: 0.4662 - accuracy: 0.9063 - val_loss: 0.7837 - val_accuracy: 0.8540
-  ```
-  ```py
-  Epoch 00016
-  45490/45490 [==============================] - 7643s 168ms/step - loss: 0.3991 - logits_accuracy: 0.9451
-  45490/45490 [==============================] - 7663s 168ms/step - loss: 0.2789 - logits_accuracy: 0.9597
-  45490/45490 [==============================] - 7663s 168ms/step - loss: 0.2165 - logits_accuracy: 0.9677
-  45490/45490 [==============================] - 7656s 168ms/step - loss: 0.1762 - logits_accuracy: 0.9731
-  45490/45490 [==============================] - 7677s 169ms/step - loss: 0.1481 - logits_accuracy: 0.9770
-  Epoch 00021
-  45490/45490 [==============================] - 7674s 169ms/step - loss: 0.1274 - logits_accuracy: 0.9800
-  45490/45490 [==============================] - 7653s 168ms/step - loss: 0.1118 - logits_accuracy: 0.9822
-  45490/45490 [==============================] - 7683s 169ms/step - loss: 0.0999 - logits_accuracy: 0.9840
-  45490/45490 [==============================] - 7672s 169ms/step - loss: 0.0910 - logits_accuracy: 0.9854
-  45490/45490 [==============================] - 7670s 169ms/step - loss: 0.0838 - logits_accuracy: 0.9865
-  Epoch 00026
-  45490/45490 [==============================] - 7678s 169ms/step - loss: 0.0783 - logits_accuracy: 0.9873
-  45490/45490 [==============================] - 7662s 168ms/step - loss: 0.0738 - logits_accuracy: 0.9880
-  45490/45490 [==============================] - 7664s 168ms/step - loss: 0.0703 - logits_accuracy: 0.9886
-  45490/45490 [==============================] - 7663s 168ms/step - loss: 0.0674 - logits_accuracy: 0.9890
-  45490/45490 [==============================] - 7664s 168ms/step - loss: 0.0651 - logits_accuracy: 0.9894
-  Epoch 00031
-  45490/45490 [==============================] - 7664s 168ms/step - loss: 0.0633 - logits_accuracy: 0.9897
-  45490/45490 [==============================] - 7661s 168ms/step - loss: 0.0617 - logits_accuracy: 0.9900
-  ```
-  ```py
-  # ./keras_checkpoints_soft.h5
-  Epoch 1/200
-  45490/45490 [==============================] - 8141s 179ms/step - loss: 3.5892 - accuracy: 0.4865
-  45490/45490 [==============================] - 8126s 179ms/step - loss: 0.8975 - accuracy: 0.8248
-  45490/45490 [==============================] - 8126s 179ms/step - loss: 0.6311 - accuracy: 0.8750
-  45490/45490 [==============================] - 8132s 179ms/step - loss: 0.5163 - accuracy: 0.8969
-  45490/45490 [==============================] - 8180s 180ms/step - loss: 0.4481 - accuracy: 0.9101
-  Epoch 6/200
-  45490/45490 [==============================] - 8101s 178ms/step - loss: 0.4021 - accuracy: 0.9191
-  45490/45490 [==============================] - 8214s 181ms/step - loss: 0.3688 - accuracy: 0.9256
-
-  >>>> lfw evaluation max accuracy: 0.984167, thresh: 190.876343, overall max accuracy: 0.984167
-  >>>> cfp_fp evaluation max accuracy: 0.853429, thresh: 79.759888, overall max accuracy: 0.856429
-  >>>> agedb_30 evaluation max accuracy: 0.889667, thresh: 133.383347, overall max accuracy: 0.899000
-  ```
+## Softmax train
   ```py
   ee = model.predict(image_batch)
   print((label_batch.numpy().argmax(1) == ee.argmax(1)).sum())
@@ -858,67 +482,8 @@
   print(cc.max(1).min())
   # 0.25448152
   ```
-## Arcface loss 2
-```py
-def arcface_loss(y_true, y_pred, margin1=1.0, margin2=0.5, margin3=0.0, scale=64.0):
-    # norm_logits = y_pred[:, 512:]
-    norm_logits = tf.clip_by_value(y_pred, clip_value_min=-1.0, clip_value_max=1.0)
-    theta = tf.cos(tf.acos(norm_logits) * margin1 + margin2) - margin3
-    cond = tf.logical_and(tf.cast(y_true, dtype=tf.bool), theta < norm_logits)
-    arcface_logits = tf.where(cond, theta, norm_logits) * scale
-    # tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
-    return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
-
-class ArcfaceLoss(keras.losses.Loss):
-  def __init__(self, m=0.5, s=64, easy_margin=True):
-    super(Save_Numpy_Callback, self).__init__()
-    self.threshold = np.cos(np.pi - m)  # -0.8775825618903726
-    self.mm = np.sin(np.pi - m) * m # 0.23971276930210156
-    self.m = m
-    self.s = s
-
-  def call(self, y_true, y_pred, margin=0.5, scale=64.0):
-
-    threshold = np.cos(np.pi - margin)
-    cond = tf.logical_and(tf.cast(y_true, dtype=tf.bool), y_pred > threshold)
-    arcface_logits = tf.where(cond, tf.cos(tf.acos(y_pred) + margin), y_pred) * scale
-    return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=False)
-```
 ## Arcface loss
   - **Mxnet Insigntface Arcface loss**
-    ```py
-    # def arcface_loss(y_true, y_pred, margin1=0.9, margin2=0.4, margin3=0.15, scale=64.0):
-    def arcface_loss(y_true, y_pred, margin1=1.0, margin2=0.5, margin3=0.0, scale=64.0):
-        # norm_logits = y_pred[:, 512:]
-        norm_logits = y_pred
-        y_pred_vals = norm_logits[tf.cast(y_true, dtype=tf.bool)]
-        y_pred_vals = tf.clip_by_value(y_pred_vals, clip_value_min=-1.0, clip_value_max=1.0)
-        theta = tf.cos(tf.acos(y_pred_vals) * margin1 + margin2) - margin3
-        theta_one_hot = tf.expand_dims(theta - y_pred_vals, 1) * tf.cast(y_true, dtype=tf.float32)
-        arcface_logits = (theta_one_hot + norm_logits) * scale
-        tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
-        return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
-
-    def arcface_loss(y_true, y_pred, margin1=1.0, margin2=0.5, margin3=0.0, scale=64.0):
-        # norm_logits = y_pred[:, 512:]
-        norm_logits = y_pred
-        y_pred_vals = norm_logits[tf.cast(y_true, dtype=tf.bool)]
-        y_pred_vals = tf.clip_by_value(y_pred_vals, clip_value_min=-1.0, clip_value_max=1.0)
-        theta = tf.cos(tf.acos(y_pred_vals) + margin2)
-        theta_one_hot = tf.expand_dims(theta - y_pred_vals, 1) * tf.cast(y_true, dtype=tf.float32)
-        arcface_logits = (theta_one_hot + norm_logits) * scale
-        # tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
-        return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
-
-    def arcface_loss(y_true, y_pred, margin=0.5, scale=64.0):
-        # y_pred = tf.clip_by_value(y_pred, clip_value_min=-1.0, clip_value_max=1.0)
-        theta = tf.cos(tf.acos(y_pred) + margin2)
-        cond = tf.logical_and(tf.cast(y_true, dtype=tf.bool), theta < y_pred)
-        arcface_logits = tf.where(cond, theta, y_pred) * scale
-        # tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
-        return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=False)
-    ```
-    **Plot**
     ```py
     def plot_arc_trans(margin_list, new_fig=True):
         xx = np.arange(-1, 1, 0.01)
@@ -950,34 +515,6 @@ class ArcfaceLoss(keras.losses.Loss):
     ```
     ![](images/arcface_loss_mxnet_insightface.png)
   - **Modified Arcface loss** 限制转化后的值不能大于原值
-    ```py
-    # def arcface_loss(y_true, y_pred, margin1=0.9, margin2=0.4, margin3=0.15, scale=64.0):
-    def arcface_loss(y_true, y_pred, margin1=1.0, margin2=0.5, margin3=0.0, scale=64.0):
-        # norm_logits = y_pred[:, 512:]
-        norm_logits = tf.clip_by_value(y_pred, clip_value_min=-1.0, clip_value_max=1.0)
-        theta = tf.cos(tf.acos(norm_logits) * margin1 + margin2) - margin3
-        cond = tf.logical_and(tf.cast(y_true, dtype=tf.bool), theta < norm_logits)
-        arcface_logits = tf.where(cond, theta, norm_logits) * scale
-        # tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
-        return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
-
-    def arcface_loss(y_true, y_pred, margin1=0.9, margin2=0.4, margin3=0.15, scale=64.0):
-        norm_logits = y_pred[:, 512:]
-        y_pred_vals = norm_logits[tf.cast(y_true, dtype=tf.bool)]
-        theta = tf.cos(tf.acos(y_pred_vals) * margin1 + margin2) - margin3
-        theta_valid = tf.where(theta < y_pred_vals, theta, y_pred_vals)
-        theta_one_hot = tf.expand_dims(theta_valid - y_pred_vals, 1) * tf.cast(y_true, dtype=tf.float32)
-        arcface_logits = theta_one_hot + norm_logits
-        # tf.assert_equal(tf.math.is_nan(tf.reduce_mean(arcface_logits)), False)
-        return tf.keras.losses.categorical_crossentropy(y_true, arcface_logits, from_logits=True)
-
-    with strategy.scope():
-        model.compile(optimizer='nadam', loss=arcface_loss, metrics=["accuracy"])
-
-    with strategy.scope():
-        model.compile(optimizer='adamax', loss=arcface_loss, metrics=[logits_accuracy])
-    ```
-    **Plot**
     ```py
     def plot_arc_trans(margin_list, new_fig=True):
         xx = np.arange(-1, 1, 0.01)
@@ -1033,15 +570,6 @@ class ArcfaceLoss(keras.losses.Loss):
     ![](images/arcface_loss_limit_values.png)
   - **Training result**
     ```py
-    # arcface from scratch
-    45490/45490 [==============================] - 7573s 166ms/step - loss: 17.2420 - logits_accuracy: 0.0033
-    45490/45490 [==============================] - 7558s 166ms/step - loss: 14.9532 - logits_accuracy: 0.0025
-    45490/45490 [==============================] - 7551s 166ms/step - loss: 14.9645 - logits_accuracy: 0.0034
-    45490/45490 [==============================] - 7538s 166ms/step - loss: 14.9531 - logits_accuracy: 0.0042
-    45490/45490 [==============================] - 7536s 166ms/step - loss: 14.9377 - logits_accuracy: 0.0051
-    45490/45490 [==============================] - 7542s 166ms/step - loss: 14.9266 - logits_accuracy: 0.0060
-    ```
-    ```py
     # Fine tune on softmax
     Epoch 00016
     45490/45490 [==============================] - 7650s 168ms/step - loss: 7.4638 - logits_accuracy: 0.9441
@@ -1067,23 +595,6 @@ class ArcfaceLoss(keras.losses.Loss):
     ```
 ## Soft arcface
   - **Soft Arcface loss** 直接调整 softmax 值
-    ```py
-    # def soft_arcface_loss(y_true, y_pred, power=1, scale=0.4):
-    def soft_arcface_loss(y_true, y_pred, power=2, scale=0.4):
-        arcface_soft = tf.where(tf.cast(y_true, dtype=tf.bool), (y_pred ** power + y_pred * scale) / 2, y_pred)
-        return tf.keras.losses.categorical_crossentropy(y_true, arcface_soft, from_logits=False)
-
-    def soft_arcface_loss(y_true, y_pred, power=3, scale=0.8):
-        y_pred_vals = y_pred[tf.cast(y_true, dtype=tf.bool)]
-        shrink_vals = (y_pred_vals ** power + y_pred_vals) / 2 * scale
-        shrink_vals_one_hot = tf.expand_dims(shrink_vals, 1) * tf.cast(y_true, dtype=tf.float32)
-        arcface_soft = tf.where(tf.cast(y_true, dtype=tf.bool), shrink_vals_one_hot, y_pred)
-        return tf.keras.losses.categorical_crossentropy(y_true, arcface_soft, from_logits=False)
-
-    with strategy.scope():
-        model.compile(optimizer='nadam', loss=soft_arcface_loss, metrics=["accuracy"])
-    ```
-  - **Plot**
     ```py
     xx = np.arange(0, 1, 0.01)
     plt.plot(xx, xx, label="xx")
@@ -1192,137 +703,6 @@ class ArcfaceLoss(keras.losses.Loss):
     plt.tight_layout()
     ```
     ![](images/arcface_softarc.png)
-## Center loss
-  ```py
-  class Save_Numpy_Callback(tf.keras.callbacks.Callback):
-      def __init__(self, save_file, save_tensor):
-          super(Save_Numpy_Callback, self).__init__()
-          self.save_file = os.path.splitext(save_file)[0]
-          self.save_tensor = save_tensor
-
-      def on_epoch_end(self, epoch=0, logs=None):
-          np.save(self.save_file, self.save_tensor.numpy())
-
-  class Center_loss(keras.losses.Loss):
-      def __init__(self, num_classes, feature_dim=512, alpha=0.5, factor=1.0, initial_file=None, logits_loss=None):
-          super(Center_loss, self).__init__()
-          self.alpha = alpha
-          self.factor = factor
-          centers = tf.Variable(tf.zeros([num_classes, feature_dim]), trainable=False)
-          if initial_file:
-              if os.path.exists(initial_file):
-                  aa = np.load(initial_file)
-                  centers.assign(aa)
-              self.save_centers_callback = Save_Numpy_Callback(initial_file, centers)
-          self.centers = centers
-          self.logits_loss = logits_loss
-
-      def call(self, y_true, y_pred):
-          embedding = y_pred[:, :512]
-          labels = tf.argmax(y_true, axis=1)
-          centers_batch = tf.gather(self.centers, labels)
-          # loss = tf.reduce_mean(tf.square(embedding - centers_batch))
-          loss = tf.reduce_mean(tf.square(embedding - centers_batch), axis=-1)
-
-          # Update centers
-          # diff = (1 - self.alpha) * (centers_batch - embedding)
-          diff = centers_batch - embedding
-          unique_label, unique_idx, unique_count = tf.unique_with_counts(labels)
-          appear_times = tf.gather(unique_count, unique_idx)
-          appear_times = tf.reshape(appear_times, [-1, 1])
-
-          diff = diff / tf.cast((1 + appear_times), tf.float32)
-          diff = self.alpha * diff
-          # print(centers_batch.shape, self.centers.shape, labels.shape, diff.shape)
-          self.centers.assign(tf.tensor_scatter_nd_sub(self.centers, tf.expand_dims(labels, 1), diff))
-          # centers_batch = tf.gather(self.centers, labels)
-          if self.logits_loss:
-              return self.logits_loss(y_true, y_pred[:, 512:]) + loss * self.factor
-          else:
-              return loss * self.factor
-
-  center_loss = Center_loss(classes, factor=1.0, initial_file='./centers.npy', logits_loss=None)
-  center_loss = Center_loss(classes, factor=1.0, initial_file='./centers.npy', logits_loss=keras.losses.categorical_crossentropy)
-  center_loss = Center_loss(classes, factor=1.0, initial_file='./centers.npy', logits_loss=arcface_loss)
-
-  callbacks.insert(0, center_loss.save_centers_callback)
-
-  ''' Accuracy function '''
-  def logits_accuracy(y_true, y_pred):
-      logits = y_pred[:, 512:]
-      return keras.metrics.categorical_accuracy(y_true, logits)
-
-  cent_model = keras.models.Model(model.inputs[0], layers.concatenate([basic_model.outputs[0], model.outputs[0]]))
-  with strategy.scope():
-      # model.compile(optimizer='adamax', loss=single_center_loss, metrics=[logits_accuracy()])
-      cent_model.compile(optimizer='nadam', loss=center_loss, metrics=[logits_accuracy])
-  ```
-  ```py
-  Epoch 1/200
-  >>>> lfw evaluation max accuracy: 0.956833, thresh: 0.628311, overall max accuracy: 0.956833, improved = True
-  43216/43216 [==============================] - 9838s 228ms/step - loss: 9.3089 - logits_accuracy: 0.0376 - val_loss: 7.7020 - val_logits_accuracy: 0.1513
-  Epoch 2/200
-  >>>> lfw evaluation max accuracy: 0.986000, thresh: 0.321373, overall max accuracy: 0.986000, improved = True
-  43216/43216 [==============================] - 9979s 231ms/step - loss: 6.3202 - logits_accuracy: 0.4252 - val_loss: 5.1966 - val_logits_accuracy: 0.6057
-  Epoch 3/200
-  >>>> lfw evaluation max accuracy: 0.991667, thresh: 0.287180, overall max accuracy: 0.991667, improved = True
-  43216/43216 [==============================] - 9476s 219ms/step - loss: 4.5633 - logits_accuracy: 0.7169 - val_loss: 3.9777 - val_logits_accuracy: 0.7618
-  Epoch 4/200
-  >>>> lfw evaluation max accuracy: 0.992333, thresh: 0.250578, overall max accuracy: 0.992333, improved = True
-  43216/43216 [==============================] - 9422s 218ms/step - loss: 3.6551 - logits_accuracy: 0.8149 - val_loss: 3.2682 - val_logits_accuracy: 0.8270
-  Epoch 5/200
-  >>>> lfw evaluation max accuracy: 0.993500, thresh: 0.232111, overall max accuracy: 0.993500, improved = True
-  43216/43216 [==============================] - 9379s 217ms/step - loss: 3.1123 - logits_accuracy: 0.8596 - val_loss: 2.8836 - val_logits_accuracy: 0.8516
-  Epoch 6/200
-  >>>> lfw evaluation max accuracy: 0.992500, thresh: 0.208816, overall max accuracy: 0.993500, improved = False
-  43216/43216 [==============================] - 9068s 210ms/step - loss: 2.7492 - logits_accuracy: 0.8851 - val_loss: 2.5630 - val_logits_accuracy: 0.8771                                                         
-  Epoch 7/200
-  >>>> lfw evaluation max accuracy: 0.992667, thresh: 0.207485, overall max accuracy: 0.993500, improved = False
-  43216/43216 [==============================] - 9145s 212ms/step - loss: 2.4826 - logits_accuracy: 0.9015 - val_loss: 2.3668 - val_logits_accuracy: 0.8881
-  ```
-  ```py
-  # soft_center_loss Renet50 II from scratch
-  45490/45490 [==============================] - 9407s 207ms/step - loss: 2.1294 - logits_accuracy: 0.7163
-  >>>> lfw evaluation max accuracy: 0.983833, thresh: 0.355683, overall max accuracy: 0.983833
-  >>>> cfp_fp evaluation max accuracy: 0.896714, thresh: 0.223122, overall max accuracy: 0.896714
-  >>>> agedb_30 evaluation max accuracy: 0.884667, thresh: 0.310732, overall max accuracy: 0.884667
-
-  45490/45490 [==============================] - 9352s 206ms/step - loss: 1.3088 - logits_accuracy: 0.8440
-  45490/45490 [==============================] - 9325s 205ms/step - loss: 1.0394 - logits_accuracy: 0.8849
-  45490/45490 [==============================] - 9285s 204ms/step - loss: 0.8652 - logits_accuracy: 0.9085
-  45490/45490 [==============================] - 9259s 204ms/step - loss: 0.7653 - logits_accuracy: 0.9232
-  Epoch 6/200
-  45490/45490 [==============================] - 9251s 203ms/step - loss: 0.7063 - logits_accuracy: 0.9330
-  45490/45490 [==============================] - 9262s 204ms/step - loss: 0.6590 - logits_accuracy: 0.9405
-  45490/45490 [==============================] - 9232s 203ms/step - loss: 0.6210 - logits_accuracy: 0.9463
-  45490/45490 [==============================] - 9260s 204ms/step - loss: 0.5877 - logits_accuracy: 0.9510
-  45490/45490 [==============================] - 9262s 204ms/step - loss: 0.5556 - logits_accuracy: 0.9550
-  Epoch 11/200
-  45490/45490 [==============================] - 9261s 204ms/step - loss: 0.5293 - logits_accuracy: 0.9584
-  45490/45490 [==============================] - 9224s 203ms/step - loss: 0.4924 - logits_accuracy: 0.9646
-  45490/45490 [==============================] - 9209s 202ms/step - loss: 0.4654 - logits_accuracy: 0.9693
-  45490/45490 [==============================] - 9264s 204ms/step - loss: 0.4427 - logits_accuracy: 0.9730
-  45490/45490 [==============================] - 9283s 204ms/step - loss: 0.4229 - logits_accuracy: 0.9762
-  Epoch 16/200
-  45490/45490 [==============================] - 9275s 204ms/step - loss: 0.4058 - logits_accuracy: 0.9789
-  45490/45490 [==============================] - 9280s 204ms/step - loss: 0.3896 - logits_accuracy: 0.9812
-  45490/45490 [==============================] - 9288s 204ms/step - loss: 0.3733 - logits_accuracy: 0.9832
-  45490/45490 [==============================] - 10228s 225ms/step - loss: 0.3562 - logits_accuracy: 0.9849
-  45490/45490 [==============================] - 9454s 208ms/step - loss: 0.3402 - logits_accuracy: 0.9864
-  Epoch 21/200
-  45490/45490 [==============================] - 9306s 205ms/step - loss: 0.3249 - logits_accuracy: 0.9876
-  45490/45490 [==============================] - 9417s 207ms/step - loss: 0.3103 - logits_accuracy: 0.9887
-  45490/45490 [==============================] - 9239s 203ms/step - loss: 0.2961 - logits_accuracy: 0.9897
-  45490/45490 [==============================] - 9227s 203ms/step - loss: 0.2821 - logits_accuracy: 0.9905
-  45490/45490 [==============================] - 9337s 205ms/step - loss: 0.2684 - logits_accuracy: 0.9912
-  Epoch 26/200
-  45490/45490 [==============================] - 9204s 202ms/step - loss: 0.2559 - logits_accuracy: 0.9918
-  45490/45490 [==============================] - 9225s 203ms/step - loss: 0.2442 - logits_accuracy: 0.9924
-  45490/45490 [==============================] - 9346s 205ms/step - loss: 0.2320 - logits_accuracy: 0.9928
-  >>>> lfw evaluation max accuracy: 0.993167, thresh: 0.203878, overall max accuracy: 0.994333
-  >>>> cfp_fp evaluation max accuracy: 0.944000, thresh: 0.105898, overall max accuracy: 0.944857
-  >>>> agedb_30 evaluation max accuracy: 0.942333, thresh: 0.146463, overall max accuracy: 0.943667
-  ```
 ## Offline Triplet loss train SUB
   ```py
   import pickle
@@ -2050,137 +1430,231 @@ for ii in range(20):
 38.7 ms ± 3.53 ms per loop (mean ± std. dev. of 7 runs, 10 loops each)
 ```
 
-# Mobilefacenet Train
 ```py
-import mobile_facenet
-import losses
-import train
-# basic_model = train.buildin_models("MobileNet", dropout=0.4, emb_shape=256)
-basic_model = mobile_facenet.mobile_facenet(256, dropout=0.4)
-data_path = '/datasets/faces_emore_112x112_folders'
-eval_paths = ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin']
-tt = train.Train(data_path, eval_paths, 'keras_mobilefacenet_256.h5', basic_model=basic_model, model=None, compile=False, lr_base=0.001, batch_size=160, random_status=3)
-sch = [
-  {"loss": keras.losses.categorical_crossentropy, "optimizer": "nadam", "epoch": 15},    
-  {"loss": losses.margin_softmax, "optimizer": None, "epoch": 10},
-  {"loss": losses.ArcfaceLoss(), "optimizer": None, "bottleneckOnly": True, "epoch": 4},
-  {"loss": losses.ArcfaceLoss(), "optimizer": None, "epoch": 15},
-  {"loss": losses.ArcfaceLoss(scale=32.0), "optimizer": None, "epoch": 15},
-  {"loss": losses.batch_hard_triplet_loss, "optimizer": None, "epoch": 30},
-]                        
-tt.train(sch, 0)
+physical_devices = tf.config.experimental.list_physical_devices('GPU')
+assert len(physical_devices) > 0, "No GPUs found"
+tf.config.experimental.set_virtual_device_configuration(
+  physical_devices[0],
+  [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=100),
+   tf.config.experimental.VirtualDeviceConfiguration(memory_limit=100)])
+
+try:
+  tf.config.experimental.set_memory_growth(physical_devices[0], True)
+except:
 ```
 ```py
-import losses
-import train
-data_path = '/datasets/faces_emore_112x112_folders'
-eval_paths = ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin']
-tt = train.Train(data_path, eval_paths, 'keras_mobilefacenet_256_II.h5', basic_model=-2, model='./checkpoints/keras_mobilefacenet_256.h5', compile=True, lr_base=0.001, batch_size=160, random_status=3, custom_objects={'soft_arcface_loss': losses.margin_softmax})
-sch = [
-  # {"loss": keras.losses.categorical_crossentropy, "optimizer": "nadam", "type": tt.softmax, "epoch": 15},
-  {"loss": losses.margin_softmax, "optimizer": None, "epoch": 10},
-  {"loss": losses.ArcfaceLoss(), "optimizer": None, "bottleneckOnly": True, "epoch": 4},
-  {"loss": losses.ArcfaceLoss(), "optimizer": None, "epoch": 15},
-  {"loss": losses.ArcfaceLoss(scale=32.0), "optimizer": None, "epoch": 15},
-  {"loss": losses.batch_hard_triplet_loss, "optimizer": None, "epoch": 30},
-]
-tt.train(sch, 15)
+!pip install nmslib
+import nmslib
+data = np.random.randn(1000, 512).astype(np.float32)
+index = nmslib.init(method='hnsw', space='cosinesimil')
+index.addDataPointBatch(data)
+%time index.createIndex({'post': 2}, print_progress=True)
+# CPU times: user 520 ms, sys: 27.8 ms, total: 548 ms
+# Wall time: 70.3 ms
+
+neighbours = index.knnQueryBatch(data[:10], k=1, num_threads=4)
+
+from sklearn import metrics
+from sklearn.svm import SVC
+model = SVC()
+%time model.fit(data, np.arange(data.shape[0]))
+# CPU times: user 2.44 s, sys: 15.1 ms, total: 2.46 s
+# Wall time: 2.46 s
+
+''' nmslib '''
+%timeit index.knnQueryBatch(data[:10], k=1, num_threads=4)
+# 306 µs ± 2.71 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
+
+''' dot '''
+%timeit np.argmax(np.dot(data, data[:10].T), 0)
+# 46.5 µs ± 179 ns per loop (mean ± std. dev. of 7 runs, 10000 loops each)
+
+''' svm '''
+%timeit model.predict(data[:10])
+# 36.1 ms ± 422 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
 ```
 ```py
-emb_shape: 256
-dropout: 0.4
-batch_size: 160
+import nmslib
+data = np.random.randn(100000, 512).astype(np.float32)
+index = nmslib.init(method='hnsw', space='cosinesimil')
+index.addDataPointBatch(data)
 
-'''
->>>> Softmax 15
-Epoch 1/15
-36392/36392 [==============================] - 12820s 352ms/step - loss: 5.0583 - accuracy: 0.2964
-'''
-lfw = [0.971500,0.980000,0.986000,0.988000,0.988333,0.989667,0.989000,0.989833,0.988833,0.988500,0.987667,0.988667,0.988833,0.988167,0.989000,]
-cfp_fp = [0.865714,0.893000,0.898857,0.910000,0.908571,0.913857,0.912143,0.913000,0.913143,0.916143,0.920143,0.920857,0.924429,0.921571,0.927429,]
-agedb_30 = [0.829167,0.877500,0.892667,0.903167,0.903500,0.915167,0.910000,0.917167,0.917833,0.919833,0.919833,0.929167,0.920333,0.933333,0.928000,]
-loss = [5.0583, 1.6944, 1.2544, 1.0762, 0.9791, 0.9118, 0.8605, 0.8217, 0.7900, 0.7641, 0.7432, 0.6879, 0.6580, 0.6354, 0.6199,]
-accuracy = [0.2964, 0.6755, 0.7532, 0.7862, 0.8047, 0.8174, 0.8273, 0.8348, 0.8410, 0.8460, 0.8501, 0.8611, 0.8671, 0.8714, 0.8746,]
+%time index.createIndex({'post': 2}, print_progress=True)
+# CPU times: user 20min 7s, sys: 667 ms, total: 20min 7s
+# Wall time: 1min 42s
 
-'''
->>>> margin_softmax 10
-Epoch 16/25
-36392/36392 [==============================] - 12623s 347ms/step - loss: 0.7236 - accuracy: 0.8861
-'''
-lfw_2 = [0.989000,0.989500,0.989167,0.990333,0.989500,0.991000,0.989667,]
-cfp_fp_2 = [0.925857,0.919571,0.926286,0.929286,0.927000,0.926714,0.926857,]
-agedb_30_2 = [0.932000,0.931333,0.932333,0.933500,0.933333,0.934667,0.933667,]
-loss_2 = [0.7236,0.6785, 0.6545, 0.6401, 0.6290, 0.6199, 0.6115, ]
-accuracy_2 = [0.8861,0.8934, 0.8973, 0.8995, 0.9015, 0.9030, 0.9043, ]
+neighbours = index.knnQueryBatch(data[:10], k=1, num_threads=4)
 
-Epoch 21/25
+''' nmslib '''
+%timeit index.knnQueryBatch(data[:10], k=1, num_threads=4)
+# 1.17 ms ± 2.06 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
 
-def peak_scatter(ax, array, splits, peak_method, color):
-  for nn, ss in splits.items():
-    if ss[1] == -1:
-      pp = peak_method(array[ss[0]:])
-    else:
-      pp = peak_method(array[ss[0]:ss[1]])
-    ax.scatter(pp + ss[0], array[pp + ss[0]], color=color)
-    ax.text(pp + ss[0], array[pp + ss[0]], str(array[pp + ss[0]]))
-
-def add_plot(lfw, cfp_fp, agedb_30, loss, accuracy, splits, fig=None, axes=None):
-  if fig == None:
-    fig, axes = plt.subplots(1, 3, sharex=True, figsize=(15, 5))
-
-  xx = np.arange(len(loss))
-  for ss, aa, cc in zip(['lfw', 'cfp_fp', 'agedb_30'], [lfw, cfp_fp, agedb_30], ["b", "g", "r"]):
-    axes[0].plot(xx, aa, label=ss, color=cc)
-    peak_scatter(axes[0], aa, splits, np.argmax, cc)
-  axes[0].set_title('eval accuracy')
-  axes[0].legend()
-
-  axes[1].plot(xx, loss, color="b")
-  peak_scatter(axes[1], loss, splits, np.argmin, "b")
-  axes[1].set_title('loss')
-
-  axes[2].plot(xx, accuracy, color="b")
-  peak_scatter(axes[2], accuracy, splits, np.argmax, "b")
-  axes[2].set_title('accuracy')
-
-  for ax in axes:
-    ymin, ymax = ax.get_ylim()
-    mm = (ymax - ymin) * 0.05
-    for nn, ss in splits.items():
-      ax.plot([xx[ss[0]], xx[ss[0]]], [ymin + mm, ymax - mm], color='k', linestyle='--')
-      # ax.text(xx[ss[0]], np.mean(ax.get_ylim()), nn)
-      ax.text(ss[0] + len(xx[ss[0]:ss[1]]) * 0.4, ymin + mm * 4, nn)
-
-  fig.tight_layout()
-
-add_plot(lfw + lfw_2, cfp_fp + cfp_fp_2, agedb_30 + agedb_30_2, loss + loss_2, accuracy + accuracy_2, {"Softmax": [0, 15], "margin_softmax": [15, -1]})
+''' dot '''
+%timeit np.argmax(np.dot(data, data[:10].T), 0)
+# 10.9 ms ± 14.1 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
 ```
-## Mobilenet Train
+
 ```py
-import losses
-import train
-data_path = '/datasets/faces_emore_112x112_folders'
-eval_paths = ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin']
-tt = train.Train(data_path, eval_paths, 'keras_mobilenet_256_V.h5', basic_model="./checkpoints/keras_mobilenet_256_II_basic_agedb_30_epoch_6_0.900333.h5", model=None, compile=False, lr_base=0.001, batch_size=128, random_status=3)
+import cv2
+import scipy.io as sio
+import os
+from centerface import CenterFace
+centerface = CenterFace(landmarks=True)
+imm = cv2.imread('../../test_img/Anthony_Hopkins_0002.jpg')
+h, w, _ = imm.shape
+centerface(imm, h, w, threshold=0.9)
 
-sch = [{"loss": keras.losses.categorical_crossentropy, "optimizer": "adam", "epoch": 1}]
-sch = [{"loss": losses.margin_softmax, "optimizer": "adam", "epoch": 1}]
-sch = [{"loss": losses.scale_softmax, "optimizer": "adam", "epoch": 1}]
-sch = [{"loss": losses.arcface_loss, "optimizer": "adam", "epoch": 1}]
-sch = [{"loss": losses.arcface_loss, "optimizer": "adam", "centerloss": True, "epoch": 1}]
-sch = [{"loss": losses.batch_hard_triplet_loss, "optimizer": "adam", "epoch": 1}]
-sch = [{"loss": losses.batch_all_triplet_loss, "optimizer": "adam", "epoch": 1}]
-sch = [{"loss": losses.batch_hard_triplet_loss, "optimizer": "adam", "centerloss": True, "epoch": 1}]
+!cd ../../../samba/tdFace-flask/mtcnn_tf/
+import mtcnn
+mtcnn_det = mtcnn.MTCNN('./mtcnn.pb')
+mtcnn_det.detect_faces(imm)
+
+import insightface
+retina = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+retina.prepare(-1)
+retina.detect(imm)
+
+''' Single face '''
+%timeit centerface(imm, h, w, threshold=0.9)
+# 13.3 ms ± 795 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+%timeit mtcnn_det.detect_faces(imm)
+# 4.25 ms ± 103 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+%timeit retina.detect(imm)
+# 16.3 ms ± 256 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+
+iaa = cv2.imread('../test_images/1.jpg')
+h, w, _ = iaa.shape
+ibb = imread('../test_images/1.jpg')
+centerface(iaa, h, w, threshold=0.9)
+mtcnn_det.detect_faces(ibb)
+retina.detect(iaa)
+
+''' Multi face '''
+%timeit -n 100 centerface(iaa, h, w, threshold=0.9)
+# 315 ms ± 35.1 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
+%timeit -n 100 mtcnn_det.detect_faces(ibb)
+# 63 ms ± 2.65 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
+%timeit -n 100 retina.detect(iaa)
+# 456 ms ± 12.5 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
 ```
-| Loss type                      | loss    | accuracy | lfw      | lfw thresh | cfp_fp   | cfp_fp thresh | agedb_30 | agedb_30 thresh | total time | per step |
-| ------------------------------ | ------- | -------- | -------- | ---------- | -------- | ------------- | -------- | --------------- | ---------- | -------- |
-| **Original Epoch 6**           | 22.6342 | 0.7855   | 0.987833 | 0.307455   | 0.891714 | 0.201755      | 0.900333 | 0.229057        | 5653s      | 124ms    |
-| **Train Epoch 7**              | adam    | lr 0.001 | bs 128   | random 3   |          |               |          |                 |            |          |
-| softmax                        | 1.8196  | 0.6941   | 0.987333 | 0.345970   | 0.895286 | 0.204387      | 0.901667 | 0.265905        | 5677s      | 125ms    |
-| margin_softmax                 | 3.8359  | 0.6294   | 0.989000 | 0.317540   | 0.889000 | 0.210142      | 0.897833 | 0.246658        | 5716s      | 126ms    |
-| scale_softmax                  | 2.2430  | 0.6779   | 0.987333 | 0.340417   | 0.887857 | 0.204122      | 0.900333 | 0.273266        | 5702s      | 125ms    |
-| arcface_loss                   | 22.3337 | 0.7928   | 0.987500 | 0.293580   | 0.886857 | 0.199602      | 0.904833 | 0.247436        | 6133s      | 135ms    |
-| center arcface_loss            | 22.5102 | 0.7924   | 0.987833 | 0.321488   | 0.884000 | 0.200262      | 0.894833 | 0.263254        | 5861s      | 129ms    |
-| batch_hard_triplet_loss        | 0.2276  |          | 0.986333 | 0.386425   | 0.910571 | 0.245836      | 0.891333 | 0.354833        | 4622s      | 156ms    |
-| batch_all_triplet_loss         |         |          |          |            |          |               |          |                 |            |          |
-| center batch_hard_triplet_loss |         |          |          |            |          |               |          |                 |            |          |
+```py
+In [37]: centerface(iaa, h, w, threshold=0.9)                                                                                                                                                                      
+Out[37]:
+(array([[1.2027432e+03, 6.3846680e+02, 1.2974719e+03, 7.1919543e+02,
+         9.6600962e-01],
+        [3.6708798e+02, 3.1482706e+02, 5.2461823e+02, 4.4480045e+02,
+         9.5752537e-01],
+        [8.0555890e+02, 3.6767062e+02, 8.7024487e+02, 4.1478021e+02,
+         9.3526572e-01],
+        [9.1664618e+02, 3.9390857e+02, 9.4433923e+02, 4.2681378e+02,
+         9.1680831e-01]], dtype=float32),
+ array([[1219.671  ,  688.14215, 1210.0287 ,  677.7351 , 1203.3889 ,
+          696.7554 , 1239.1373 ,  704.9357 , 1229.6863 ,  695.70685],
+        [ 474.19067,  401.61896,  507.10788,  376.0719 ,  552.7421 ,
+          422.85565,  518.40485,  437.2738 ,  542.47516,  417.5965 ],
+        [ 840.6775 ,  403.3571 ,  848.16486,  395.8568 ,  855.9793 ,
+          407.278  ,  841.77545,  408.02695,  848.8935 ,  401.77716],
+        [ 942.64685,  415.50668,  937.8298 ,  410.7285 ,  949.89575,
+          416.11053,  943.01404,  418.20386,  940.0262 ,  414.42154]],
+       dtype=float32))
+
+In [38]: mtcnn_det.detect_faces(ibb)                                                                                                                                                                               
+Out[38]:
+(array([[ 305.56012,  383.83823,  460.1761 ,  514.2741 ],
+       [ 357.47598,  813.1547 ,  419.11575,  870.75256],
+       [ 628.12366, 1228.7682 ,  728.3427 , 1316.0033 ]], dtype=float32),
+array([0.9999721 , 0.99896455, 0.94571006], dtype=float32),
+array([[ 370.8418 ,  379.21454,  408.57153,  423.7774 ,  430.34595,
+         440.22064,  495.93152,  468.10645,  428.8279 ,  476.17242],
+       [ 386.78534,  388.89816,  400.56534,  406.9472 ,  409.095  ,
+         833.8898 ,  853.8183 ,  843.5045 ,  831.1647 ,  850.6185 ],
+       [ 661.7363 ,  661.23285,  678.1033 ,  705.1453 ,  705.9677 ,
+        1266.657  , 1293.0474 , 1281.595  , 1267.5706 , 1284.7332 ]],
+      dtype=float32))
+```
+```sh
+ls -1 /datasets/faces_emore_112x112_folders | head -n 20 | xargs -I {} sh -c "find /datasets/faces_emore_112x112_folders/{} -name *.jpg | head" > foo
+```
+```py
+import os
+import json
+import numpy as np
+import tensorflow as tf
+
+def tf_imread(file_paths):
+    img = tf.io.read_file(file_paths)
+    img = tf.image.decode_jpeg(img, channels=3)
+    img = tf.image.convert_image_dtype(img, tf.float32)
+    img = (img - 0.5) * 2
+    return tf.expand_dims(img, 0)
+
+def random_pick_files(data_path, folder=10, images=10):
+    aa = os.listdir(data_path)
+    bb = np.random.permutation(aa)[:10]
+    files = []
+    for ii in bb:
+        cc = os.listdir(os.path.join(data_path, ii))
+        dd = np.random.permutation(cc)[:10]
+        for jj in dd:
+            files.append(os.path.join(data_path, ii, jj))
+    return files
+
+def images_2_emb(files, model_path):
+    interpreter = tf.lite.Interpreter(model_path)
+    interpreter.allocate_tensors()
+    input_index = interpreter.get_input_details()[0]["index"]
+    output_index = interpreter.get_output_details()[0]["index"]
+
+    dd = []
+    for ii in files:
+        imm = tf_imread(ii.strip())
+        interpreter.set_tensor(input_index, imm)
+        interpreter.invoke()
+        dd.append(interpreter.get_tensor(output_index)[0])
+    embs = np.array(dd)
+    return embs
+
+def save_uint_emb_to_file(embs, files, dest_path):
+    print("Orign embeddings range:", embs.min(), embs.max())
+    gg = (embs + 64).astype(np.uint)
+    print("Uint embeddings range:", gg.min(), gg.max())
+
+    tt = []
+    for id, ii in enumerate(files):
+        ss = json.dumps(gg[id].tolist())
+        ss = ss.replace(' ', '')[1:-1]
+        tt.append(ii.strip() + ',' + ss)
+
+    with open(dest_path, 'w') as ff:
+        for ii in tt:
+            ff.write(ii + "\n")
+
+if __name__ == "__main__":
+    data_path = '/datasets/faces_emore_112x112_folders/'
+    model_path = 'mobilefacenet_tf2.tflite'
+    dest_path = "goo"
+    files = random_pick_files(data_path, folder=10, images=10)
+    embs = images_2_emb(files, model_path)
+    save_uint_emb_to_file(embs, files, dest_path)
+
+imm = tf_imread('/datasets/faces_emore_112x112_folders/0/1.jpg')
+interpreter.set_tensor(input_index, imm)
+interpreter.invoke()
+aa = interpreter.get_tensor(output_index)[0]
+
+mm = tf.keras.models.load_model(glob2.glob('./keras_mobilefacenet_256_basic_*.h5')[0], compile=False)
+bb = mm(imm).numpy()
+assert np.allclose(aa, bb, rtol=1e-3)
+```
+
+When you use the conversion script , you tensorflow version must be tf1.10 . The conversion script can’t work in newer version . I use tf1.14 to train ,but I must use tf1.10 to convert . But I am not sure about TF2.0 model
+```py
+from onnx import checker
+import onnx
+
+# Load onnx model
+model_proto = onnx.load_model(converted_model_path)
+
+# Check if converted ONNX protobuf is valid
+checker.check_graph(model_proto.graph)
+```

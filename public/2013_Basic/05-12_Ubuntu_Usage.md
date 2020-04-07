@@ -107,6 +107,11 @@
     Q: Unable to lock directory /var/lib/apt/lists/
     A: sudo rm /var/lib/apt/lists/lock
     ```
+  - 清理已卸载包配置文件
+    ```sh
+    apt list | grep -i residual-config
+    aptitude -F %p search '~c' | sudo xargs dpkg -P
+    ```
   - 404 error while apt-get install libssl-dev
     ```c
     check if
@@ -1741,6 +1746,19 @@
     | 手机复制到电脑 | `Ctrl`+`c`           |
     | 电脑粘贴到手机 | `Ctrl`+`v`           |
     | 电脑复制到手机 | `Ctrl`+`Shift`+`v`   |
+## md5sum sha256sum
+  - 查看文件 MD5 / SHA256 值
+    ```sh
+    md5sum foo
+    ls -1 ./* | xargs -I {} md5sum {} >> goo
+
+    sha256sum foo
+    ```
+  - `-c` 从文件中读取 MD5 / SHA256 值并校验
+    ```sh
+    md5sum -c goo
+    sha256sum -c goo
+    ```
 ***
 
 # 系统备份恢复

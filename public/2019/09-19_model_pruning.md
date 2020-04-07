@@ -603,6 +603,7 @@
   - **模型转化**
     ```py
     converter = tf.lite.TFLiteConverter.from_keras_model(final_model)
+    # converter = tf.lite.TFLiteConverter.from_keras_model_file('./mm.h5')
     tflite_model = converter.convert()
     tflite_model_file = '/tmp/sparse_mnist.tflite'
     open(tflite_model_file, 'wb').write(tflite_model)

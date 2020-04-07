@@ -22,7 +22,7 @@
   	- [指定 Signature 保存模型](#指定-signature-保存模型)
   	- [SavedModel 中的 SignatureDefs 定义类型](#savedmodel-中的-signaturedefs-定义类型)
   	- [C++ 加载 SavedModel 模型](#c-加载-savedmodel-模型)
-  	- [使用 keras 训练与保存模型 pb 文件](#使用-keras-训练与保存模型-pb-文件)
+  	- [使用 keras 训练与保存模型 SavedModel](#使用-keras-训练与保存模型-savedmodel)
   - [TF 2.0 Beta 使用 SavedModel 格式](#tf-20-beta-使用-savedmodel-格式)
   	- [TensorFlow 2.0 安装](#tensorflow-20-安装)
   	- [保存与加载 keras 模型](#保存与加载-keras-模型)
@@ -47,6 +47,7 @@
   - [TF_1 checkpoints](#tf1-checkpoints)
   	- [save and restore checkpoints models](#save-and-restore-checkpoints-models)
   	- [inspect_checkpoint](#inspectcheckpoint)
+  - [Keras h5 to pb](#keras-h5-to-pb)
 
   <!-- /TOC -->
 ***
@@ -585,7 +586,7 @@
     ...
     LoadSavedModel(session_options, run_options, export_dir, {kSavedModelTagTrain}, &bundle);
     ```
-## 使用 keras 训练与保存模型 pb 文件
+## 使用 keras 训练与保存模型 SavedModel
   - **在 Fashion MNIST 上训练 keras 分类器**
     ```py
     from tensorflow import keras
@@ -1407,5 +1408,30 @@
   # tensor_name:  bias
   # 2.0
   # Total number of params: 1
+  ```
+***
+
+# Keras h5 to pb
+  ```py
+  # tf.__version__
+  # '1.15.0'
+  from tensorflow.python.framework import graph_util, graph_io
+  def h5_to_pb(h5_model, output_dir, output_model_name, out_prefix="output_", log_tensorboard=True):
+      if os.path.exists(output_dir) == False:
+          os.mkdir(output_dir)
+      out_nodes = []
+      for i in range(len(h5_model.outputs)):
+          out_nodes.append(out_prefix + str(i + 1))
+          tf.identity(h5_model.output[i], out_prefix + str(i + 1))
+      sess = tf.keras.backend.get_session()
+
+      # 写入pb模型文件
+      init_graph = sess.graph.as_graph_def()
+      main_graph = graph_util.convert_variables_to_constants(sess, init_graph, out_nodes)
+      graph_io.write_graph(main_graph, output_dir, name=output_model_name, as_text=False)
+      # 输出日志文件
+      if log_tensorboard:
+          from tensorflow.python.tools import import_pb_to_tensorboard
+          import_pb_to_tensorboard.import_to_tensorboard(os.path.join(output_dir, output_model_name), output_dir)
   ```
 ***

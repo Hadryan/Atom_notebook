@@ -20,19 +20,89 @@
 # 链接
   - [JerryJiaGit/facenet_trt](https://github.com/JerryJiaGit/facenet_trt)
   - [tensorrt-developer-guide](https://docs.nvidia.com/deeplearning/sdk/tensorrt-developer-guide/index.html#python_topics)
-  - [onnx/onnx-tensorrt](https://github.com/onnx/onnx-tensorrt/)
 ***
 
 # TensorRT
-  - nvcc -V 查看 CUDA 版本
+## Install
+  - `nvcc -V` 查看 CUDA 版本
   - **TensorRT** 只是 **推理优化器**，是对训练好的模型进行优化，当网络训练完之后，可以将训练模型文件直接丢进 tensorRT 中，而不再需要依赖深度学习框架 Caffe / TensorFlow
     - 可以认为 **tensorRT** 是一个 **只有前向传播的深度学习框架**
     - 可以将 Caffe / TensorFlow 的网络模型 **解析**，然后与 tensorRT 中对应的层进行一一 **映射**，把其他框架的模型统一转换到 tensorRT 中
     - 然后在 tensorRT 中可以针对 NVIDIA 自家 GPU 实施优化策略，并进行 **部署加速**
+  - [Install](https://docs.nvidia.com/deeplearning/sdk/tensorrt-install-guide/index.html)
+    - Download and install `TensorRT deb` file, for `cuda==10.1 --> TensorRT==6.xxx`, for `cuda==10.2 --> TensorRT==7.xxx`
+    - Download and extract `tar` file for python installation
+    ```sh
+    export TRT_RELEASE=$HOME/local_bin/TensorRT-7.0.0.11
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/local_bin/TensorRT-7.0.0.11/lib
+
+    sudo apt install python3-libnvinfer-dev uff-converter-tf
+
+    # Extract tar file
+    cd TensorRT-7.0.0.11/python
+    pip install tensorrt-7.0.0.11-cp37-none-linux_x86_64.whl
+    cd ../uff/
+    pip install uff-0.6.5-py2.py3-none-any.whl
+    cd ../graphsurgeon/
+    pip install graphsurgeon-0.4.1-py2.py3-none-any.whl
+    ```
+## ONNX tensorrt
+  - [Github onnx-tensorrt](https://github.com/onnx/onnx-tensorrt.git)
+  - **pybind11**
+    ```sh
+    # Needs pybind11 >= 2.2
+    sudo apt install pybind11-dev # For 18.04, install version is 2.0.1
+    git clone https://github.com/pybind/pybind11.git  # Install newest version pybind11 from git
+    cd pybind11 && mkdir build && cd build && cmake .. && make && sudo make install
+    ```
+  - **cmake** [Download | CMake](https://cmake.org/download/) and extract tar file
+    ```sh
+    # Needs cmake >= 3.3.2
+    sudo cp cmake-*-Linux-x86_64//* /usr/ -r
+    cmake --version
+    # cmake version 3.17.0
+    ```
+  - **Build**
+    ```sh
+    locate libnvonnxparser.so
+    # /usr/lib/x86_64-linux-gnu/libnvonnxparser.so
+    # /usr/lib/x86_64-linux-gnu/libnvonnxparser.so.7
+    # /usr/lib/x86_64-linux-gnu/libnvonnxparser.so.7.0.0
+
+    git clone https://github.com/onnx/onnx-tensorrt.git
+    cd onnx-tensorrt
+    git submodule update --init --recursive
+    mkdir build
+    cd build
+
+    # cmake .. -DCUDA_INCLUDE_DIRS=/usr/local/cuda/include -DTENSORRT_ROOT=/usr/src/tensorrt -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc
+    cmake .. -DBUILD_ONNX_PYTHON=ON
+    # --   BUILD_ONNX_PYTHON     : ON
+    # --     Python version      :
+    # --     Python executable   : /opt/anaconda3/bin/python3.7
+    # --     Python includes     : /opt/anaconda3/include/python3.7m
+
+    make && sudo make install
+    ```
+  - **Setup python library**
+    ```sh
+    # Run setup.py
+    python setup.py install
+
+    ''' Q:
+    NvOnnxParser.h:213: Error: Syntax error in input(1).
+    error: command 'swig' failed with exit status 1
+    '''
+    ''' A:
+    $ vi NvOnnxParser.h
+    33 + #define TENSORRTAPI
+    '''
+    ```
+***
   - **Demo test**
     ```py
     from tensorflow.python.platform import gfile
-    import tensorflow.contrib.tensorrt as trt
+    import tensorrt as trt
 
     def load_model(mode_file):
         with gfile.FastGFile(mode_file,'rb') as f:
@@ -189,14 +259,27 @@
 
   convert-to-uff test.pb
   ```
+- [Keras h5 to pb](07-26_model_conversion.md#keras-h5-to-pb)
   ```py
   import tensorrt as trt
   TRT_LOGGER = trt.Logger(trt.Logger.INFO)
-  model_file = './test.uff'
+  model_file = './aaa.uff'
 
   with trt.Builder(TRT_LOGGER) as builder, builder.create_network() as network, trt.UffParser() as parser:
-      parser.register_input("data", (112, 112, 3), trt.UffInputOrder.NHWC)
-      parser.register_output("fc1/add_1")
+      parser.register_input("input_1_1", (112, 112, 3), trt.UffInputOrder.NHWC)
+      parser.register_output("dense_1/Identity")
       parser.parse(model_file, network)
   ```
+  ```py
+  model_file = "./model.onnx"
+  EXPLICIT_BATCH = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+  with trt.Builder(TRT_LOGGER) as builder, builder.create_network(EXPLICIT_BATCH) as network, trt.OnnxParser(network, TRT_LOGGER) as parser:
+    parser.register_input("input_1_1", (112, 112, 3), trt.UffInputOrder.NHWC)
+    parser.register_output("dense_1/Identity")
+    with open(model_file, 'rb') as model:
+      parser.parse(model.read())
+  ```
+***
+
+
 ***
