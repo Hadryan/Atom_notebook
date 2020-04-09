@@ -1,10 +1,10 @@
-# ___2019 - 07 - 26 Model Convertion___
+# ___2019 - 07 - 26 Model Conversion___
 ***
 
 # 目录
   <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
 
-  - [___2019 - 07 - 26 Model Convertion___](#2019-07-26-model-convertion)
+  - [___2019 - 07 - 26 Model Conversion___](#2019-07-26-model-conversion)
   - [目录](#目录)
   - [MMDNN](#mmdnn)
   	- [安装](#安装)
@@ -1433,5 +1433,18 @@
       if log_tensorboard:
           from tensorflow.python.tools import import_pb_to_tensorboard
           import_pb_to_tensorboard.import_to_tensorboard(os.path.join(output_dir, output_model_name), output_dir)
+  ```
+  **Save frozen pb**
+  ```py
+  # tf.__version__
+  # '1.15.0'
+  def save_frozen(model, filename):
+      # First freeze the graph and remove training nodes.
+      sess = tf.keras.backend.get_session()
+      frozen_graph = tf.graph_util.convert_variables_to_constants(sess, sess.graph.as_graph_def(), [model.output.op.name])
+      frozen_graph = tf.graph_util.remove_training_nodes(frozen_graph)
+      # Save the model
+      with open(filename, "wb") as ofile:
+          ofile.write(frozen_graph.SerializeToString())
   ```
 ***

@@ -1320,6 +1320,25 @@
     sudo rm /var/crash/*
     ```
   - **Approt 配置文件** `/etc/default/apport`，将 `enabled=1` 修改为 `0` 可以禁止 `approt` 服务
+## Nvidia
+  - Fan speed
+    ```sh
+    sudo nvidia-xconfig --enable-all-gpus
+    sudo nvidia-xconfig --cool-bits=4
+    sudo nvidia-xconfig -a --cool-bits=28
+    sudo reboot
+
+    #
+    sudo nvidia-settings -a '[gpu:0]/GPUFanControlState=1' -a '[fan:0]/GPUTargetFanSpeed=99'
+    sudo nvidia-settings -a '[gpu:0]/GPUFanControlState=0'
+    ```
+    ```sh
+    racadm get System.ThermalSettings
+
+    racadm get System.PCIESlotLFM.2
+
+    racadm set System.PCIESlotLFM.<x>.LFMMode 2
+    ```
 ***
 
 # 软件

@@ -6,24 +6,24 @@
 
   - [___2019 - 08 - 19 TensorRT___](#2019-08-19-tensorrt)
   - [目录](#目录)
-  - [链接](#链接)
-  - [TensorRT](#tensorrt)
-  - [trt 加载 insightface 模型对比](#trt-加载-insightface-模型对比)
-  	- [Tensorflow test](#tensorflow-test)
-  	- [TensorRT test](#tensorrt-test)
-  	- [TensorRT MTCNN test](#tensorrt-mtcnn-test)
-  - [Uff](#uff)
+  - [Install](#install)
+    - [链接](#链接)
+  	- [TensorRT](#tensorrt)
+  	- [ONNX tensorrt](#onnx-tensorrt)
+  - [Inference](#inference)
+  	- [UFF MNIST](#uff-mnist)
+  	- [UFF MNIST Official Sample Definition](#uff-mnist-official-sample-definition)
+  	- [ONNX Engine](#onnx-engine)
+  	- [ONNX Engine With Optimization Profile](#onnx-engine-with-optimization-profile)
+  	- [ONNX Engine with INT8 Calibrator](#onnx-engine-with-int8-calibrator)
 
   <!-- /TOC -->
 ***
 
-# 链接
-  - [JerryJiaGit/facenet_trt](https://github.com/JerryJiaGit/facenet_trt)
+# Install
+## 链接
   - [tensorrt-developer-guide](https://docs.nvidia.com/deeplearning/sdk/tensorrt-developer-guide/index.html#python_topics)
-***
-
-# TensorRT
-## Install
+## TensorRT
   - `nvcc -V` 查看 CUDA 版本
   - **TensorRT** 只是 **推理优化器**，是对训练好的模型进行优化，当网络训练完之后，可以将训练模型文件直接丢进 tensorRT 中，而不再需要依赖深度学习框架 Caffe / TensorFlow
     - 可以认为 **tensorRT** 是一个 **只有前向传播的深度学习框架**
@@ -45,6 +45,15 @@
     pip install uff-0.6.5-py2.py3-none-any.whl
     cd ../graphsurgeon/
     pip install graphsurgeon-0.4.1-py2.py3-none-any.whl
+    ```
+  - Compile `trtexec`
+    ```sh
+    cd $TRT_RELEASE/samples/trtexec/
+    make
+    ```
+    编译完的文件位于 `$TRT_RELEASE/targets/x86_64-linux-gnu/bin/trtexec`
+    ```sh
+    export PATH=$PATH:$TRT_RELEASE/targets/x86_64-linux-gnu/bin
     ```
 ## ONNX tensorrt
   - [Github onnx-tensorrt](https://github.com/onnx/onnx-tensorrt.git)
@@ -99,187 +108,600 @@
     '''
     ```
 ***
-  - **Demo test**
+
+# Inference
+## UFF MNIST
+  - [Keras MNIST](09-06_tensorflow_tutotials.md#keras-mnist) Train a basic MNIST model
     ```py
-    from tensorflow.python.platform import gfile
-    import tensorrt as trt
-
-    def load_model(mode_file):
-        with gfile.FastGFile(mode_file,'rb') as f:
-            graph_def = tf.GraphDef()
-            graph_def.ParseFromString(f.read())
-            trt_graph = trt.create_inference_graph(input_graph_def=graph_def,
-                outputs=['embeddings:0'],
-                max_batch_size = 1,
-                max_workspace_size_bytes= 500000000, # 500MB mem assgined to TRT
-                precision_mode="FP16",  # Precision "FP32","FP16" or "INT8"                                        
-                minimum_segment_size=1
-                )
-            return trt_graph
-
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
-    sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False))
-    with sess.as_default():
-        graph_load = load_model('./test.pb')
-
-    sess.close()
-    tf.reset_default_graph()
-    sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False))
-    tf.import_graph_def(graph_load, input_map=None, name='')
-
-    images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
-    embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
-    phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
-
-    feed_dict = {images_placeholder: np.ones([1, 160, 160, 3]), phase_train_placeholder: False}
-    sess.run(embeddings, feed_dict=feed_dict)
-
-    with sess.as_default():
-        sess.run(embeddings, feed_dict=feed_dict)
+    # Save trained model to h5
+    model.save('aaa.h5')
     ```
-***
+  - [Keras h5 to pb](07-26_model_conversion.md#keras-h5-to-pb) save a frozen PB file
+    ```py
+    # Reload in tf 1.15.0
+    model = keras.models.load_model('aaa.h5')
+    save_frozen(model, 'aaa.pb')
+    ```
+  - Convert to `uff`
+    ```sh
+    convert-to-uff aaa.pb
+    # UFF Output written to aaa.uff
+    ```
+  - **Build engine**
+    ```py
+    import tensorrt as trt
+    import pycuda.driver as cuda
+    # Or will throw LogicError: explicit_context_dependent failed: invalid device context - no currently active context?
+    import pycuda.autoinit
 
-# trt 加载 insightface 模型对比
-## Tensorflow test
-  ```py
-  import numpy as np
-  import tensorflow as tf
+    model_file = './aaa.uff'
+    TRT_LOGGER = trt.Logger(trt.Logger.INFO)
 
-  model_path = 'models/'
-  graph = tf.Graph()
-  with graph.as_default():
-      gpu_options = tf.GPUOptions(allow_growth=True)
-      config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True, log_device_placement=False)
-      sess = tf.Session(config=config)
-      with sess.as_default():
-          meta_graph_def = tf.saved_model.loader.load(sess, ["serve"], model_path)
+    with trt.Builder(TRT_LOGGER) as builder, builder.create_network() as network, trt.UffParser() as parser:
+        parser.register_input("flatten_input", (28, 28, 1), trt.UffInputOrder.NHWC)
+        parser.register_output("dense_1/Softmax")
+        parser.parse(model_file, network)
+        # builder.int8_mode = True
+        engine = builder.build_cuda_engine(network)
+    ```
+  - **Serialize**
+    ```py
+    # Serialize the model to a modelstream
+    serialized_engine = engine.serialize()
 
-          input_x = sess.graph.get_tensor_by_name("data:0")
-          embedding = sess.graph.get_tensor_by_name("fc1/add_1:0")
+    # Deserialize modelstream to perform inference. Deserializing requires creation of a runtime object
+    with trt.Runtime(TRT_LOGGER) as runtime:
+        engine = runtime.deserialize_cuda_engine(serialized_engine)
 
-  sess.run(embedding, feed_dict={input_x: np.ones([100, 112, 112, 3])})
-  ```
-  ```py
-  %timeit sess.run(embedding, feed_dict={input_x: np.ones([1, 112, 112, 3])})
-  # 39.1 ms ± 268 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
+    # Serialize the engine and write to a file
+    with open("sample.engine", "wb") as f:
+        f.write(engine.serialize())
 
-  In [4]: %timeit -n 10 sess.run(embedding, feed_dict={input_x: np.ones([100, 112, 112, 3])})
-  10 loops, best of 5: 249 ms per loop
+    # Read the engine from the file and deserialize
+    with open("sample.engine", "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
+        engine = runtime.deserialize_cuda_engine(f.read())
+    ```
+  - **Inference**
+    ```py
+    import tensorflow as tf
+    (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+    x_test = np.expand_dims(x_test / 255.0, -1)
 
-  In [5]: %timeit -n 10 sess.run(embedding, feed_dict={input_x: np.ones([100, 112, 112, 3])})
-  10 loops, best of 5: 256 ms per loop
-  ```
-## TensorRT test
-  ```py
-  import numpy as np
-  import tensorflow as tf
+    h_input = cuda.pagelocked_empty(trt.volume(engine.get_binding_shape(0)), dtype=np.float32)
+    h_output = cuda.pagelocked_empty(trt.volume(engine.get_binding_shape(1)), dtype=np.float32)
+    d_input = cuda.mem_alloc(h_input.nbytes)
+    d_output = cuda.mem_alloc(h_output.nbytes)
+    stream = cuda.Stream()
 
-  from tensorflow.python.platform import gfile
-  import tensorflow.contrib.tensorrt as trt
-  def load_model(mode_file):
-      with tf.gfile.GFile(mode_file,'rb') as f:
-          graph_def = tf.GraphDef()
-          graph_def.ParseFromString(f.read())
-          trt_graph = trt.create_inference_graph(input_graph_def=graph_def,
-              outputs=['fc1/add_1:0'],
-              max_batch_size = 1,
-              max_workspace_size_bytes= 500000000, # 500MB mem assgined to TRT
-              precision_mode="INT8",  # Precision "FP32","FP16" or "INT8"                                        
-              minimum_segment_size=1
-              )
+    context = engine.create_execution_context()
+    # Transfer input data to the GPU.
+    np.copyto(h_input, x_test[0].ravel())
+    cuda.memcpy_htod_async(d_input, h_input, stream)
+    # Run inference.
+    context.execute_async(bindings=[int(d_input), int(d_output)], stream_handle=stream.handle)
+    # Transfer predictions back from the GPU.
+    cuda.memcpy_dtoh_async(h_output, d_output, stream)
+    # Synchronize the stream
+    stream.synchronize()
 
-
-          print("TensorRT INT8 Enabled and Running INT8 Calib")
-          input_map = np.random.random_sample((1, 112, 112, 3))
-          inc=tf.constant(input_map, dtype=tf.float32)
-          dataset=tf.data.Dataset.from_tensors(inc)
-          dataset=dataset.repeat()
-          iterator=dataset.make_one_shot_iterator()
-          next_element=iterator.get_next()
-          out=tf.import_graph_def(trt_graph, input_map={"input":next_element, "phase_train": False}, return_elements=[ "embeddings"])
-          self.sess.run(out)
-          graph_load=trt.calib_graph_to_infer_graph(trt_graph)
-
-          return trt_graph
-
-  gpu_options = tf.GPUOptions(allow_growth=True)
-  sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True, log_device_placement=False))
-  with sess.as_default():
-      graph_load = load_model('../test.pb')
-      tf.import_graph_def(graph_load, input_map=None, name='')
-
-      images_placeholder = tf.get_default_graph().get_tensor_by_name("data:0")
-      embeddings = tf.get_default_graph().get_tensor_by_name("fc1/add_1:0")
-
-  sess.run(embeddings, feed_dict={images_placeholder: np.ones([1, 112, 112, 3])})
-  ```
-  ```py
-  %timeit sess.run(embeddings, feed_dict={images_placeholder: np.ones([1, 112, 112, 3])})
-  # 35.6 ms ± 256 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
-
-  In [22]: %timeit -n 10 sess.run(embeddings, feed_dict={images_placeholder: np.ones([100, 112, 112, 3])})
-  # 10 loops, best of 5: 224 ms per loop
-
-  In [23]: %timeit -n 10 sess.run(embeddings, feed_dict={images_placeholder: np.ones([100, 112, 112, 3])})
-  # 10 loops, best of 5: 226 ms per loop
-  ```
-## TensorRT MTCNN test
-  ```py
-  import numpy as np
-  import tensorflow as tf
-
-  import tensorflow.contrib.tensorrt as trt
-
-  with tf.gfile.GFile(mode_file,'rb') as f:
-      graph_def = tf.GraphDef.FromString(f.read())
-      trt_graph = trt.create_inference_graph(input_graph_def=graph_def,
-          outputs=['prob', 'landmarks', 'box'],
-          max_batch_size = 1,
-          max_workspace_size_bytes= 500000000, # 500MB mem assgined to TRT
-          precision_mode="INT8",  # Precision "FP32","FP16" or "INT8"                                        
-          minimum_segment_size=1
-          )
-      tf.import_graph_def(trt_graph, name='')
-
-  from mtcnn_tf.mtcnn import MTCNN
-  det = MTCNN('./mtcnn_tf/mtcnn.pb')
-  det.detect_faces(np.ones([560, 560, 3]))
-
-  In [30]: %timeit -n 10 det.detect_faces(np.ones([560, 560, 3]))
-  10 loops, best of 5: 23.2 ms per loop
-  10 loops, best of 5: 24.4 ms per loop
-  10 loops, best of 5: 23.1 ms per loop
-  ```
-***
-
-# Uff
-  ```sh
-  saved_model_cli show --dir ./tf_resnet100 --all
-  freeze_graph --input_saved_model_dir tf_resnet100 --output_node_names fc1/add_1 --output_graph ./test.pb
-
-  convert-to-uff test.pb
-  ```
-- [Keras h5 to pb](07-26_model_conversion.md#keras-h5-to-pb)
+    print("Prediction:", np.argmax(h_output), ", true label:", y_test[0])
+    # Prediction: 7 , true label: 7
+    ```
+## UFF MNIST Official Sample Definition
   ```py
   import tensorrt as trt
-  TRT_LOGGER = trt.Logger(trt.Logger.INFO)
-  model_file = './aaa.uff'
+  import pycuda.driver as cuda
+  # Or will throw LogicError: explicit_context_dependent failed: invalid device context - no currently active context?
+  import pycuda.autoinit
 
-  with trt.Builder(TRT_LOGGER) as builder, builder.create_network() as network, trt.UffParser() as parser:
-      parser.register_input("input_1_1", (112, 112, 3), trt.UffInputOrder.NHWC)
-      parser.register_output("dense_1/Identity")
-      parser.parse(model_file, network)
+  model_file = './aaa.uff'
+  TRT_LOGGER = trt.Logger(trt.Logger.INFO)
+
+  def build_engine(model_file):
+      GiB = lambda n: n * 1 << 30
+      with trt.Builder(TRT_LOGGER) as builder, builder.create_network() as network, trt.UffParser() as parser:
+          builder.max_workspace_size = GiB(1)
+          # Parse the Uff Network
+          parser.register_input("flatten_input", (28, 28, 1), trt.UffInputOrder.NHWC)
+          parser.register_output("dense_1/Softmax")
+          parser.parse(model_file, network)
+          # Build and return an engine.
+          return builder.build_cuda_engine(network)
+
+  # Simple helper data class that's a little nicer to use than a 2-tuple.
+  class HostDeviceMem(object):
+      def __init__(self, host_mem, device_mem):
+          self.host = host_mem
+          self.device = device_mem
+
+      def __str__(self):
+          return "Host:\n" + str(self.host) + "\nDevice:\n" + str(self.device)
+
+      def __repr__(self):
+          return self.__str__()
+
+  # Allocates all buffers required for an engine, i.e. host/device inputs/outputs.
+  def allocate_buffers(engine):
+      inputs = []
+      outputs = []
+      bindings = []
+      stream = cuda.Stream()
+      for binding in engine:
+          size = trt.volume(engine.get_binding_shape(binding)) * engine.max_batch_size
+          dtype = trt.nptype(engine.get_binding_dtype(binding))
+          # Allocate host and device buffers
+          host_mem = cuda.pagelocked_empty(size, dtype)
+          device_mem = cuda.mem_alloc(host_mem.nbytes)
+          # Append the device buffer to device bindings.
+          bindings.append(int(device_mem))
+          # Append to the appropriate list.
+          if engine.binding_is_input(binding):
+              inputs.append(HostDeviceMem(host_mem, device_mem))
+          else:
+              outputs.append(HostDeviceMem(host_mem, device_mem))
+      return inputs, outputs, bindings, stream
+
+  # inputs and outputs are expected to be lists of HostDeviceMem objects.
+  def do_inference(context, bindings, inputs, outputs, stream, batch_size=1):
+      # Transfer input data to the GPU.
+      [cuda.memcpy_htod_async(inp.device, inp.host, stream) for inp in inputs]
+      # Run inference.
+      context.execute_async(batch_size=batch_size, bindings=bindings, stream_handle=stream.handle)
+      # Transfer predictions back from the GPU.
+      [cuda.memcpy_dtoh_async(out.host, out.device, stream) for out in outputs]
+      # Synchronize the stream
+      stream.synchronize()
+      # Return only the host outputs.
+      return [out.host for out in outputs]
+
+  import tensorflow as tf
+  (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+  x_test = np.expand_dims(x_test / 255.0, -1)
+
+  engine = build_engine(model_file)
+  # Build an engine, allocate buffers and create a stream.
+  # For more information on buffer allocation, refer to the introductory samples.
+  inputs, outputs, bindings, stream = allocate_buffers(engine)
+
+  with engine.create_execution_context() as context:
+      # case_num = load_normalized_test_case(data_paths, pagelocked_buffer=inputs[0].host)
+      np.copyto(inputs[0].host, x_test[0].ravel())
+      # For more information on performing inference, refer to the introductory samples.
+      # The common.do_inference function will return a list of outputs - we only have one in this case.
+      [output] = do_inference(context, bindings=bindings, inputs=inputs, outputs=outputs, stream=stream)
+      print("Prediction:", np.argmax(output), ", true label:", y_test[0])
+      # Prediction: 7 , true label: 7
   ```
+## ONNX Engine
+  - In TensorRT 7.0, the ONNX parser only supports full-dimensions mode, meaning that your network definition must be created with the `explicitBatch` flag set
+  - Currently most frameworks support `tf1.x` only, so better convert it under `tf1.x` environment
+    ```py
+    tf.__version__
+    # '1.15.0'
+
+    # Convert to saved model first
+    model = tf.keras.models.load_model('aaa.h5', compile=False)
+    tf.keras.experimental.export_saved_model(model, './aaa')
+    ```
+    `tf2onnx` convert `saved model` to `tflite`, also `tf1.15.0`
+    ```sh
+    pip install -U tf2onnx
+    python -m tf2onnx.convert --saved-model ./aaa --output aaa.onnx
+    ```
+  - **Build engine**
+    ```py
+    import tensorrt as trt
+    import pycuda.driver as cuda
+    # Or will throw LogicError: explicit_context_dependent failed: invalid device context - no currently active context?
+    import pycuda.autoinit
+    import os
+
+    TRT_LOGGER = trt.Logger(trt.Logger.INFO)
+
+    def build_onnx_engine(model_file):
+        GiB = lambda n: n * 1 << 30
+        engine_backup = os.path.splitext(model_file)[0] + '.engine'
+        if os.path.exists(engine_backup):
+            with open(engine_backup, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
+                return runtime.deserialize_cuda_engine(f.read())
+
+        EXPLICIT_BATCH = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH) # Explicit batch size only
+        with trt.Builder(TRT_LOGGER) as builder, builder.create_network(EXPLICIT_BATCH) as network, trt.OnnxParser(network, TRT_LOGGER) as parser:
+            # builder.max_workspace_size = GiB(2)
+            with open(model_file, 'rb') as model:
+                parser.parse(model.read())
+            assert parser.num_errors == 0
+            input_shape = network.get_input(0).shape
+            network.get_input(0).shape = [1] + list(input_shape[1:])  # Change dynamic batch_size to 1
+            engine = builder.build_cuda_engine(network)
+
+        # Serialize the engine and write to a file
+        with open(engine_backup, "wb") as f:
+            f.write(engine.serialize())
+        return engine
+
+    engine = build_onnx_engine(model_file="./aaa.onnx")
+    ```
+  - **Inference**
+    ```py
+    class EngineInference:
+        def __init__(self, engine):
+            self.h_input = cuda.pagelocked_empty(trt.volume(engine.get_binding_shape(0)), dtype=np.float32)
+            self.h_output = cuda.pagelocked_empty(trt.volume(engine.get_binding_shape(1)), dtype=np.float32)
+            self.d_input = cuda.mem_alloc(self.h_input.nbytes)
+            self.d_output = cuda.mem_alloc(self.h_output.nbytes)
+            self.stream = cuda.Stream()
+            self.context = engine.create_execution_context()
+
+        def __call__(self, img):
+            np.copyto(self.h_input, img.ravel())
+            cuda.memcpy_htod_async(self.d_input, self.h_input, self.stream)
+            # Run inference.
+            # self.context.execute_async(bindings=[int(self.d_input), int(self.d_output)], stream_handle=self.stream.handle)
+            self.context.execute_async_v2(bindings=[int(self.d_input), int(self.d_output)], stream_handle=self.stream.handle)
+            # Transfer predictions back from the GPU.
+            cuda.memcpy_dtoh_async(self.h_output, self.d_output, self.stream)
+            # Synchronize the stream
+            self.stream.synchronize()
+            return self.h_output
+
+    import tensorflow as tf
+    (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+    x_test = np.expand_dims(x_test / 255.0, -1)
+
+    aa = EngineInference(engine)
+    output = aa(x_test[0])
+    print("Prediction:", np.argmax(output), ", true label:", y_test[0])
+    # Prediction: 7 , true label: 7
+    ```
+  - **Time compare**
+    ```py
+    model = keras.models.load_model('aaa.h5')
+    model(x_test[:1])
+    %timeit model(x_test[:1])
+    # 806 µs ± 11.9 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
+
+    %timeit model(x_test[:10])
+    # 840 µs ± 14.7 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
+    ```
+    ```py
+    %timeit aa(x_test[0])
+    # 51.1 µs ± 616 ns per loop (mean ± std. dev. of 7 runs, 10000 loops each)
+
+    %timeit [aa(ii) for ii in x_test[:10]]
+    # 495 µs ± 1.22 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
+    ```
+    ```py
+    model = keras.models.load_model('resnet101.h5')
+    imm = np.random.uniform(-1, 1, 112 * 112 * 3).reshape(1, 112, 112, 3)
+    model(imm)
+    %timeit model(imm)
+    # 70.9 ms ± 1.17 ms per loop (mean ± std. dev. of 7 runs, 10 loops each)
+
+    engine = build_onnx_engine(model_file="./resnet101.onnx")
+    aa = EngineInference(engine)
+    imm = np.random.uniform(-1, 1, 112 * 112 * 3).reshape(112, 112, 3)
+    aa(imm)
+    %timeit aa(imm)
+    # 9.46 ms ± 1.63 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+    ```
+## ONNX Engine With Optimization Profile
+  - **Build engine**
+    ```py
+    import tensorrt as trt
+    import pycuda.driver as cuda
+    # Or will throw LogicError: explicit_context_dependent failed: invalid device context - no currently active context?
+    import pycuda.autoinit
+    import os
+
+    TRT_LOGGER = trt.Logger(trt.Logger.INFO)
+    def build_onnx_engine(model_file, max_batch_size=4, int8_mode=False, calib=None):
+        EXPLICIT_BATCH = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH) # Explicit batch size only
+        with trt.Builder(TRT_LOGGER) as builder, builder.create_network(EXPLICIT_BATCH) as network, builder.create_builder_config() as config, trt.OnnxParser(network, TRT_LOGGER) as parser:
+            builder.max_batch_size = max_batch_size
+            with open(model_file, 'rb') as model:
+                parser.parse(model.read())
+            assert parser.num_errors == 0
+            if int8_mode:
+                config.set_flag(trt.BuilderFlag.INT8)
+                config.int8_calibrator = calib
+            profile = builder.create_optimization_profile()
+            input_shape = network.get_input(0).shape[1:]
+            profile.set_shape(network.get_input(0).name, (1, *input_shape), (1, *input_shape), (builder.max_batch_size, *input_shape))
+            config.add_optimization_profile(profile)
+
+            # for ii in range(1, max_batch_size + 1):
+            #     profile = builder.create_optimization_profile()
+            #     input_shape = network.get_input(0).shape[1:]
+            #     profile.set_shape(network.get_input(0).name, (ii, *input_shape), (ii, *input_shape), (ii, *input_shape))
+            #     config.add_optimization_profile(profile)
+
+            # profile = builder.create_optimization_profile()
+            # output_shape = network.get_output(0).shape[1:]
+            # profile.set_shape(network.get_output(0).name, (1, *output_shape), (1, *output_shape), (builder.max_batch_size, *output_shape))
+            # config.add_optimization_profile(profile)
+
+            return builder.build_engine(network, config)
+    ```
+  - **Inference**
+    ```py
+    class EngineInference:
+        def __init__(self, engine):
+            max_inputs = [engine.max_batch_size, *engine.get_binding_shape(0)[1:]]
+            dtype_input = trt.nptype(engine.get_binding_dtype(0))
+            max_outputs = [engine.max_batch_size, *engine.get_binding_shape(1)[1:]]
+            dtype_output = trt.nptype(engine.get_binding_dtype(1))
+
+            self.h_input = cuda.pagelocked_empty(trt.volume(max_inputs), dtype=dtype_input)
+            self.h_output = cuda.pagelocked_empty(trt.volume(max_outputs), dtype=dtype_output)
+            self.d_input = cuda.mem_alloc(self.h_input.nbytes)
+            self.d_output = cuda.mem_alloc(self.h_output.nbytes)
+            self.stream = cuda.Stream()
+            self.context = engine.create_execution_context()
+
+            self.max_batch_size = engine.max_batch_size
+            self.output_dim = max_outputs[1:]
+            self.output_ravel_shape = self.h_output.shape[0] // engine.max_batch_size
+
+        def __call__(self, imgs):
+            batch_size = imgs.shape[0]
+            if batch_size > self.max_batch_size:
+                batch_size = self.max_batch_size
+                imgs = imgs[:self.max_batch_size]
+            inputs = imgs.ravel()
+            self.context.set_binding_shape(0, imgs.shape)
+            np.copyto(self.h_input[:inputs.shape[0]], inputs)
+            cuda.memcpy_htod_async(self.d_input, self.h_input[:inputs.shape[0]], self.stream)
+            # Run inference.
+            self.context.execute_async_v2(bindings=[int(self.d_input), int(self.d_output)], stream_handle=self.stream.handle)
+            # Transfer predictions back from the GPU.
+            cuda.memcpy_dtoh_async(self.h_output[:batch_size * self.output_ravel_shape], self.d_output, self.stream)
+            # Synchronize the stream
+            self.stream.synchronize()
+            return self.h_output[:batch_size * self.output_ravel_shape].reshape([batch_size, *self.output_dim])
+
+    import tensorflow as tf
+    (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+    x_test = np.expand_dims(x_test / 255.0, -1)
+
+    engine = build_onnx_engine(model_file="./aaa.onnx", max_batch_size=4)
+    aa = EngineInference(engine)
+    output = aa(x_test[:4])
+    print("Prediction:", np.argmax(output, 1), ", true label:", y_test[:4])
+    # Prediction: [7 2 1 0] , true label: [7 2 1 0]
+    ```
+  - **Time**
+    ```py
+    engine = build_onnx_engine(model_file="./aaa.onnx", max_batch_size=10)
+    aa = EngineInference(engine)
+    %timeit aa(x_test[:1])
+    # 60.5 µs ± 692 ns per loop (mean ± std. dev. of 7 runs, 10000 loops each)
+    %timeit aa(x_test[:10])
+    # 87.1 µs ± 245 ns per loop (mean ± std. dev. of 7 runs, 10000 loops each)
+    ```
+    ```py
+    engine = build_onnx_engine(model_file="./resnet101.onnx", max_batch_size=10)
+    aa = EngineInference(engine)
+    iaa = np.random.uniform(-1, 1, 112 * 112 * 3).reshape(1, 112, 112, 3)
+    ibb = np.random.uniform(-1, 1, 10 * 112 * 112 * 3).reshape(10, 112, 112, 3)
+    %timeit aa(iaa)
+    # 19.2 ms ± 177 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
+    %timeit aa(ibb)
+    # 45.3 ms ± 30.3 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
+    ```
+## ONNX Engine With Optimization Profile
+  - **Build engine**
+    ```py
+    import tensorrt as trt
+    import pycuda.driver as cuda
+    # Or will throw LogicError: explicit_context_dependent failed: invalid device context - no currently active context?
+    import pycuda.autoinit
+    import os
+
+    TRT_LOGGER = trt.Logger(trt.Logger.INFO)
+    def build_onnx_engine(model_file, max_batch_size=4, int8_mode=False, calib=None):
+        EXPLICIT_BATCH = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH) # Explicit batch size only
+        with trt.Builder(TRT_LOGGER) as builder, builder.create_network(EXPLICIT_BATCH) as network, builder.create_builder_config() as config, trt.OnnxParser(network, TRT_LOGGER) as parser:
+            builder.max_batch_size = max_batch_size
+            with open(model_file, 'rb') as model:
+                parser.parse(model.read())
+            assert parser.num_errors == 0
+            if int8_mode:
+                config.set_flag(trt.BuilderFlag.INT8)
+                config.int8_calibrator = calib
+
+            for ii in range(1, max_batch_size + 1):
+                profile = builder.create_optimization_profile()
+                input_shape = network.get_input(0).shape[1:]
+                profile.set_shape(network.get_input(0).name, (ii, *input_shape), (ii, *input_shape), (ii, *input_shape))
+                config.add_optimization_profile(profile)
+
+            return builder.build_engine(network, config)
+    ```
+  - **Inference**
+    ```py
+    class EngineInference:
+        def __init__(self, engine):
+            max_inputs = [engine.max_batch_size, *engine.get_binding_shape(0)[1:]]
+            dtype_input = trt.nptype(engine.get_binding_dtype(0))
+            max_outputs = [engine.max_batch_size, *engine.get_binding_shape(1)[1:]]
+            dtype_output = trt.nptype(engine.get_binding_dtype(1))
+
+            self.h_input = cuda.pagelocked_empty(trt.volume(max_inputs), dtype=dtype_input)
+            self.h_output = cuda.pagelocked_empty(trt.volume(max_outputs), dtype=dtype_output)
+            self.d_input = cuda.mem_alloc(self.h_input.nbytes)
+            self.d_output = cuda.mem_alloc(self.h_output.nbytes)
+            self.stream = cuda.Stream()
+            self.context = engine.create_execution_context()
+
+            self.max_batch_size = engine.max_batch_size
+            self.output_dim = max_outputs[1:]
+            self.output_ravel_shape = self.h_output.shape[0] // engine.max_batch_size
+
+        def __call__(self, imgs):
+            batch_size = imgs.shape[0]
+            if batch_size > self.max_batch_size:
+                batch_size = self.max_batch_size
+                imgs = imgs[:self.max_batch_size]
+            inputs = imgs.ravel()
+            self.context.active_optimization_profile = batch_size - 1
+            self.context.set_binding_shape(2 * (batch_size - 1), imgs.shape)
+            np.copyto(self.h_input[:inputs.shape[0]], inputs)
+            cuda.memcpy_htod_async(self.d_input, self.h_input[:inputs.shape[0]], self.stream)
+            # Run inference.
+            self.context.execute_async_v2(bindings=[int(self.d_input), int(self.d_output)], stream_handle=self.stream.handle)
+            # Transfer predictions back from the GPU.
+            cuda.memcpy_dtoh_async(self.h_output[:batch_size * self.output_ravel_shape], self.d_output, self.stream)
+            # Synchronize the stream
+            self.stream.synchronize()
+            return self.h_output[:batch_size * self.output_ravel_shape].reshape([batch_size, *self.output_dim])
+
+    import tensorflow as tf
+    (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+    x_test = np.expand_dims(x_test / 255.0, -1)
+
+    engine = build_onnx_engine(model_file="./aaa.onnx", max_batch_size=4)
+    for binding in engine:
+        print(engine.get_binding_shape(binding))
+
+    aa = EngineInference(engine)
+    output = aa(x_test[:4])
+    print("Prediction:", np.argmax(output, 1), ", true label:", y_test[:4])
+    # Prediction: [7 2 1 0] , true label: [7 2 1 0]
+    ```
+  - **Time**
+    ```py
+    engine = build_onnx_engine(model_file="./aaa.onnx", max_batch_size=10)
+    aa = EngineInference(engine)
+    %timeit aa(x_test[:1])
+    # 60.5 µs ± 692 ns per loop (mean ± std. dev. of 7 runs, 10000 loops each)
+    %timeit aa(x_test[:10])
+    # 87.1 µs ± 245 ns per loop (mean ± std. dev. of 7 runs, 10000 loops each)
+    ```
+    ```py
+    engine = build_onnx_engine(model_file="./resnet101.onnx", max_batch_size=10)
+    aa = EngineInference(engine)
+    iaa = np.random.uniform(-1, 1, 112 * 112 * 3).reshape(1, 112, 112, 3)
+    ibb = np.random.uniform(-1, 1, 10 * 112 * 112 * 3).reshape(10, 112, 112, 3)
+    %timeit aa(iaa)
+    # 19.2 ms ± 177 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
+    %timeit aa(ibb)
+    # 45.3 ms ± 30.3 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
+    ```
+## ONNX Engine with INT8 Calibrator
   ```py
-  model_file = "./model.onnx"
-  EXPLICIT_BATCH = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
-  with trt.Builder(TRT_LOGGER) as builder, builder.create_network(EXPLICIT_BATCH) as network, trt.OnnxParser(network, TRT_LOGGER) as parser:
-    parser.register_input("input_1_1", (112, 112, 3), trt.UffInputOrder.NHWC)
-    parser.register_output("dense_1/Identity")
-    with open(model_file, 'rb') as model:
-      parser.parse(model.read())
+  import tensorrt as trt
+  import pycuda.driver as cuda
+  import pycuda.autoinit
+  import os
+  TRT_LOGGER = trt.Logger(trt.Logger.INFO)
+
+  class MNISTEntropyCalibrator(trt.IInt8EntropyCalibrator2):
+      def __init__(self, data, cache_file, batch_size=32):
+          # Whenever you specify a custom constructor for a TensorRT class,
+          # you MUST call the constructor of the parent explicitly.
+          trt.IInt8EntropyCalibrator2.__init__(self)
+
+          self.cache_file = cache_file
+
+          # Every time get_batch is called, the next batch of size batch_size will be copied to the device and returned.
+          self.data = data
+          self.batch_size = batch_size
+          self.current_index = 0
+
+          # Allocate enough memory for a whole batch.
+          self.device_input = cuda.mem_alloc(self.data[0].nbytes * self.batch_size)
+
+      def get_batch_size(self):
+          return self.batch_size
+
+      # TensorRT passes along the names of the engine bindings to the get_batch function.
+      # You don't necessarily have to use them, but they can be useful to understand the order of
+      # the inputs. The bindings list is expected to have the same ordering as 'names'.
+      def get_batch(self, names):
+          if self.current_index + self.batch_size > self.data.shape[0]:
+              return None
+
+          current_batch = int(self.current_index / self.batch_size)
+          if current_batch % 10 == 0:
+              print("Calibrating batch {:}, containing {:} images".format(current_batch, self.batch_size))
+
+          batch = self.data[self.current_index:self.current_index + self.batch_size].ravel()
+          cuda.memcpy_htod(self.device_input, batch)
+          self.current_index += self.batch_size
+          return [self.device_input]
+
+      def read_calibration_cache(self):
+          # If there is a cache, use it instead of calibrating again. Otherwise, implicitly return None.
+          if os.path.exists(self.cache_file):
+              with open(self.cache_file, "rb") as f:
+                  return f.read()
+
+      def write_calibration_cache(self, cache):
+          with open(self.cache_file, "wb") as f:
+              f.write(cache)
+
+  def build_int8_engine_fix(model_file, calib, batch_size=32):
+      EXPLICIT_BATCH = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+      with trt.Builder(TRT_LOGGER) as builder, builder.create_network(EXPLICIT_BATCH) as network, trt.OnnxParser(network, TRT_LOGGER) as parser:
+          # We set the builder batch size to be the same as the calibrator's, as we use the same batches
+          # during inference. Note that this is not required in general, and inference batch size is
+          # independent of calibration batch size.
+          # builder.max_batch_size = batch_size        
+          builder.int8_mode = True
+          builder.int8_calibrator = calib
+          with open(model_file, 'rb') as model:
+              parser.parse(model.read())
+          assert parser.num_errors == 0
+          input_shape = network.get_input(0).shape
+          network.get_input(0).shape = [batch_size] + list(input_shape[1:])
+          # Build engine and do int8 calibration.
+          return builder.build_cuda_engine(network)
+
+  '''
+  Build engine with fixed batch_size first to generate `calibration_cache` file.
+  This will throw 'WARNING: Explicit batch network detected and batch size specified, use execute without batch size instead.'
+  Reason maybe using `context.execute_async` instead of `context.execute_async_v2` inside.
+  '''
+  import tensorflow as tf
+  (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+  x_test = np.expand_dims(x_test / 255.0, -1)
+  calibration_cache = "mnist_calibration.cache"
+  calib = MNISTEntropyCalibrator(x_test, cache_file=calibration_cache, batch_size=32)
+  engine = build_int8_engine_fix(model_file="./aaa.onnx", calib=calib, batch_size=32)
+
+  '''
+  Then again, build engine with dynamic batch_size
+  '''
+  engine = build_onnx_engine(model_file="./aaa.onnx", max_batch_size=32, int8_mode=True, calib=calib)
+
+  '''
+  But time is not improved...
+  '''
+  %timeit aa(x_test[:1])
+  # 57.1 µs ± 164 ns per loop (mean ± std. dev. of 7 runs, 10000 loops each)
+  %timeit aa(x_test[:10])
+  # 86.6 µs ± 203 ns per loop (mean ± std. dev. of 7 runs, 10000 loops each)
   ```
 ***
 
+# ONNX tensorrt
+  ```sh
+  onnx2trt my_model.onnx -O "pass_1;pass_2;pass_3" -m my_model_optimized.onnx
+  onnx2trt my_model.onnx -o my_engine.trt
 
+  trtexec --explicitBatch --onnx=aaa.onnx --minShapes=input:1x28x28x3 --optShapes=input:1x28x28x3 --maxShapes=input:1x28x28x3 --saveEngine=aaa.engine
+  ```
+  ```py
+  import onnx
+  import onnx_tensorrt.backend as backend
+  import numpy as np
+
+  model = onnx.load("aaa.onnx")
+  engine = backend.prepare(model, device='CUDA:0')
+  input_data = np.random.random(size=(32, 3, 224, 224)).astype(np.float32)
+  output_data = engine.run(input_data)[0]
+  print(output_data)
+  print(output_data.shape)
+  ```
 ***
