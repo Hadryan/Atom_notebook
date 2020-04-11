@@ -1035,13 +1035,25 @@
     ```shell
     mkisofs -r -o file.iso your_folder_name/
     ```
-  - 取消挂载 umount 时出现的 “Device is busy”
+  - 取消挂载 umount 时出现的 "Device is busy"
     - fuser 可以显示出当前哪个程序在使用磁盘上的某个文件、挂载点、甚至网络端口，并给出程序进程的详细信息
-    - fuser -mv /tmp
-      - **-m** 参数显示所有使用指定文件系统的进程，后面可以跟挂载点，或是dev设备，-v 参数给出详细的输出
+      ```sh
+      # 查看那占用的进程
+      fuser -m /dev/sdc
+      /dev/sdc:             3293c  9704c
+
+      # 查看具体的命令
+      ps aux | grep 3293
+      ps aux | grep 9704
+      cat /proc/<pid>/cmdline
+      ```
+    - **参数**
+      - **-m** / **-c** 参数显示所有使用指定文件系统的进程，后面可以跟挂载点，或是dev设备，-v 参数给出详细的输出
       - **-k** 参数自动把霸占着 /media/USB/ 的程序杀死
       - **-i** 参数，这样每杀死一个程序前，都会询问
-      - fuser -mv -ik /tmp
+      ```sh
+      fuser -mv -ik /tmp
+      ```
     - 执行延迟卸载，延迟卸载（lazy unmount）会立即卸载目录树里的文件系统，等到设备不再繁忙时才清理所有相关资源
       ```shell
       umount -vl /mnt/mymount/     

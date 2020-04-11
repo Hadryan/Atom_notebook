@@ -410,12 +410,6 @@
             profile.set_shape(network.get_input(0).name, (1, *input_shape), (1, *input_shape), (builder.max_batch_size, *input_shape))
             config.add_optimization_profile(profile)
 
-            # for ii in range(1, max_batch_size + 1):
-            #     profile = builder.create_optimization_profile()
-            #     input_shape = network.get_input(0).shape[1:]
-            #     profile.set_shape(network.get_input(0).name, (ii, *input_shape), (ii, *input_shape), (ii, *input_shape))
-            #     config.add_optimization_profile(profile)
-
             # profile = builder.create_optimization_profile()
             # output_shape = network.get_output(0).shape[1:]
             # profile.set_shape(network.get_output(0).name, (1, *output_shape), (1, *output_shape), (builder.max_batch_size, *output_shape))
@@ -489,7 +483,8 @@
     %timeit aa(ibb)
     # 45.3 ms ± 30.3 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
     ```
-## ONNX Engine With Optimization Profile
+## ONNX Engine With Multi Optimization Profile
+  - **NOT working [ !!! ]**
   - **Build engine**
     ```py
     import tensorrt as trt
@@ -510,33 +505,41 @@
                 config.set_flag(trt.BuilderFlag.INT8)
                 config.int8_calibrator = calib
 
+            # for ii in range(max_batch_size, max_batch_size + 1):
             for ii in range(1, max_batch_size + 1):
                 profile = builder.create_optimization_profile()
                 input_shape = network.get_input(0).shape[1:]
                 profile.set_shape(network.get_input(0).name, (ii, *input_shape), (ii, *input_shape), (ii, *input_shape))
                 config.add_optimization_profile(profile)
+                print((ii, *input_shape))
 
             return builder.build_engine(network, config)
     ```
   - **Inference**
     ```py
+    [TensorRT] ERROR: ../rtSafe/cuda/genericReformat.cu (1262) - Cuda Error in executeMemcpy: 1 (invalid argument)
+    [TensorRT] ERROR: FAILED_EXECUTION: std::exception
+    ```
+    ```py
     class EngineInference:
         def __init__(self, engine):
-            max_inputs = [engine.max_batch_size, *engine.get_binding_shape(0)[1:]]
+            basic_inputs = [1, *engine.get_binding_shape(0)[1:]]
             dtype_input = trt.nptype(engine.get_binding_dtype(0))
-            max_outputs = [engine.max_batch_size, *engine.get_binding_shape(1)[1:]]
+            basic_outputs = [1, *engine.get_binding_shape(1)[1:]]
             dtype_output = trt.nptype(engine.get_binding_dtype(1))
+            max_batch_size = engine.max_batch_size
 
-            self.h_input = cuda.pagelocked_empty(trt.volume(max_inputs), dtype=dtype_input)
-            self.h_output = cuda.pagelocked_empty(trt.volume(max_outputs), dtype=dtype_output)
-            self.d_input = cuda.mem_alloc(self.h_input.nbytes)
-            self.d_output = cuda.mem_alloc(self.h_output.nbytes)
+            self.h_input = cuda.pagelocked_empty(trt.volume(basic_inputs) * max_batch_size, dtype=dtype_input)
+            self.h_output = cuda.pagelocked_empty(trt.volume(basic_outputs) * max_batch_size, dtype=dtype_output)
+            self.d_input = cuda.mem_alloc(self.h_input.nbytes * 4)
+            self.d_output = cuda.mem_alloc(self.h_output.nbytes * 4)
             self.stream = cuda.Stream()
-            self.context = engine.create_execution_context()
+            # self.context = engine.create_execution_context()
 
-            self.max_batch_size = engine.max_batch_size
-            self.output_dim = max_outputs[1:]
-            self.output_ravel_shape = self.h_output.shape[0] // engine.max_batch_size
+            # self.max_batch_size = engine.max_batch_size
+            self.max_batch_size = max_batch_size
+            self.output_dim = basic_outputs[1:]
+            self.output_ravel_shape = self.h_output.shape[0] // max_batch_size
 
         def __call__(self, imgs):
             batch_size = imgs.shape[0]
@@ -544,8 +547,11 @@
                 batch_size = self.max_batch_size
                 imgs = imgs[:self.max_batch_size]
             inputs = imgs.ravel()
+            self.context = engine.create_execution_context()
             self.context.active_optimization_profile = batch_size - 1
+            print("batch_size = %d, active_optimization_profile = %d" % (batch_size, self.context.active_optimization_profile))
             self.context.set_binding_shape(2 * (batch_size - 1), imgs.shape)
+            # self.context.set_binding_shape(0, imgs.shape)
             np.copyto(self.h_input[:inputs.shape[0]], inputs)
             cuda.memcpy_htod_async(self.d_input, self.h_input[:inputs.shape[0]], self.stream)
             # Run inference.
@@ -562,31 +568,12 @@
 
     engine = build_onnx_engine(model_file="./aaa.onnx", max_batch_size=4)
     for binding in engine:
-        print(engine.get_binding_shape(binding))
+        print(binding, ": ", engine.get_binding_shape(binding))
 
     aa = EngineInference(engine)
     output = aa(x_test[:4])
     print("Prediction:", np.argmax(output, 1), ", true label:", y_test[:4])
     # Prediction: [7 2 1 0] , true label: [7 2 1 0]
-    ```
-  - **Time**
-    ```py
-    engine = build_onnx_engine(model_file="./aaa.onnx", max_batch_size=10)
-    aa = EngineInference(engine)
-    %timeit aa(x_test[:1])
-    # 60.5 µs ± 692 ns per loop (mean ± std. dev. of 7 runs, 10000 loops each)
-    %timeit aa(x_test[:10])
-    # 87.1 µs ± 245 ns per loop (mean ± std. dev. of 7 runs, 10000 loops each)
-    ```
-    ```py
-    engine = build_onnx_engine(model_file="./resnet101.onnx", max_batch_size=10)
-    aa = EngineInference(engine)
-    iaa = np.random.uniform(-1, 1, 112 * 112 * 3).reshape(1, 112, 112, 3)
-    ibb = np.random.uniform(-1, 1, 10 * 112 * 112 * 3).reshape(10, 112, 112, 3)
-    %timeit aa(iaa)
-    # 19.2 ms ± 177 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
-    %timeit aa(ibb)
-    # 45.3 ms ± 30.3 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
     ```
 ## ONNX Engine with INT8 Calibrator
   ```py

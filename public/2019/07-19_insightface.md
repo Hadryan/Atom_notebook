@@ -596,7 +596,7 @@
   import sys
 
   sys.path.append("../")
-  from face_model import FaceModel
+  from face_model.face_model import FaceModel
   fm = FaceModel(None)
 
   def video_capture_local_mtcnn(fm, dest_path, dest_name_pre, video_src=0, skip_frame=5):
@@ -610,7 +610,7 @@
 
               if cur_frame == 0:
                   frame_rgb = frame[:, :, ::-1]
-                  bbs, pps = fm.get_face_location(frame_rgb)
+                  bbs, ccs, pps = fm.get_face_location(frame_rgb)
                   if len(bbs) != 0:
                       nns = fm.face_align_landmarks(frame_rgb, pps)
                       for nn in nns:

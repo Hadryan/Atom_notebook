@@ -230,6 +230,10 @@
   calc() { awk "BEGIN {print $*}"; }
   calc '1 + 2 * 3 / 4'  # 2.5
   ```
+  **统计 `top` 占用 CPU 最高的 30 个进程的总量**
+  ```py
+  top -b -n 1 | head -n 37 | tail -n 30 | awk -F' ' 'BEGIN {total=0} {size=size+$9} END {print "Sum 30: " size "%"}'
+  ```
 ## awk内置变量
   | 变量名   |                                            |
   | -------- | ------------------------------------------ |
@@ -615,7 +619,7 @@
     # <b>This</b> is what <b>I</b> meant 将变成 This is what I meant
     sed -ie 's/<[^>]*>//g' foo
 
-    # 从空行到以END开有的一行，替换foo为bar，指定的查找区间不止一个时，替换所有符合条件的区间
+    # 从空行到以 END 开头的一行，替换 foo 为 bar，指定的查找区间不止一个时，替换所有符合条件的区间
     sed -ie '/^$/,/^END/s:foo:bar:g' foo
     ```
     **'&' 表示插入整个匹配的规则表达式**
