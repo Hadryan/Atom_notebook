@@ -54,7 +54,9 @@
   ```sh
   $ git diff Makefile
   diff --git a/Makefile b/Makefile
-  index b7660e85..9331d8aa 100644
+  old mode 100644
+  new mode 100755
+  index b7660e85..119f59d7
   --- a/Makefile
   +++ b/Makefile
   @@ -198,14 +198,14 @@ ifeq ($(USE_HDF5), 1)
@@ -75,6 +77,14 @@
    WARNINGS := -Wall -Wno-sign-compare
 
    ##############################
+  @@ -385,6 +385,7 @@ ifeq ($(BLAS), mkl)
+          BLAS_LIB ?= $(MKLROOT)/lib $(MKLROOT)/lib/intel64
+   else ifeq ($(BLAS), open)
+          # OpenBLAS
+  +       LDFLAGS += -L/opt/OpenBLAS/lib -lopenblas
+          LIBRARIES += openblas
+   else
+          # ATLAS
   ```
 ## apt install
   ```sh
@@ -90,7 +100,7 @@
   make all
   make test
   make runtest
-  make pytest  # --> caffe/python/caffe/_caffe.so
+  make pytest  # --> python/caffe/_caffe.so
   export PYTHONPATH=/home/leondgarse/workspace/caffe/python:$PYTHONPATH
   ```
 ## Q / A
@@ -101,10 +111,13 @@
     ```
     A: 原因是 boost_python 的版本不匹配，Makefile 中指定的是 2.7，应使用 python 3.6
     ```sh
-    # ls /usr/lib/x86_64-linux-gnu/libboost_python* -l
+    $ locate libboost_python-py
+    /usr/lib/x86_64-linux-gnu/libboost_python-py36.so
+
+    $ ls /usr/lib/x86_64-linux-gnu/libboost_python* -l
     # /usr/lib/x86_64-linux-gnu/libboost_python-py36.so -> libboost_python3-py36.so
 
-    # vi Makefile +208
+    $ vi Makefile +208
     PYTHON_LIBRARIES ?= boost_python-py36
     ```
     重新编译 so 文件

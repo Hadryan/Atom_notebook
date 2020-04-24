@@ -145,6 +145,12 @@
     ```shell
     find . -name '*test.c'
     ```
+  - 查找 `/tmp` 下没有正在使用的文件
+    ```sh
+    find /tmp -mtime +7 -and -not -exec fuser -s {} ';' -and -exec echo {} ';'
+    # -mtime +7: 大于 7 天
+    # fuser -s: silent 执行
+    ```
 ***
 
 # grep

@@ -333,11 +333,13 @@
   ![](images/pyecharts_bar.jpg)
 ## Gauge 仪表盘
   ```python
-  from pyecharts import Gauge
-  gauge = Gauge("仪表盘示例")
-  gauge.add("业务指标", "完成率", 166.66, angle_range=[180, 0],
-            scale_range=[0, 200], is_legend_show=False)
-  gauge.render()
+  from pyecharts.charts import Gauge
+  import pyecharts.options as opts
+
+  gg = Gauge(init_opts=opts.InitOpts(width="1600px", height="800px"))
+  gg = gg.add(series_name="业务指标", data_pair=[["完成率", 55.5]])
+  gg = gg.set_global_opts(legend_opts=opts.LegendOpts(is_show=False),tooltip_opts=opts.TooltipOpts(is_show=True, formatter="{a} <br/>{b} : {c}%"))
+  gg.render('gauge.html')
   ```
   ![](images/pyecharts_gauge.jpg)
 ## GeoLines 地理坐标系线图

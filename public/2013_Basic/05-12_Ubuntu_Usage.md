@@ -319,6 +319,21 @@
     ```c
     命令：/usr/bin/sudo /usr/bin/vi /etc/environment
     ```
+  - `sudo` 与 `root` 使用的环境变量是不同的
+    ```sh
+    $ cat /etc/environment
+    # PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:/aaa
+
+    $ sudo su -c 'echo $PATH'
+    # PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:/aaa
+
+    $ sudo sh -c 'echo $PATH'
+    # /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin
+    ```
+    其中 `sudo` 的环境变量路径来自 `/etc/sudoers`
+    ```sh
+    Defaults    secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
+    ```
 ## SSH
   - Ubuntu使用SSH访问远程Linux服务器
     ```shell
@@ -1351,6 +1366,60 @@
 
     racadm set System.PCIESlotLFM.<x>.LFMMode 2
     ```
+## tmux
+  - **快捷键** `<prefix + ?>`
+  - **保存 log**
+    ```
+    `<prefix + [> / Mouse wheel` copy-mode --> `<shift V>` select --> `<Enter>` ─┐____┌─ `<prefix + ]>` paste text
+                                                                 `Mouse select` ─┘    └─ `<prefix + <shift>L>` save to file
+    ```
+  - **tpm** Tmux Plugin Manager
+    ```sh
+    $ git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+    ```
+    Modify `~/.tmux.conf`
+    ```sh
+    $ vi ~/.tmux.conf
+    # List of plugins
+    set -g @plugin 'tmux-plugins/tpm'
+    set -g @plugin 'tmux-plugins/tmux-sensible'
+
+    # Other examples:
+    # set -g @plugin 'github_username/plugin_name'
+    # set -g @plugin 'git@github.com/user/plugin'
+    # set -g @plugin 'git@bitbucket.com/user/plugin'
+
+    # Initialize TMUX plugin manager (keep this line at the very bottom of tmux.conf)
+    run -b '~/.tmux/plugins/tpm/tpm'
+    ```
+    ```sh
+    tmux source ~/.tmux.conf
+    ```
+  - **关机保存 / 恢复会话** [Install tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect)
+    ```sh
+    $ vi ~/.tmux.conf
+    set -g @plugin 'tmux-plugins/tmux-resurrect'
+    ```
+    Hit `prefix + <shift> I`  in `tmux` session to install plugins
+    ```sh
+    TMUX environment reloaded.
+    Done, press ENTER to continue.
+    ```
+    Default Key bindings
+    ```sh
+    `<prefix + Ctrl-s>` - save
+    `<prefix + Ctrl-r>` - restore
+    ```
+    alias, `tmux attach` --> `restore tmux session` + `tmux attach` --> `tmux`
+    ```sh
+    alias Tmux="tmux attach || if [[ -e $HOME/.tmux/resurrect/last ]]; then tmux new-session -d; tmux run-shell $HOME/.tmux/plugins/tmux-resurrect/scripts/restore.sh; tmux attach; else tmux; fi"
+    ```
+## 制表符
+  ```sh
+  ┌─┬─┐ ┏━┳━┓ ─ | ━ ┃
+  ├─┼─┤ ┣━╋━┫
+  └─┴─┘ ┗━┻━┛
+  ```
 ***
 
 # 软件

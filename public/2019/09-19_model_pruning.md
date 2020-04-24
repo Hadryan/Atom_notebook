@@ -907,5 +907,6 @@
     ```
     ```sh
     toco --graph_def_file=mtcnn.pb --output_file=mtcnn.tflite --input_shape=-1,-1,3:None:3:None --input_array=input,min_size,thresholds,factor --output_array=prob,landmarks,box
+    toco --graph_def_file=mtcnn.pb --output_file=mtcnn.tflite --input_shape=1,240,240,3 --input_array=input --output_array=prob,landmarks,box
     ```
 ***

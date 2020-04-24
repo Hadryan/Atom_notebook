@@ -428,60 +428,6 @@
     print(xx.shape, yy.shape)
     # (128, 112, 112, 3) (128, 85742)
     ```
-## strategy
-  ```py
-  import multiprocessing as mp
-  mp.set_start_method('forkserver')
-  hist = model.fit(train_ds, epochs=200, verbose=1, callbacks=callbacks, steps_per_epoch=steps_per_epoch, initial_epoch=11, use_multiprocessing=True, workers=4)
-
-  # hist = model.fit(train_ds, epochs=200, verbose=1, callbacks=callbacks, steps_per_epoch=steps_per_epoch)
-  hist = model.fit(train_ds, epochs=200, verbose=1, callbacks=callbacks, steps_per_epoch=steps_per_epoch, validation_data=val_ds, validation_steps=validation_steps)
-
-  hist = model.fit(train_ds, epochs=200, verbose=1, callbacks=callbacks, steps_per_epoch=steps_per_epoch, validation_data=val_ds, validation_steps=validation_steps)
-  ```
-  ```py
-  from tensorflow.keras import layers
-
-  ''' Basic model '''
-  # Multi GPU
-  # strategy = tf.distribute.MirroredStrategy()
-  strategy = tf.distribute.OneDeviceStrategy(device="/gpu:0")
-  with strategy.scope():
-      xx = tf.keras.applications.ResNet50V2(input_shape=(112, 112, 3), include_top=False, weights='imagenet')
-      xx.trainable = True
-
-      inputs = xx.inputs[0]
-      nn = xx.outputs[0]
-      nn = layers.GlobalAveragePooling2D()(nn)
-      nn = layers.Dropout(0.1)(nn)
-      embedding = layers.Dense(512, name='embedding')(nn)
-      basic_model = keras.models.Model(inputs, embedding)
-
-      inputs = basic_model.inputs[0]
-      embedding = basic_model.outputs[0]
-      output = NormDense(classes, name='norm_dense')(embedding)
-      concate = layers.concatenate([embedding, output], name='concate')
-      model = keras.models.Model(inputs, concate)
-      model.load_weights('nn.h5')
-  ```
-  ```py
-  with strategy.scope():
-      model.compile(optimizer='nadam', loss=keras.losses.categorical_crossentropy, metrics=["accuracy"])
-  ```
-## Softmax train
-  ```py
-  ee = model.predict(image_batch)
-  print((label_batch.numpy().argmax(1) == ee.argmax(1)).sum())
-  # 119
-  bb = ee[(label_batch.numpy().argmax(1) != ee.argmax(1))]
-  print(bb.max(1))
-  # [0.64594656, 0.23489477, 0.9657724, 0.8969463, 0.83450264, 0.46848086, 0.08751345, 0.0814515, 0.0754174]
-
-  np.sort(bb, 1)[:, -3:]
-  cc = ee[(label_batch.numpy().argmax(1) == ee.argmax(1))]
-  print(cc.max(1).min())
-  # 0.25448152
-  ```
 ## Arcface loss
   - **Mxnet Insigntface Arcface loss**
     ```py
@@ -527,23 +473,6 @@
             theta = tf.cos(tf.acos(y_pred_vals) * margin1 + margin2) - margin3
             # theta_valid = tf.where(y_pred_vals > threshold, theta, y_pred_vals - threshold - 1)
             theta_valid = tf.where(y_pred_vals > threshold, theta, (-1 - margin3) * 2 - theta)
-            theta_one_hot = (theta_valid - y_pred_vals) * y_true
-            arcface_logits = (theta_one_hot + xx).numpy()
-            plt.plot(xx, arcface_logits, label="Margin1, 2, 3 [{}, {}, {}]".format(margin1, margin2, margin3))
-        plt.plot(xx, xx, label="Original")
-        plt.legend()
-        plt.grid()
-        plt.tight_layout()
-
-    def plot_arc_trans(margin_list, new_fig=True):
-        xx = np.arange(-1, 1, 0.01)
-        y_true = tf.ones_like(xx)
-        if new_fig:
-            fig = plt.figure()
-        for margin1, margin2, margin3 in margin_list:
-            y_pred_vals = xx[tf.cast(y_true, dtype=tf.bool)]
-            theta = tf.cos(tf.acos(y_pred_vals) * margin1 + margin2) - margin3
-            theta_valid = tf.where(theta < y_pred_vals, theta, y_pred_vals)
             theta_one_hot = (theta_valid - y_pred_vals) * y_true
             arcface_logits = (theta_one_hot + xx).numpy()
             plt.plot(xx, arcface_logits, label="Margin1, 2, 3 [{}, {}, {}]".format(margin1, margin2, margin3))
@@ -889,240 +818,6 @@
               print("label: %d, pos: %d, %f, neg: %d, %f" % (label, labels[pos], dist[pos], labels[neg_random], dist[neg_random]))
       return anchors, poses, negs
   ```
-  ```py
-  Epoch 1
-  4447/4447 [==============================] - 951s 214ms/step - loss: 0.0250
-  4447/4447 [==============================] - 939s 211ms/step - loss: 0.0081
-  5895/5895 [==============================] - 1224s 208ms/step - loss: 0.0170
-  5895/5895 [==============================] - 1222s 207ms/step - loss: 0.0056
-  6167/6167 [==============================] - 1276s 207ms/step - loss: 0.0160
-  6167/6167 [==============================] - 1271s 206ms/step - loss: 0.0054
-  6139/6139 [==============================] - 1262s 206ms/step - loss: 0.0176
-  6139/6139 [==============================] - 1267s 206ms/step - loss: 0.0058
-  6304/6304 [==============================] - 1270s 201ms/step - loss: 0.0166
-  6304/6304 [==============================] - 1272s 202ms/step - loss: 0.0055
-  Epoch 11
-  6436/6436 [==============================] - 1294s 201ms/step - loss: 0.0164
-  6436/6436 [==============================] - 1295s 201ms/step - loss: 0.0047
-  6184/6184 [==============================] - 1245s 201ms/step - loss: 0.0184
-  6184/6184 [==============================] - 1246s 202ms/step - loss: 0.0049
-  5890/5890 [==============================] - 1188s 202ms/step - loss: 0.0211
-  5890/5890 [==============================] - 1189s 202ms/step - loss: 0.0060
-  5581/5581 [==============================] - 1128s 202ms/step - loss: 0.0247
-  5581/5581 [==============================] - 1128s 202ms/step - loss: 0.0086
-  5469/5469 [==============================] - 1107s 202ms/step - loss: 0.0285
-  5469/5469 [==============================] - 1107s 202ms/step - loss: 0.0119
-  Epoch 21
-  5338/5338 [==============================] - 1079s 202ms/step - loss: 0.0318
-  5338/5338 [==============================] - 1080s 202ms/step - loss: 0.0162
-  5110/5110 [==============================] - 1040s 204ms/step - loss: 0.0354
-  5110/5110 [==============================] - 1041s 204ms/step - loss: 0.0209
-  4946/4946 [==============================] - 1011s 204ms/step - loss: 0.0391
-  4946/4946 [==============================] - 1007s 204ms/step - loss: 0.0269
-  >>>> lfw evaluation max accuracy: 0.994167, thresh: 0.245675, overall max accuracy: 0.994500
-  >>>> cfp_fp evaluation max accuracy: 0.918143, thresh: 0.112114, overall max accuracy: 0.919286
-  >>>> agedb_30 evaluation max accuracy: 0.938333, thresh: 0.160105, overall max accuracy: 0.939500
-  ```
-## Online Triplet loss train
-  - [TensorFlow Addons Losses: TripletSemiHardLoss](https://www.tensorflow.org/addons/tutorials/losses_triplet)
-  ```py
-  import pickle
-  import pandas as pd
-  with open('faces_emore_img_class_shuffle.pkl', 'rb') as ff:
-      aa = pickle.load(ff)
-  image_names, image_classes = aa['image_names'], aa['image_classes']
-  classes = np.max(image_classes) + 1
-  print(len(image_names), len(image_classes), classes)
-  # 5822653 5822653 85742
-
-  class Triplet_datasets:
-      def __init__(self, image_names, image_classes, batch_size=48, image_per_class=4, img_shape=(112, 112, 3)):
-          self.AUTOTUNE = tf.data.experimental.AUTOTUNE
-          image_dataframe = pd.DataFrame({'image_names': image_names, "image_classes" : image_classes})
-          image_dataframe = image_dataframe.groupby("image_classes").apply(lambda xx: xx.image_names.values)
-          aa = image_dataframe.map(len)
-          self.image_dataframe = image_dataframe[aa > image_per_class]
-          self.split_func = lambda xx: np.array(np.split(np.random.permutation(xx)[:len(xx) // image_per_class * image_per_class], len(xx) // image_per_class))
-          self.image_per_class = image_per_class
-          self.batch_size = batch_size
-          self.img_shape = img_shape[:2]
-          self.channels = img_shape[2] if len(img_shape) > 2 else 3
-          print("The final train_dataset batch will be %s" % ([batch_size * image_per_class, * self.img_shape, self.channels]))
-
-          image_data = self.image_data_shuffle()
-          self.steps_per_epoch = np.ceil(image_data.shape[0] / self.batch_size)
-
-          train_dataset = tf.data.Dataset.from_generator(self.triplet_datasets_gen, output_types=tf.string, output_shapes=(image_per_class,))
-          # train_dataset = train_dataset.shuffle(total)
-          train_dataset = train_dataset.batch(self.batch_size)
-          train_dataset = train_dataset.map(self.process_batch_path, num_parallel_calls=self.AUTOTUNE)
-          self.train_dataset = train_dataset.prefetch(buffer_size=self.AUTOTUNE)
-
-      def triplet_datasets_gen(self):
-          while True:
-              tf.print("Shuffle image data...")
-              image_data = self.image_data_shuffle()
-              for ii in image_data:
-                  yield ii
-
-      def image_data_shuffle(self):
-          shuffle_dataset = self.image_dataframe.map(self.split_func)
-          tt = np.random.permutation(np.vstack(shuffle_dataset.values))
-          return tt
-
-      def process_batch_path(self, image_name_batch):
-          image_names = tf.reshape(image_name_batch, [-1])
-          images, labels = tf.map_fn(self.process_single_path, image_names, dtype=(tf.float32, tf.int32))
-          return images, labels
-
-      def process_single_path(self, img_name, random_convert=True):
-          parts = tf.strings.split(img_name, os.path.sep)[-2]
-          label = tf.cast(tf.strings.to_number(parts), tf.int32)
-          img = tf.io.read_file(img_name)
-          img = tf.image.decode_jpeg(img, channels=self.channels)
-          img = tf.image.convert_image_dtype(img, tf.float32)
-          if random_convert:
-              img = tf.image.random_flip_left_right(img)
-              img = tf.image.random_brightness(img, 0.2)
-              img = tf.image.random_crop(img, [100, 100, 3])
-          img = tf.image.resize(img, self.img_shape)
-          img = (img - 0.5) * 2
-          return img, label
-
-  def batch_hard_triplet_loss(labels, embeddings, alpha=0.35):
-      labels = tf.squeeze(labels)
-      labels.set_shape([None])
-      pos_mask = tf.equal(tf.expand_dims(labels, 0), tf.expand_dims(labels, 1))
-      norm_emb = tf.nn.l2_normalize(embeddings, 1)
-      dists = tf.matmul(norm_emb, tf.transpose(norm_emb))
-      # pos_dists = tf.ragged.boolean_mask(dists, pos_mask)
-      pos_dists = tf.where(pos_mask, dists, tf.ones_like(dists))
-      hardest_pos_dist = tf.reduce_min(pos_dists, -1)
-      # neg_dists = tf.ragged.boolean_mask(dists, tf.logical_not(pos_mask))
-      neg_dists = tf.where(pos_mask, tf.ones_like(dists) * -1, dists)
-      hardest_neg_dist = tf.reduce_max(neg_dists, -1)
-      basic_loss = hardest_neg_dist - hardest_pos_dist + alpha
-      return tf.reduce_mean(tf.maximum(basic_loss, 0.0))
-
-  def batch_all_triplet_loss(labels, embeddings, alpha=0.35):
-      labels = tf.squeeze(labels)
-      labels.set_shape([None])
-      pos_mask = tf.equal(tf.expand_dims(labels, 0), tf.expand_dims(labels, 1))
-      norm_emb = tf.nn.l2_normalize(embeddings, 1)
-      dists = tf.matmul(norm_emb, tf.transpose(norm_emb))
-
-      pos_dists = tf.where(pos_mask, dists, tf.ones_like(dists))
-      pos_dists_loss = tf.reduce_sum(1. - pos_dists, -1) / tf.reduce_sum(tf.cast(pos_mask, dtype=tf.float32), -1)
-      hardest_pos_dist = tf.expand_dims(tf.reduce_min(pos_dists, -1), 1)
-
-      neg_valid_mask = tf.logical_and(tf.logical_not(pos_mask), (hardest_pos_dist - dists) < alpha)
-      neg_dists_valid = tf.where(neg_valid_mask, dists, tf.zeros_like(dists))
-      neg_dists_loss = tf.reduce_sum(neg_dists_valid, -1) / (tf.reduce_sum(tf.cast(neg_valid_mask, dtype=tf.float32), -1) + 1)
-      return pos_dists_loss + neg_dists_loss
-
-  basic_model.compile(optimizer='nadam', loss=batch_all_triplet_loss)
-  basic_model.compile(optimizer='nadam', loss=batch_hard_triplet_loss)
-  triplet_datasets = Triplet_datasets(image_names, image_classes, batch_size=48, image_per_class=4)
-  basic_model.fit(triplet_datasets.train_dataset, epochs=200, verbose=1, callbacks=callbacks, steps_per_epoch=triplet_datasets.steps_per_epoch, initial_epoch=0)
-
-  gg = Gently_stop_callback()
-  for epoch in range(0, 100):
-      train_dataset, steps_per_epoch = triplet_datasets.random_init_triplet_dataset()
-      basic_model.fit(train_dataset, epochs=epoch+1, verbose=1, callbacks=callbacks[:-1], steps_per_epoch=steps_per_epoch, initial_epoch=epoch)
-      del train_dataset
-      print()
-      if not gg.yes_or_no():
-          break
-  ```
-  ```py
-  labels = tf.convert_to_tensor([0, 0, 2, 1, 1, 2])
-  dists = tf.convert_to_tensor([[1, 0.9, 0.8, 0.7, 0.2, 0.1], [0.9, 1, 0.7, 0.5, 0.6, 0.3],
-                                [0.1, 0.2, 1, 0.2, 0.2, 0.8], [0.6, 0.9, 0.3, 1, 0.6, 0.2],
-                                [0.4, 0.5, 0.6, 0.2, 1, 0.2], [0.5, 0.4, 0.2, 0.3, 0.2, 1]])
-  ```
-  ```py
-  # batch_all_triplet_loss
-  Epoch 1/1
-  29650/29650 [==============================] - 6162s 208ms/step - loss: 0.4569
-  >>>> lfw evaluation max accuracy: 0.978333, thresh: 0.391538, overall max accuracy: 0.978333
-  >>>> cfp_fp evaluation max accuracy: 0.891429, thresh: 0.185161, overall max accuracy: 0.891429
-  >>>> agedb_30 evaluation max accuracy: 0.796333, thresh: 0.351609, overall max accuracy: 0.796333
-
-  29650/29650 [==============================] - 5864s 198ms/step - loss: 0.3908
-  29650/29650 [==============================] - 5870s 198ms/step - loss: 0.3633
-  29650/29650 [==============================] - 6338s 214ms/step - loss: 0.3842
-  29650/29650 [==============================] - 5857s 198ms/step - loss: 0.3154
-  Epoch 6/6
-  29650/29650 [==============================] - 5852s 197ms/step - loss: 0.3039
-  29650/29650 [==============================] - 5866s 198ms/step - loss: 0.2966
-  29650/29650 [==============================] - 5875s 198ms/step - loss: 0.2904
-  29650/29650 [==============================] - 5897s 199ms/step - loss: 0.2850
-  29650/29650 [==============================] - 5884s 198ms/step - loss: 0.2801
-  Epoch 11/11
-  29650/29650 [==============================] - 5886s 199ms/step - loss: 0.2744
-  29650/29650 [==============================] - 5916s 200ms/step - loss: 0.2684
-  29650/29650 [==============================] - 5901s 199ms/step - loss: 0.2630
-  >>>> lfw evaluation max accuracy: 0.987667, thresh: 0.444083, overall max accuracy: 0.988333
-  >>>> cfp_fp evaluation max accuracy: 0.921286, thresh: 0.201033, overall max accuracy: 0.928857
-  >>>> agedb_30 evaluation max accuracy: 0.886500, thresh: 0.427934, overall max accuracy: 0.897167
-  ```
-  ```py
-  # softarc hh.h5 --> batch_all_triplet_loss
-  Epoch 11/11
-  29650/29650 [==============================] - 6365s 215ms/step - loss: 0.3880
-  29650/29650 [==============================] - 6337s 214ms/step - loss: 0.3521
-  29650/29650 [==============================] - 6336s 214ms/step - loss: 0.3369
-  29650/29650 [==============================] - 6346s 214ms/step - loss: 0.3260
-  29650/29650 [==============================] - 6341s 214ms/step - loss: 0.3170
-  Epoch 16/16
-  29650/29650 [==============================] - 6376s 215ms/step - loss: 0.3097
-  29650/29650 [==============================] - 6750s 228ms/step - loss: 0.3030
-  >>>> lfw evaluation max accuracy: 0.988833, thresh: 0.433936, overall max accuracy: 0.989167
-  >>>> cfp_fp evaluation max accuracy: 0.928143, thresh: 0.196322, overall max accuracy: 0.929000
-  >>>> agedb_30 evaluation max accuracy: 0.904833, thresh: 0.379133, overall max accuracy: 0.910167
-  ```
-  ```py
-  # softarc hh.h5 --> batch_hard_triplet_loss
-  Epoch 24/24
-  29650/29650 [==============================] - 6475s 218ms/step - loss: 0.0523
-  29650/29650 [==============================] - 6373s 215ms/step - loss: 0.0510
-  29650/29650 [==============================] - 6378s 215ms/step - loss: 0.0498
-  29650/29650 [==============================] - 6373s 215ms/step - loss: 0.0487
-  29650/29650 [==============================] - 6368s 215ms/step - loss: 0.0478
-  Epoch 29/29
-  29650/29650 [==============================] - 6363s 215ms/step - loss: 0.0469
-  29650/29650 [==============================] - 6358s 214ms/step - loss: 0.0460
-  29650/29650 [==============================] - 6346s 214ms/step - loss: 0.0454
-  29650/29650 [==============================] - 6345s 214ms/step - loss: 0.0447
-  29650/29650 [==============================] - 6487s 219ms/step - loss: 0.0439
-  Epoch 34/34
-  29650/29650 [==============================] - 6503s 219ms/step - loss: 0.0435
-  29650/29650 [==============================] - 6515s 220ms/step - loss: 0.0429
-  29650/29650 [==============================] - 6433s 217ms/step - loss: 0.0425
-  29650/29650 [==============================] - 6432s 217ms/step - loss: 0.0421
-  29650/29650 [==============================] - 6428s 217ms/step - loss: 0.0416
-  Epoch 39/39
-  29650/29650 [==============================] - 6373s 215ms/step - loss: 0.0413
-  29650/29650 [==============================] - 6389s 215ms/step - loss: 0.0410
-  29650/29650 [==============================] - 6366s 215ms/step - loss: 0.0407
-  29650/29650 [==============================] - 6357s 214ms/step - loss: 0.0404
-  29650/29650 [==============================] - 6353s 214ms/step - loss: 0.0402
-  Epoch 44/44
-  29650/29650 [==============================] - 6375s 215ms/step - loss: 0.0400
-  29650/29650 [==============================] - 6406s 216ms/step - loss: 0.0398
-  alpha 0.3 --> alpha 0.2
-  Epoch 46/46
-  29650/29650 [==============================] - 6452s 218ms/step - loss: 0.0156
-
-  Epoch 32/32
-  >>>> lfw evaluation max accuracy: 0.995667, thresh: 0.342895, overall max accuracy: 0.996167
-  >>>> cfp_fp evaluation max accuracy: 0.949857, thresh: 0.167578, overall max accuracy: 0.950857
-  >>>> agedb_30 evaluation max accuracy: 0.956500, thresh: 0.298158, overall max accuracy: 0.956500
-  Epoch 46/46
-  >>>> lfw evaluation max accuracy: 0.995833, thresh: 0.365894, overall max accuracy: 0.995833
-  >>>> cfp_fp evaluation max accuracy: 0.951143, thresh: 0.158986, overall max accuracy: 0.951143
-  >>>> agedb_30 evaluation max accuracy: 0.959333, thresh: 0.279509, overall max accuracy: 0.959333
-  ```
 ## TF 通用函数
   - **tf.compat.v1.scatter_sub** 将 `ref` 中 `indices` 指定位置的值减去 `updates`，会同步更新 `ref`
     ```py
@@ -1279,382 +974,140 @@
     - 第二部分是更新，利用模板匹配进行人脸目标位置的初步预判，再结合mtcnn中的onet来对人脸位置进行更加精细的定位，最后通过mtcnn中的rnet的置信度来判断跟踪是否为人脸，防止当有手从面前慢慢挥过去的话，框会跟着手走而无法跟踪到真正的人脸
     - 第三部分是定时检测，通过在更新的部分中加入一个定时器来做定时人脸检测，从而判断中途是否有新人脸的加入，本项目在定时人脸检测中使用了一个trick就是将已跟踪的人脸所在位置利用蒙版遮蔽起来，避免了人脸检测的重复检测，减少其计算量，从而提高了检测速度
 ***
-```py
-import data
-import eval
-import myCallbacks
-import mobile_facenet
 
-train_ds, steps_per_epoch, classes = data.prepare_for_training('/datasets/faces_emore_112x112_folders')
-lfw_eval = eval.epoch_eval_callback('/datasets/faces_emore/lfw.bin', save_model=None, eval_freq=1, flip=True)
-cfp_fp_eval = eval.epoch_eval_callback('/datasets/faces_emore/cfp_fp.bin', save_model=None, eval_freq=1, flip=True)
-agedb_30_eval = eval.epoch_eval_callback('/datasets/faces_emore/agedb_30.bin', save_model=None, eval_freq=1, flip=True)
-callbacks = myCallbacks.basic_callbacks(checkpoint="./keras_checkpoint.h5", lr=0.1)
-callbacks = [lfw_eval, cfp_fp_eval, agedb_30_eval] + callbacks
-basic_model = mobile_facenet.mobile_facenet(256)
-```
-```py
-import mobile_facenet
-import losses
-import train
-
-''' Basic model '''
-# xx = keras.applications.ResNet101V2(include_top=False, weights='imagenet')
-# xx = tf.keras.applications.MobileNetV2(input_shape=(112, 112, 3), include_top=False, weights=None)
-# xx = tf.keras.applications.MobileNet(input_shape=(112, 112, 3), include_top=False, weights=None)
-# xx = keras.applications.NASNetMobile(input_shape=(112, 112, 3), include_top=False, weights=None)
-# xx = tf.keras.applications.ResNet50V2(include_top=False, weights='imagenet')
-# xx = keras.models.load_model('checkpoints/mobilnet_v1_basic_922667.h5', compile=False)
-xx = tf.keras.applications.ResNet50V2(input_shape=(112, 112, 3), include_top=False, weights='imagenet')
-xx.trainable = True
-
-inputs = xx.inputs[0]
-nn = xx.outputs[0]
-nn = keras.layers.Conv2D(512, 3, use_bias=False)(nn)
-# nn = keras.layers.Conv2D(512, 4, use_bias=False)(nn)
-# BatchNormalization(momentum=0.99, epsilon=0.001)
-nn = keras.layers.BatchNormalization(momentum=0.9, epsilon=2e-5)(nn)
-# nn = layers.Dropout(0.4)(nn)
-nn = keras.layers.Flatten()(nn)
-nn = keras.layers.Dense(512)(nn)
-embedding = keras.layers.BatchNormalization(momentum=0.9, epsilon=2e-5, name='embedding')(nn)
-# norm_emb = layers.Lambda(tf.nn.l2_normalize, name='norm_embedding', arguments={'axis': 1})(embedding)
-basic_model = keras.models.Model(inputs, embedding)
-
-basic_model = mobile_facenet.mobile_facenet(128)
-tt = train.TrainNet(basic_model, '/datasets/faces_emore_112x112_folders', ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin'], 'keras_mobilefacenet.h5', lr_base=0.001, random_status=1)
-
-tt.train_model_from_scratch(10, 200, 'nadam', keras.losses.categorical_crossentropy, losses.arcface_loss)
-```
-- **Scratch train**
+# nmslib dot svm dist calculation comparing
   ```py
-  import mobile_facenet
-  import losses
-  import train
-  basic_model = train.buildin_models("MobileNet", dropout=0.4, emb_shape=256)
-  # basic_model = mobile_facenet.mobile_facenet(128)
-  basic_model = mobile_facenet.mobile_facenet(256, dropout=0.4, name="mobile_facenet_256")
-  data_path = '/datasets/faces_emore_112x112_folders'
-  eval_paths = ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin']
-  tt = train.Train(data_path, eval_paths, 'keras_mobilefacenet_256.h5', basic_model=basic_model, model=None, compile=False, lr_base=0.001, batch_size=160, random_status=3)
-  sch = [
-    {"loss": keras.losses.categorical_crossentropy, "optimizer": "nadam", "epoch": 15},
-    {"loss": losses.margin_softmax, "optimizer": None, "epoch": 10},
-    {"loss": losses.ArcfaceLoss(), "optimizer": None, "bottleneckOnly": True, "epoch": 4},
-    {"loss": losses.ArcfaceLoss(), "optimizer": None, "epoch": 15},
-    {"loss": losses.ArcfaceLoss(scale=32.0), "optimizer": None, "epoch": 15},
-    {"loss": losses.batch_hard_triplet_loss, "optimizer": None, "epoch": 30},
-  ]
-  tt.train(sch, 0)
+  !pip install nmslib
+  import nmslib
+  data = np.random.randn(1000, 512).astype(np.float32)
+  index = nmslib.init(method='hnsw', space='cosinesimil')
+  index.addDataPointBatch(data)
+  %time index.createIndex({'post': 2}, print_progress=True)
+  # CPU times: user 520 ms, sys: 27.8 ms, total: 548 ms
+  # Wall time: 70.3 ms
+
+  neighbours = index.knnQueryBatch(data[:10], k=1, num_threads=4)
+
+  from sklearn import metrics
+  from sklearn.svm import SVC
+  model = SVC()
+  %time model.fit(data, np.arange(data.shape[0]))
+  # CPU times: user 2.44 s, sys: 15.1 ms, total: 2.46 s
+  # Wall time: 2.46 s
+
+  ''' nmslib '''
+  %timeit index.knnQueryBatch(data[:10], k=1, num_threads=4)
+  # 306 µs ± 2.71 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
+
+  ''' dot '''
+  %timeit np.argmax(np.dot(data, data[:10].T), 0)
+  # 46.5 µs ± 179 ns per loop (mean ± std. dev. of 7 runs, 10000 loops each)
+
+  ''' svm '''
+  %timeit model.predict(data[:10])
+  # 36.1 ms ± 422 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
   ```
   ```py
-  tt = train.Train(data_path, eval_paths, 'keras_mobilenet_256.h5', basic_model=-2, model="./checkpoints/keras_mobilefacenet_256_II.h5", compile=False, lr_base=0.1, batch_size=160, random_status=3)
-  tt.train([{"loss": losses.ArcfaceLoss(), "optimizer": keras.optimizers.SGD(0.1, momentum=0.9), "type": tt.arcface, "epoch": 10}], 0)
+  import nmslib
+  data = np.random.randn(100000, 512).astype(np.float32)
+  index = nmslib.init(method='hnsw', space='cosinesimil')
+  index.addDataPointBatch(data)
+
+  %time index.createIndex({'post': 2}, print_progress=True)
+  # CPU times: user 20min 7s, sys: 667 ms, total: 20min 7s
+  # Wall time: 1min 42s
+
+  neighbours = index.knnQueryBatch(data[:10], k=1, num_threads=4)
+
+  ''' nmslib '''
+  %timeit index.knnQueryBatch(data[:10], k=1, num_threads=4)
+  # 1.17 ms ± 2.06 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
+
+  ''' dot '''
+  %timeit np.argmax(np.dot(data, data[:10].T), 0)
+  # 10.9 ms ± 14.1 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
   ```
-- **Continue train**
+***
+
+# Centerface
+  - [Github CenterFace](https://github.com/Star-Clouds/CenterFace.git)
   ```py
-  import losses
-  import train
-  data_path = '/datasets/faces_emore_112x112_folders'
-  eval_paths = ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin']
-  tt = train.Train(data_path, eval_paths, 'keras_mobilefacenet_256_II.h5', basic_model=-2, model='./checkpoints/keras_mobilefacenet_256.h5', compile=True, lr_base=0.001, batch_size=160, random_status=3)
+  import cv2
+  import scipy.io as sio
+  import os
+  from centerface import CenterFace
+  cf = CenterFace(landmarks=True)
+  imm = cv2.imread('../../test_img/Anthony_Hopkins_0002.jpg')
+  h, w, _ = imm.shape
+  # h, w = 480, 640
+  cf(imm, h, w, threshold=0.9)
+
+  os.chdir("../../../samba/tdFace-flask/mtcnn_tf/")
+  import mtcnn
+  mtcnn_det = mtcnn.MTCNN('./mtcnn.pb')
+  mtcnn_det.detect_faces(imm)
+
+  import insightface
+  retina = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+  retina.prepare(-1)
+  retina.detect(imm)
+
+  ''' Single face '''
+  %timeit cf(imm, h, w, threshold=0.9)
+  # 13.3 ms ± 795 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+  %timeit mtcnn_det.detect_faces(imm)
+  # 4.25 ms ± 103 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+  %timeit retina.detect(imm)
+  # 16.3 ms ± 256 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+
+  iaa = cv2.imread('../test_images/1.jpg')
+  h, w, _ = iaa.shape
+  ibb = imread('../test_images/1.jpg')
+  cf(iaa, h, w, threshold=0.9)
+  mtcnn_det.detect_faces(ibb)
+  retina.detect(iaa)
+
+  ''' Multi face '''
+  %timeit -n 100 cf(iaa, h, w, threshold=0.9)
+  # 315 ms ± 35.1 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
+  %timeit -n 100 mtcnn_det.detect_faces(ibb)
+  # 63 ms ± 2.65 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
+  %timeit -n 100 retina.detect(iaa)
+  # 456 ms ± 12.5 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
   ```
-- **Continue Triplet train**
   ```py
-  import losses
-  import train
-  data_path = '/datasets/faces_emore_112x112_folders'
-  eval_paths = ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin']
-  tt = train.Train(data_path, eval_paths, 'keras_mobilefacenet_256_triplet_III.h5', basic_model='checkpoints/keras_mobilefacenet_triplet.h5', model=None, compile=True, batch_size=128)
-  sch = [
-    {"loss": losses.batch_hard_triplet_loss, "optimizer": None, "type": tt.triplet, "epoch": 30},
-  ]
-  tt.train(sch, 30)
+  In [37]: cf(iaa, h, w, threshold=0.9)                                                                                                                                                                      
+  Out[37]:
+  (array([[1.2027432e+03, 6.3846680e+02, 1.2974719e+03, 7.1919543e+02,
+           9.6600962e-01],
+          [3.6708798e+02, 3.1482706e+02, 5.2461823e+02, 4.4480045e+02,
+           9.5752537e-01],
+          [8.0555890e+02, 3.6767062e+02, 8.7024487e+02, 4.1478021e+02,
+           9.3526572e-01],
+          [9.1664618e+02, 3.9390857e+02, 9.4433923e+02, 4.2681378e+02,
+           9.1680831e-01]], dtype=float32),
+   array([[1219.671  ,  688.14215, 1210.0287 ,  677.7351 , 1203.3889 ,
+            696.7554 , 1239.1373 ,  704.9357 , 1229.6863 ,  695.70685],
+          [ 474.19067,  401.61896,  507.10788,  376.0719 ,  552.7421 ,
+            422.85565,  518.40485,  437.2738 ,  542.47516,  417.5965 ],
+          [ 840.6775 ,  403.3571 ,  848.16486,  395.8568 ,  855.9793 ,
+            407.278  ,  841.77545,  408.02695,  848.8935 ,  401.77716],
+          [ 942.64685,  415.50668,  937.8298 ,  410.7285 ,  949.89575,
+            416.11053,  943.01404,  418.20386,  940.0262 ,  414.42154]],
+         dtype=float32))
+
+  In [38]: mtcnn_det.detect_faces(ibb)                                                                                                                                                                               
+  Out[38]:
+  (array([[ 305.56012,  383.83823,  460.1761 ,  514.2741 ],
+         [ 357.47598,  813.1547 ,  419.11575,  870.75256],
+         [ 628.12366, 1228.7682 ,  728.3427 , 1316.0033 ]], dtype=float32),
+  array([0.9999721 , 0.99896455, 0.94571006], dtype=float32),
+  array([[ 370.8418 ,  379.21454,  408.57153,  423.7774 ,  430.34595,
+           440.22064,  495.93152,  468.10645,  428.8279 ,  476.17242],
+         [ 386.78534,  388.89816,  400.56534,  406.9472 ,  409.095  ,
+           833.8898 ,  853.8183 ,  843.5045 ,  831.1647 ,  850.6185 ],
+         [ 661.7363 ,  661.23285,  678.1033 ,  705.1453 ,  705.9677 ,
+          1266.657  , 1293.0474 , 1281.595  , 1267.5706 , 1284.7332 ]],
+        dtype=float32))
   ```
-```py
-import insightface
-img = imread('/home/leondgarse/workspace/samba/insightface-master/test_images/4.png')
-det = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
-det.prepare(0)  # 685M
-det.detect(img) # 757M
-
-det2 = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
-det2.prepare(0) # 879M
-det2.detect(img)  # 951M
-
-det3 = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
-det3.prepare(0) # 1039M
-!nvidia-smi | tail -n 3 | head -n 1
-det3.detect(img)  # 1111M
-!nvidia-smi | tail -n 3 | head -n 1
-
-det4 = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
-det4.prepare(0) # 1233MiB
-!nvidia-smi | tail -n 3 | head -n 1
-det4.detect(img)  # 1305MiB
-!nvidia-smi | tail -n 3 | head -n 1
-
-det = []
-for ii in range(5):
-  det.append(insightface.model_zoo.face_detection.retinaface_mnet025_v1())
-  det[ii].prepare(0)
-  !nvidia-smi | tail -n 3 | head -n 1
-  det[ii].detect(img)
-  !nvidia-smi | tail -n 3 | head -n 1
-```
-```py
-cd ~/workspace/face_recognition_collection/insightface/deploy
-from mtcnn_detector import MtcnnDetector
-import cv2
-import mxnet as mx
-
-img = cv2.imread('../../test_img/Anthony_Hopkins_0002.jpg')
-det_threshold = [0.6,0.7,0.8]
-mtcnn_path = './mtcnn-model'
-
-det = []
-for ii in range(20):
-  det.append(MtcnnDetector(model_folder=mtcnn_path, num_worker=2, accurate_landmark = False, threshold=det_threshold, minsize=40, ctx=mx.gpu(ii%2)))
-  !nvidia-smi | tail -n 4 | head -n 2
-  det[ii].detect_face(img, det_type=0)
-  !nvidia-smi | tail -n 4 | head -n 2
-```
-```py
-# TF MTCNN
-8.17 ms ± 134 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-
-# MX MTCNN
-25.5 ms ± 260 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
-
-# MX Retinaface
-38.7 ms ± 3.53 ms per loop (mean ± std. dev. of 7 runs, 10 loops each)
-```
-
-```py
-physical_devices = tf.config.experimental.list_physical_devices('GPU')
-assert len(physical_devices) > 0, "No GPUs found"
-tf.config.experimental.set_virtual_device_configuration(
-  physical_devices[0],
-  [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=100),
-   tf.config.experimental.VirtualDeviceConfiguration(memory_limit=100)])
-
-try:
-  tf.config.experimental.set_memory_growth(physical_devices[0], True)
-except:
-```
-```py
-!pip install nmslib
-import nmslib
-data = np.random.randn(1000, 512).astype(np.float32)
-index = nmslib.init(method='hnsw', space='cosinesimil')
-index.addDataPointBatch(data)
-%time index.createIndex({'post': 2}, print_progress=True)
-# CPU times: user 520 ms, sys: 27.8 ms, total: 548 ms
-# Wall time: 70.3 ms
-
-neighbours = index.knnQueryBatch(data[:10], k=1, num_threads=4)
-
-from sklearn import metrics
-from sklearn.svm import SVC
-model = SVC()
-%time model.fit(data, np.arange(data.shape[0]))
-# CPU times: user 2.44 s, sys: 15.1 ms, total: 2.46 s
-# Wall time: 2.46 s
-
-''' nmslib '''
-%timeit index.knnQueryBatch(data[:10], k=1, num_threads=4)
-# 306 µs ± 2.71 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
-
-''' dot '''
-%timeit np.argmax(np.dot(data, data[:10].T), 0)
-# 46.5 µs ± 179 ns per loop (mean ± std. dev. of 7 runs, 10000 loops each)
-
-''' svm '''
-%timeit model.predict(data[:10])
-# 36.1 ms ± 422 µs per loop (mean ± std. dev. of 7 runs, 10 loops each)
-```
-```py
-import nmslib
-data = np.random.randn(100000, 512).astype(np.float32)
-index = nmslib.init(method='hnsw', space='cosinesimil')
-index.addDataPointBatch(data)
-
-%time index.createIndex({'post': 2}, print_progress=True)
-# CPU times: user 20min 7s, sys: 667 ms, total: 20min 7s
-# Wall time: 1min 42s
-
-neighbours = index.knnQueryBatch(data[:10], k=1, num_threads=4)
-
-''' nmslib '''
-%timeit index.knnQueryBatch(data[:10], k=1, num_threads=4)
-# 1.17 ms ± 2.06 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
-
-''' dot '''
-%timeit np.argmax(np.dot(data, data[:10].T), 0)
-# 10.9 ms ± 14.1 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-```
-
-```py
-import cv2
-import scipy.io as sio
-import os
-from centerface import CenterFace
-centerface = CenterFace(landmarks=True)
-imm = cv2.imread('../../test_img/Anthony_Hopkins_0002.jpg')
-h, w, _ = imm.shape
-centerface(imm, h, w, threshold=0.9)
-
-!cd ../../../samba/tdFace-flask/mtcnn_tf/
-import mtcnn
-mtcnn_det = mtcnn.MTCNN('./mtcnn.pb')
-mtcnn_det.detect_faces(imm)
-
-import insightface
-retina = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
-retina.prepare(-1)
-retina.detect(imm)
-
-''' Single face '''
-%timeit centerface(imm, h, w, threshold=0.9)
-# 13.3 ms ± 795 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-%timeit mtcnn_det.detect_faces(imm)
-# 4.25 ms ± 103 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-%timeit retina.detect(imm)
-# 16.3 ms ± 256 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-
-iaa = cv2.imread('../test_images/1.jpg')
-h, w, _ = iaa.shape
-ibb = imread('../test_images/1.jpg')
-centerface(iaa, h, w, threshold=0.9)
-mtcnn_det.detect_faces(ibb)
-retina.detect(iaa)
-
-''' Multi face '''
-%timeit -n 100 centerface(iaa, h, w, threshold=0.9)
-# 315 ms ± 35.1 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
-%timeit -n 100 mtcnn_det.detect_faces(ibb)
-# 63 ms ± 2.65 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
-%timeit -n 100 retina.detect(iaa)
-# 456 ms ± 12.5 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
-```
-```py
-In [37]: centerface(iaa, h, w, threshold=0.9)                                                                                                                                                                      
-Out[37]:
-(array([[1.2027432e+03, 6.3846680e+02, 1.2974719e+03, 7.1919543e+02,
-         9.6600962e-01],
-        [3.6708798e+02, 3.1482706e+02, 5.2461823e+02, 4.4480045e+02,
-         9.5752537e-01],
-        [8.0555890e+02, 3.6767062e+02, 8.7024487e+02, 4.1478021e+02,
-         9.3526572e-01],
-        [9.1664618e+02, 3.9390857e+02, 9.4433923e+02, 4.2681378e+02,
-         9.1680831e-01]], dtype=float32),
- array([[1219.671  ,  688.14215, 1210.0287 ,  677.7351 , 1203.3889 ,
-          696.7554 , 1239.1373 ,  704.9357 , 1229.6863 ,  695.70685],
-        [ 474.19067,  401.61896,  507.10788,  376.0719 ,  552.7421 ,
-          422.85565,  518.40485,  437.2738 ,  542.47516,  417.5965 ],
-        [ 840.6775 ,  403.3571 ,  848.16486,  395.8568 ,  855.9793 ,
-          407.278  ,  841.77545,  408.02695,  848.8935 ,  401.77716],
-        [ 942.64685,  415.50668,  937.8298 ,  410.7285 ,  949.89575,
-          416.11053,  943.01404,  418.20386,  940.0262 ,  414.42154]],
-       dtype=float32))
-
-In [38]: mtcnn_det.detect_faces(ibb)                                                                                                                                                                               
-Out[38]:
-(array([[ 305.56012,  383.83823,  460.1761 ,  514.2741 ],
-       [ 357.47598,  813.1547 ,  419.11575,  870.75256],
-       [ 628.12366, 1228.7682 ,  728.3427 , 1316.0033 ]], dtype=float32),
-array([0.9999721 , 0.99896455, 0.94571006], dtype=float32),
-array([[ 370.8418 ,  379.21454,  408.57153,  423.7774 ,  430.34595,
-         440.22064,  495.93152,  468.10645,  428.8279 ,  476.17242],
-       [ 386.78534,  388.89816,  400.56534,  406.9472 ,  409.095  ,
-         833.8898 ,  853.8183 ,  843.5045 ,  831.1647 ,  850.6185 ],
-       [ 661.7363 ,  661.23285,  678.1033 ,  705.1453 ,  705.9677 ,
-        1266.657  , 1293.0474 , 1281.595  , 1267.5706 , 1284.7332 ]],
-      dtype=float32))
-```
-```sh
-ls -1 /datasets/faces_emore_112x112_folders | head -n 20 | xargs -I {} sh -c "find /datasets/faces_emore_112x112_folders/{} -name *.jpg | head" > foo
-```
-```py
-import os
-import json
-import numpy as np
-import tensorflow as tf
-
-def tf_imread(file_paths):
-    img = tf.io.read_file(file_paths)
-    img = tf.image.decode_jpeg(img, channels=3)
-    img = tf.image.convert_image_dtype(img, tf.float32)
-    img = (img - 0.5) * 2
-    return tf.expand_dims(img, 0)
-
-def random_pick_files(data_path, folder=10, images=10):
-    aa = os.listdir(data_path)
-    bb = np.random.permutation(aa)[:10]
-    files = []
-    for ii in bb:
-        cc = os.listdir(os.path.join(data_path, ii))
-        dd = np.random.permutation(cc)[:10]
-        for jj in dd:
-            files.append(os.path.join(data_path, ii, jj))
-    return files
-
-def images_2_emb(files, model_path):
-    interpreter = tf.lite.Interpreter(model_path)
-    interpreter.allocate_tensors()
-    input_index = interpreter.get_input_details()[0]["index"]
-    output_index = interpreter.get_output_details()[0]["index"]
-
-    dd = []
-    for ii in files:
-        imm = tf_imread(ii.strip())
-        interpreter.set_tensor(input_index, imm)
-        interpreter.invoke()
-        dd.append(interpreter.get_tensor(output_index)[0])
-    embs = np.array(dd)
-    return embs
-
-def save_uint_emb_to_file(embs, files, dest_path):
-    print("Orign embeddings range:", embs.min(), embs.max())
-    gg = (embs + 64).astype(np.uint)
-    print("Uint embeddings range:", gg.min(), gg.max())
-
-    tt = []
-    for id, ii in enumerate(files):
-        ss = json.dumps(gg[id].tolist())
-        ss = ss.replace(' ', '')[1:-1]
-        tt.append(ii.strip() + ',' + ss)
-
-    with open(dest_path, 'w') as ff:
-        for ii in tt:
-            ff.write(ii + "\n")
-
-if __name__ == "__main__":
-    data_path = '/datasets/faces_emore_112x112_folders/'
-    model_path = 'mobilefacenet_tf2.tflite'
-    dest_path = "goo"
-    files = random_pick_files(data_path, folder=10, images=10)
-    embs = images_2_emb(files, model_path)
-    save_uint_emb_to_file(embs, files, dest_path)
-
-imm = tf_imread('/datasets/faces_emore_112x112_folders/0/1.jpg')
-interpreter.set_tensor(input_index, imm)
-interpreter.invoke()
-aa = interpreter.get_tensor(output_index)[0]
-
-mm = tf.keras.models.load_model(glob2.glob('./keras_mobilefacenet_256_basic_*.h5')[0], compile=False)
-bb = mm(imm).numpy()
-assert np.allclose(aa, bb, rtol=1e-3)
-```
-
-When you use the conversion script , you tensorflow version must be tf1.10 . The conversion script can’t work in newer version . I use tf1.14 to train ,but I must use tf1.10 to convert . But I am not sure about TF2.0 model
-```py
-from onnx import checker
-import onnx
-
-# Load onnx model
-model_proto = onnx.load_model(converted_model_path)
-
-# Check if converted ONNX protobuf is valid
-checker.check_graph(model_proto.graph)
-```
+***

@@ -74,6 +74,7 @@ function generate_exclude_list_base {
 /home/lost+found
 /root/.gvfs
 /var/crash
+/var/log
 `ls -1 /home/*/.gvfs 2>/dev/null`
 `ls -1 /lib/modules/\`uname -r\`/volatile/ 2>/dev/null`
 `ls -1 /var/cache/apt/archives/partial/ 2>/dev/null`

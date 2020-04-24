@@ -769,6 +769,21 @@
   - **assets** 目录包含 TensorFlow graph 会使用的文件，如初始化单词表的文件
   - **assets.extra** 目录包含任何 TensorFlow graph 不用的文件，如接口调用示例等
 ## tensorflow_model_server 使用模型启动服务
+  - **Q / A**
+    ```sh
+    ''' Q: Tensorflow serving No versions of servable <MODEL> found under base path <path>
+    '''
+    ''' A: `model_base_path` 指定的路径下需要包含 `version` 文件夹，`version` 下是模型文件
+    $ tree /tmp/mobilenet
+    /tmp/mobilenet
+    └── 1
+        ├── assets
+        ├── saved_model.pb
+        └── variables
+            ├── variables.data-00000-of-00001
+            └── variables.index
+    '''
+    ```
   - **启动服务**
     ```sh
     echo "deb [arch=amd64] http://storage.googleapis.com/tensorflow-serving-apt stable tensorflow-model-server tensorflow-model-server-universal" | sudo tee /etc/apt/sources.list.d/tensorflow-serving.list
