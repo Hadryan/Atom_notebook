@@ -461,12 +461,18 @@
     $ sudo vim /etc/samba/smb.conf
 
     # 在 smb.conf 最后添加
-    [username]
-    path = /home/username
+    [username_workspace]
+    comment = username_workspace
+    path = /home/username/workspace
+    create mask = 0755
+    directory mask = 0755
     available = yes
     browseable = yes
     public = yes
     writable = yes
+    valid user = username
+    force user = username
+    force group = username
     ```
   - **重启 samba 服务器**
     ```shell
@@ -1294,6 +1300,7 @@
 
     # 使用 pip 安装 3.0.0 版本
     pip install https://github.com/shadowsocks/shadowsocks/archive/master.zip -U
+    export PATH=$PATH:$HOME/.local/bin
     sslocal --version
     # Shadowsocks 3.0.0
     ```
@@ -1604,6 +1611,19 @@
     ```
   - 163 邮箱配置客户端时，密码使用的是授权码，不是登陆密码
 ## Stardict
+  - **Install in 20.04**
+    - [librarian0](https://packages.ubuntu.com/bionic/amd64/librarian0/download)
+    - [rarian-compat](https://packages.ubuntu.com/bionic/amd64/rarian-compat/download)
+    - [stardict-common](https://packages.ubuntu.com/bionic/all/stardict-common/download)
+    - [stardict-gnome](https://packages.ubuntu.com/bionic/amd64/stardict-gnome/download)
+    - [stardict](https://packages.ubuntu.com/bionic/all/stardict/download)
+    ```sh
+    sudo dpkg -i librarian0_0.8.1-6build1_amd64.deb
+    sudo dpkg -i rarian-compat_0.8.1-6build1_amd64.deb
+    sudo dpkg -i stardict-common_3.0.1-9.4_all.deb
+    sudo dpkg -i stardict-gnome_3.0.1-9.4_amd64.deb
+    sudo dpkg -i stardict_3.0.1-9.4_all.deb
+    ```
   - Dictionary directory
     ```shell
     /usr/share/stardict/dic
@@ -1658,6 +1678,11 @@
     sudo apt-get install flat-remix
     ```
 ## Shutter
+  - **Install**
+    ```sh
+    sudo add-apt-repository -y ppa:linuxuprising/shutter
+    sudo apt install shutter
+    ```
   - [Quick Fix The “Edit” Option Disabled in Shutter in Ubuntu 18.04](http://ubuntuhandbook.org/index.php/2018/04/fix-edit-option-disabled-shutter-ubuntu-18-04/)
   - [libgoocanvas-common](https://launchpad.net/ubuntu/+archive/primary/+files/libgoocanvas-common_1.0.0-1_all.deb)
   - [libgoocanvas3](https://launchpad.net/ubuntu/+archive/primary/+files/libgoocanvas3_1.0.0-1_amd64.deb)
@@ -1700,6 +1725,7 @@
     - 配置 `Sensitivity` 指定是否鼠标接近屏幕顶部时显示顶栏
     - 配置 `Keyboard shortcuts` 指定快捷键
     - 配置 `Intellihide` 指定何时隐藏顶栏
+  - [proxy-switcher](https://extensions.gnome.org/extension/771/proxy-switcher/)
 ## 多线程下载 mwget axel aria2
   - **mwget**
     ```sh
@@ -2029,7 +2055,7 @@
     sudo sh -c 'echo "deb [arch=amd64] https://packagecloud.io/AtomEditor/atom/any/ any main" > /etc/apt/sources.list.d/atom.list'
 
     # Chrome
-    wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+    wget -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
     sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list'
 
     # Teamviewer
@@ -2041,6 +2067,9 @@
     # flat-remix
     sudo add-apt-repository ppa:daniruiz/flat-remix
 
+    # Shutter
+    sudo add-apt-repository -y ppa:linuxuprising/shutter
+
     # Update
     sudo apt-get update
     ```
@@ -2049,16 +2078,23 @@
     sudo apt-get update
     sudo apt-get upgrade
 
-    sudo apt-get install git atom ssh vim
+    sudo apt-get install git atom ssh vim python3-pip
+    sudo ln -s /usr/bin/pip3 /usr/bin/pip
 
     sudo apt-get install \
-    aria2 audacious axel cairo-dock calibre chrome-gnome-shell cscope curl easystroke expect filezilla flat-remix gnome-tweak-tool google-chrome-stable\
-    iptux ibus-pinyin java-common minicom mp3info mysql-client mysql-common mysql-server nfs-common nfs-kernel-server numix-gtk-theme numix-icon-theme numix-blue-gtk-theme numix-icon-theme-circle \
-    p7zip-full pidgin python-gtk2 python-vte python-glade2 rename rsync samba seahorse shutter stardict synaptic teamviewer telnet testdisk tftp tftpd tmux tree \
-    unrar unzip virtualbox virtualbox-ext-pack virtualbox-guest-additions-iso vlc vnc4server wget wireshark zip
+    aria2 audacious axel cairo-dock calibre chrome-gnome-shell cscope curl easystroke expect filezilla flat-remix gnome-tweak-tool golang-go google-chrome-stable \
+    iptux ibus-pinyin java-common locate minicom mp3info mysql-client mysql-common mysql-server net-tools nfs-common nfs-kernel-server \
+    p7zip-full pidgin privoxy proxychains rename rsync samba seahorse shutter synaptic teamviewer telnet testdisk tftp tftpd tmux tree \
+    unrar unzip virtualbox virtualbox-ext-pack virtualbox-guest-additions-iso vlc wget wireshark zip
 
     sudo apt-get install \
-    evolution gksu openjdk-9-jdk r-base r-recommended
+    aria2 axel chrome-gnome-shell cscope curl expect filezilla flat-remix gnome-tweak-tool golang-go google-chrome-stable \
+    ibus-pinyin java-common locate minicom mp3info mysql-client mysql-common mysql-server net-tools nfs-common nfs-kernel-server \
+    p7zip-full pidgin privoxy proxychains rename rsync samba seahorse synaptic telnet testdisk tftp tftpd tmux tree \
+    unrar unzip wget wireshark zip
+
+    sudo apt-get install \
+    evolution gksu openjdk-9-jdk r-base r-recommended python-gtk2 python-vte python-glade2 numix-gtk-theme numix-icon-theme numix-blue-gtk-theme numix-icon-theme-circle
 
     snap install skype --classic
     ```
@@ -2081,7 +2117,7 @@
 
     cp Atom_notebook/ ~/ -rf
     cp Calibre\ Library/ local_bin/ practice_code/ Wallpapers/ ~/ -rf
-    cp .atom/ .bashrc .easystroke/ .gitconfig* .icons/ .mozilla/ .ssh/ .thunderbird/ .tmux.conf .vimrc .vim ~/ -rf
+    cp .atom/ .bashrc .easystroke/ .gitconfig* .icons/ .mozilla/ .ssh/ .thunderbird/ .tmux .tmux.conf .vimrc .vim ~/ -rf
     cp .local/share/audacious/ ~/.local/share/ -rf
     cp .ipython/profile_default/ipython_* ~/.ipython/profile_default/
 
@@ -2091,10 +2127,10 @@
     sudo cp /opt/hadoop-2.7.2/ /opt/ -r
     cd && cp workspace/ Ubuntu_share/ ~/ -rf
 
-    sudo mount /media/DATA/Operating_Systems/squashfs_backup/xxx.squashfs /media/cdrom/
-    cd /media/cdrom/usr/share/themes/
+    sudo mount /media/DATA/Operating_Systems/squashfs_backup/xxx.squashfs /media/cdrom0/
+    cd /media/cdrom0/usr/share/themes/
     sudo cp Flat-Remix* Qogir* Sweet* /usr/share/themes/ -r
-    sudo cp /media/cdrom/usr/share/stardict/dic/* /usr/share/stardict/dic/ -r
+    sudo cp /media/cdrom0/usr/share/stardict/dic/* /usr/share/stardict/dic/ -r
 
     sudo cp ~/Wallpapers/167557-1.png /boot/grub/back.png
     ```
@@ -2102,6 +2138,7 @@
     - [netease cloud music](https://music.163.com/#/download) -> 下载全部客户端 -> Linux 版
     - osdlyrics
     - [tixati](https://download2.tixati.com/download/linux.html)
+    - [WPS](https://www.wps.cn/product/wpslinux)
   - **Other settings**
     - Tweaks -> Apperance / Desktop / Keyboard & Mouse / Startup Applications / Top Bar
     - Settings -> Network -> VPN

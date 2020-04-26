@@ -31,6 +31,13 @@
     - 然后在 tensorRT 中可以针对 NVIDIA 自家 GPU 实施优化策略，并进行 **部署加速**
   - [Install](https://docs.nvidia.com/deeplearning/sdk/tensorrt-install-guide/index.html)
     - Download and install `TensorRT deb` file, for `cuda==10.1 --> TensorRT==6.xxx`, for `cuda==10.2 --> TensorRT==7.xxx`
+    ```sh
+    sudo dpkg -i nv-tensorrt-repo-*1-1_amd64.deb
+    sudo apt-key add /var/nv-tensorrt-repo-*/7fa2af80.pub
+
+    sudo apt-get update
+    sudo apt-get install tensorrt
+    ```
     - Download and extract `tar` file for python installation
     ```sh
     export TRT_RELEASE=$HOME/local_bin/TensorRT-7.0.0.11
