@@ -41,7 +41,20 @@
   	- [grub](#grub)
   	- [坏块检测 badblocks](#坏块检测-badblocks)
   	- [NTFS disk mount error](#ntfs-disk-mount-error)
+  	- [挂载与格式化](#挂载与格式化)
   	- [gsettings schema](#gsettings-schema)
+  	- [发行版本信息](#发行版本信息)
+  	- [journal](#journal)
+  	- [unzip 中文乱码](#unzip-中文乱码)
+  	- [docker 不使用 sudo 执行](#docker-不使用-sudo-执行)
+  	- [nohup](#nohup)
+  	- [静态 IP](#静态-ip)
+  	- [更改登录界面](#更改登录界面)
+  	- [Shadow socket 代理](#shadow-socket-代理)
+  	- [每次开机时弹出 System problem report detected](#每次开机时弹出-system-problem-report-detected)
+  	- [Nvidia](#nvidia)
+  	- [tmux](#tmux)
+  	- [制表符](#制表符)
   - [软件](#软件)
   	- [自动更新无法下载 adobe flashplayer](#自动更新无法下载-adobe-flashplayer)
   	- [wireshark 配置](#wireshark-配置)
@@ -60,13 +73,20 @@
   	- [Cairo Dock](#cairo-dock)
   	- [Virtual box](#virtual-box)
   	- [Chrome](#chrome)
-  	- [Numix](#numix)
+  	- [Numix FlatRemix 主题](#numix-flatremix-主题)
   	- [Shutter](#shutter)
+  	- [gnome tweak tool](#gnome-tweak-tool)
+  	- [多线程下载 mwget axel aria2](#多线程下载-mwget-axel-aria2)
+  	- [Linux 百度云](#linux-百度云)
+  	- [mplayer 视频流](#mplayer-视频流)
+  	- [scrcpy](#scrcpy)
+  	- [md5sum sha256sum](#md5sum-sha256sum)
   - [系统备份恢复](#系统备份恢复)
   	- [acloner 从 squashfs 备份恢复系统](#acloner-从-squashfs-备份恢复系统)
   	- [Ubuntu 系统的一种备份还原方法](#ubuntu-系统的一种备份还原方法)
   	- [UCloner](#ucloner)
   	- [Configure New System](#configure-new-system)
+  - [制作 ISO 文件](#制作-iso-文件)
 
   <!-- /TOC -->
 ***
@@ -1736,7 +1756,7 @@
     cd mwget_0.1.0.orig/
     ./configure
     make
-    make install
+    sudo make install
     mwget -n 10 http://[url]
     ```
   - **axel**
@@ -2080,36 +2100,36 @@
 
     sudo apt-get install git atom ssh vim python3-pip
     sudo ln -s /usr/bin/pip3 /usr/bin/pip
+    sudo ln -s /usr/bin/python3 /usr/bin/python
 
     sudo apt-get install \
-    aria2 audacious axel cairo-dock calibre chrome-gnome-shell cscope curl easystroke expect filezilla flat-remix gnome-tweak-tool golang-go google-chrome-stable \
-    iptux ibus-pinyin java-common locate minicom mp3info mysql-client mysql-common mysql-server net-tools nfs-common nfs-kernel-server \
-    p7zip-full pidgin privoxy proxychains rename rsync samba seahorse shutter synaptic teamviewer telnet testdisk tftp tftpd tmux tree \
+    aptitude aria2 audacious axel cairo-dock calibre chrome-gnome-shell cmake cscope curl docker.io easystroke expect filezilla flat-remix gconf2 gnome-tweak-tool golang-go google-chrome-stable \
+    iptux ibus-pinyin intltool java-common libssl-dev locate minicom mp3info mysql-client mysql-common mysql-server net-tools nfs-common nfs-kernel-server \
+    p7zip-full pidgin privoxy proxychains rename rsync samba seahorse shutter supervisor synaptic teamviewer telnet testdisk tftp tftpd tmux tree \
     unrar unzip virtualbox virtualbox-ext-pack virtualbox-guest-additions-iso vlc wget wireshark zip
-
-    sudo apt-get install \
-    aria2 axel chrome-gnome-shell cscope curl expect filezilla flat-remix gnome-tweak-tool golang-go google-chrome-stable \
-    ibus-pinyin java-common locate minicom mp3info mysql-client mysql-common mysql-server net-tools nfs-common nfs-kernel-server \
-    p7zip-full pidgin privoxy proxychains rename rsync samba seahorse synaptic telnet testdisk tftp tftpd tmux tree \
-    unrar unzip wget wireshark zip
 
     sudo apt-get install \
     evolution gksu openjdk-9-jdk r-base r-recommended python-gtk2 python-vte python-glade2 numix-gtk-theme numix-icon-theme numix-blue-gtk-theme numix-icon-theme-circle
 
     snap install skype --classic
+
+    pip install https://github.com/shadowsocks/shadowsocks/archive/master.zip -U
     ```
   - **Anaconda**
     ```shell
     mv ~/Downloads/Anaconda3-5.1.0-Linux-x86_64.sh ./
     chmod a+x Anaconda3-5.1.0-Linux-x86_64.sh
     sudo mkdir /opt/anaconda3
-    sudo chown leondgarse:leondgarse /opt/anaconda3/ -R
+    sudo chown ${USER}:${USER} /opt/anaconda3/ -R
 
     # 指定安装位置为 /opt/anaconda3
     ./Anaconda3-5.1.0-Linux-x86_64.sh -u
 
     conda update --all
     conda clean --all
+
+    conda install tensorflow-gpu tensorboard pytorch jupyter ipython -c conda-forge
+    pip install mxnet-cu102
     ```
   - **Copy other files**
     ```shell
@@ -2119,13 +2139,14 @@
     cp Calibre\ Library/ local_bin/ practice_code/ Wallpapers/ ~/ -rf
     cp .atom/ .bashrc .easystroke/ .gitconfig* .icons/ .mozilla/ .ssh/ .thunderbird/ .tmux .tmux.conf .vimrc .vim ~/ -rf
     cp .local/share/audacious/ ~/.local/share/ -rf
-    cp .ipython/profile_default/ipython_* ~/.ipython/profile_default/
+    mkdir ~/.ipython/profile_default/ -p && cp .ipython/profile_default/ipython_* ~/.ipython/profile_default/
 
     cd .config
     cp cairo-dock/ audacious/ Atom/ google-chrome/ ~/.config/ -rf
 
-    sudo cp /opt/hadoop-2.7.2/ /opt/ -r
     cd && cp workspace/ Ubuntu_share/ ~/ -rf
+    cp go Android ~/ -rf
+    cp .keras .kaggle ~/ -rf
 
     sudo mount /media/DATA/Operating_Systems/squashfs_backup/xxx.squashfs /media/cdrom0/
     cd /media/cdrom0/usr/share/themes/

@@ -564,3 +564,83 @@ ff = ee.ds.map(lambda xx: tf.image.flip_left_right(xx))
 with ss.scope():
     ee.on_epoch_end()
 ```
+# 人脸跟踪
+  - [zeusees/HyperFT](https://github.com/zeusees/HyperFT)
+  - [Ncnn_FaceTrack](https://github.com/qaz734913414/Ncnn_FaceTrack)
+  - HyperFT 项目多人脸跟踪算法
+    - 第一部分是初始化，通过mtcnn的人脸检测找出第一帧的人脸位置然后将其结果对人脸跟踪进行初始化
+    - 第二部分是更新，利用模板匹配进行人脸目标位置的初步预判，再结合mtcnn中的onet来对人脸位置进行更加精细的定位，最后通过mtcnn中的rnet的置信度来判断跟踪是否为人脸，防止当有手从面前慢慢挥过去的话，框会跟着手走而无法跟踪到真正的人脸
+    - 第三部分是定时检测，通过在更新的部分中加入一个定时器来做定时人脸检测，从而判断中途是否有新人脸的加入，本项目在定时人脸检测中使用了一个trick就是将已跟踪的人脸所在位置利用蒙版遮蔽起来，避免了人脸检测的重复检测，减少其计算量，从而提高了检测速度
+***
+```sh
+git clone https://github.com/opencv/opencv.git
+cd opencv
+mkdir build && cd build && cmake ..
+make && make install # /usr/local/lib /usr/local/include
+
+git clone https://github.com/qaz734913414/Ncnn_FaceTrack.git
+cd Ncnn_FaceTrack
+g++ main.cpp mtcnn.cpp -I../../ncnn/build/install/include/ncnn/ -I/usr/local/include/opencv4/ -L../../ncnn/build/install/lib/ -lncnn -lopencv_core -lgomp -lopencv_highgui -lopencv_imgproc -lopencv_videoio
+```
+```py
+import cv2
+import shutil
+import glob2
+import insightface
+from tqdm import tqdm
+from skimage.transform import SimilarityTransform
+
+retina = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+retina.prepare(0)
+
+def face_align_landmarks(img, landmarks, image_size=(112, 112)):
+    ret = []
+    for landmark in landmarks:
+        src = np.array(
+            [[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366], [41.5493, 92.3655], [70.729904, 92.2041]],
+            dtype=np.float32,
+        )
+
+        if image_size[0] != 112:
+            src *= image_size[0] / 112
+            src[:, 0] += 8.0
+
+        dst = landmark.astype(np.float32)
+        tform = SimilarityTransform()
+        tform.estimate(dst, src)
+        M = tform.params[0:2, :]
+        ret.append(cv2.warpAffine(img, M, (image_size[1], image_size[0]), borderValue=0.0))
+
+    return np.array(ret)
+
+aa = glob2.glob('./face_image/*/*.jpg')
+dest_single = 'tdevals'
+dest_multi = dest_single + '_multi'
+dest_none = dest_single + '_none'
+os.makedirs(dest_none, exist_ok=True)
+for ii in tqdm(aa[:50]):
+    imm = imread(ii)
+    bbs, pps = retina.detect(imm)
+    if len(bbs) == 0:
+        shutil.copy(ii, os.path.join(dest_none, '_'.join(.split('/')[-2:])))
+        continue
+    user_name, image_name = ii.split('/')[-2], ii.split('/')[-1]
+    if len(bbs) == 1:
+        dest_path = os.path.join(dest_single, user_name)
+    else:
+        dest_path = os.path.join(dest_multi, user_name)
+
+    if not os.path.exists(dest_path):
+        os.makedirs(dest_path)
+    if len(bbs) != 1:
+        shutil.copy(ii, dest_path)
+
+    nns = face_align_landmarks(imm, pps)
+    image_name = '%s_{}.%s' % tuple(image_name.split('.'))
+    for id, ii in enumerate(nns):
+        dest_name = os.path.join(dest_path, image_name.format(id))
+        imsave(dest_name, ii)
+```
+```sh
+cp ./face_image/2818/1586472495016.jpg ./face_image/4609/1586475252234.jpg ./face_image/3820/1586472950858.jpg ./face_image/4179/1586520054080.jpg ./face_image/2618/1586471583221.jpg ./face_image/6696/1586529149923.jpg ./face_image/5986/1586504872276.jpg ./face_image/1951/1586489518568.jpg ./face_image/17/1586511238696.jpg ./face_image/17/1586511110105.jpg ./face_image/17/1586511248992.jpg ./face_image/4233/1586482466485.jpg ./face_image/5500/1586493019872.jpg ./face_image/4884/1586474119164.jpg ./face_image/5932/1586471784905.jpg ./face_image/7107/1586575911740.jpg ./face_image/4221/1586512334133.jpg ./face_image/5395/1586578437529.jpg ./face_image/4204/1586506059923.jpg ./face_image/4053/1586477985553.jpg ./face_image/7168/1586579239307.jpg ./face_image/7168/1586489559660.jpg ./face_image/5477/1586512847480.jpg ./face_image/4912/1586489637333.jpg ./face_image/5551/1586502762688.jpg ./face_image/5928/1586579219121.jpg ./face_image/6388/1586513897953.jpg ./face_image/4992/1586471873460.jpg ./face_image/5934/1586492793214.jpg ./face_image/5983/1586490703112.jpg ./face_image/5219/1586492929098.jpg ./face_image/5203/1586487204198.jpg ./face_image/6099/1586490074263.jpg ./face_image/5557/1586490232722.jpg ./face_image/4067/1586491778846.jpg ./face_image/4156/1586512886040.jpg ./face_image/5935/1586492829221.jpg ./face_image/2735/1586513495061.jpg ./face_image/5264/1586557233625.jpg ./face_image/1770/1586470942329.jpg ./face_image/7084/1586514100804.jpg ./face_image/5833/1586497276529.jpg ./face_image/2200/1586577699180.jpg tdevals_none
+```

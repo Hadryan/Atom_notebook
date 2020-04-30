@@ -63,6 +63,10 @@
   - [Effective Go](https://golang.org/doc/effective_go.html)
   - [Effective Go中文版](https://go-zh.org/doc/effective_go.html)
   - [Effective Go中文版](https://www.kancloud.cn/kancloud/effective/72199)
+  - **apt**
+    ```sh
+    sudo apt install golang-go
+    ```
   - **hello world**
     ```go
     package main

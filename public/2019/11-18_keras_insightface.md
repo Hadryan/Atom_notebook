@@ -15,25 +15,16 @@
   	- [模型训练](#模型训练)
   	- [模型测试](#模型测试)
   - [Keras Insightface](#keras-insightface)
-  	- [tf-insightface train](#tf-insightface-train)
-  	- [MXnet record to folder](#mxnet-record-to-folder)
-  	- [Loading data by ImageDataGenerator](#loading-data-by-imagedatagenerator)
-  	- [Loading data by Datasets](#loading-data-by-datasets)
-  	- [Evaluate](#evaluate)
-  	- [Basic model](#basic-model)
-  	- [Gently stop fit callbacks](#gently-stop-fit-callbacks)
-  	- [Softmax train](#softmax-train)
+  	- [Project](#project)
+  	- [Data](#data)
   	- [Arcface loss](#arcface-loss)
-  	- [Arcface loss 3](#arcface-loss-3)
-  	- [Arcface loss 4](#arcface-loss-4)
-  	- [Center loss](#center-loss)
+  	- [Soft arcface](#soft-arcface)
   	- [Offline Triplet loss train SUB](#offline-triplet-loss-train-sub)
-  	- [Online Triplet loss train](#online-triplet-loss-train)
   	- [TF 通用函数](#tf-通用函数)
   	- [模型测试](#模型测试)
   - [人脸旋转角度与侧脸](#人脸旋转角度与侧脸)
-  - [人脸跟踪](#人脸跟踪)
-  - [ncnn](#ncnn)
+  - [nmslib dot svm dist calculation comparing](#nmslib-dot-svm-dist-calculation-comparing)
+  - [Centerface](#centerface)
 
   <!-- /TOC -->
 ***
@@ -388,13 +379,13 @@
     image_names = np.random.permutation(image_names).tolist()
     image_classes = [int(os.path.basename(os.path.dirname(ii))) for ii in image_names]
 
-    with open('faces_emore_img_class_shuffle.pkl', 'wb') as ff:
+    with open('faces_emore_112x112_folders_shuffle.pkl', 'wb') as ff:
         pickle.dump({'image_names': image_names, "image_classes": image_classes}, ff)
 
     import pickle
-    from keras.preprocessing.image import ImageDataGenerator
+    from tensorflow.keras.preprocessing.image import ImageDataGenerator
     AUTOTUNE = tf.data.experimental.AUTOTUNE
-    with open('faces_emore_img_class_shuffle.pkl', 'rb') as ff:
+    with open('faces_emore_112x112_folders_shuffle.pkl', 'rb') as ff:
         aa = pickle.load(ff)
     image_names, image_classes = aa['image_names'], aa['image_classes']
     image_names = np.random.permutation(image_names).tolist()
@@ -966,15 +957,6 @@
   ```
 ***
 
-# 人脸跟踪
-  - [zeusees/HyperFT](https://github.com/zeusees/HyperFT)
-  - [Ncnn_FaceTrack](https://github.com/qaz734913414/Ncnn_FaceTrack)
-  - HyperFT 项目多人脸跟踪算法
-    - 第一部分是初始化，通过mtcnn的人脸检测找出第一帧的人脸位置然后将其结果对人脸跟踪进行初始化
-    - 第二部分是更新，利用模板匹配进行人脸目标位置的初步预判，再结合mtcnn中的onet来对人脸位置进行更加精细的定位，最后通过mtcnn中的rnet的置信度来判断跟踪是否为人脸，防止当有手从面前慢慢挥过去的话，框会跟着手走而无法跟踪到真正的人脸
-    - 第三部分是定时检测，通过在更新的部分中加入一个定时器来做定时人脸检测，从而判断中途是否有新人脸的加入，本项目在定时人脸检测中使用了一个trick就是将已跟踪的人脸所在位置利用蒙版遮蔽起来，避免了人脸检测的重复检测，减少其计算量，从而提高了检测速度
-***
-
 # nmslib dot svm dist calculation comparing
   ```py
   !pip install nmslib
@@ -1071,7 +1053,7 @@
   %timeit -n 100 cf(iaa, h, w, threshold=0.9)
   # 315 ms ± 35.1 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
   %timeit -n 100 mtcnn_det.detect_faces(ibb)
-  # 63 ms ± 2.65 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
+  # 60.8 ms ± 1.04 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
   %timeit -n 100 retina.detect(iaa)
   # 456 ms ± 12.5 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
   ```
@@ -1111,3 +1093,69 @@
         dtype=float32))
   ```
 ***
+```sh
+# Mobilefacenet 160
+"loss": [5.0583, 1.6944, 1.2544, 1.0762]
+"accuracy": [0.2964, 0.6755, 0.7532, 0.7862]
+"lfw": [0.9715, 0.98, 0.986, 0.988]
+"cfp_fp": [0.865714, 0.893, 0.898857, 0.91]
+"agedb_30": [0.829167, 0.8775, 0.892667, 0.903167]
+```
+```sh
+# Mobilefacenet 768
+"loss": [4.82409207357388, 1.462764699449328, 1.011261948830721, 0.8042656191418587]
+"accuracy": [0.3281610608100891, 0.7102007865905762, 0.7921959757804871, 0.8312187790870667]
+"lfw": [0.9733333333333334, 0.9781666666666666, 0.9833333333333333, 0.983]
+"cfp_fp": [0.8654285714285714, 0.8935714285714286, 0.9002857142857142, 0.9004285714285715]
+"agedb_30": [0.8253333333333334, 0.8801666666666667, 0.8983333333333333, 0.8911666666666667]
+```
+```sh
+# Renet100 128
+"loss": [6.3005, 1.6274, 1.0608]
+"accuracy": [0.2196, 0.6881, 0.7901, 0.8293]
+"lfw": [0.97, 0.983, 0.981667, 0.986167]
+"cfp_fp": [0.865571, 0.894714, 0.903571, 0.910714]
+"agedb_30": [0.831833, 0.870167, 0.886333, 0.895833]
+```
+```sh
+# Renet100 1024
+"loss": [3.3549567371716877, 0.793737195027363, 0.518424223161905, 0.3872658337998814]
+"accuracy": [0.5023580193519592, 0.8334693908691406, 0.8864460587501526, 0.9125881195068359]
+"lfw": [0.9826666666666667, 0.9861666666666666, 0.9858333333333333, 0.99]
+"cfp_fp": [0.8998571428571429, 0.914, 0.9247142857142857, 0.9264285714285714]
+"agedb_30": [0.8651666666666666, 0.8876666666666667, 0.9013333333333333, 0.899]
+```
+```sh
+# EB0 160, Orign Conv + flatten + Dense
+"loss": [4.234781265258789, 1.6501317024230957],
+"accuracy": [0.35960495471954346, 0.6766131520271301],
+"lfw": [0.9816666666666667, 0.987, 0.9826666666666667],
+"cfp_fp": [0.9005714285714286, 0.9105714285714286],
+"agedb_30": [0.848, 0.8835]
+```
+```sh
+# EB0 160, GlobalAveragePooling
+"loss": [3.5231969356536865, 1.188686490058899, 0.8824349641799927, 0.7483137249946594],
+"accuracy": [0.45284023880958557, 0.7619950771331787, 0.8200176358222961, 0.8461616039276123],
+"lfw": 0.9826666666666667, 0.9855, 0.9886666666666667, 0.9856666666666667],
+"cfp_fp": [0.9022857142857142, 0.9201428571428572, 0.9212857142857143, 0.922],
+"agedb_30": [0.8531666666666666, 0.8805, 0.8891666666666667, 0.8966666666666666]
+```
+```sh
+# EB0 160, GDC
+"loss": [3.9325125217437744, 1.5069712400436401, 1.1851387023925781]
+"accuracy": [0.40046197175979614, 0.7043213248252869, 0.7628725171089172]
+"lfw": [0.9823333333333333, 0.9851666666666666, 0.99]
+"cfp_fp": [0.8962857142857142, 0.9145714285714286, 0.9158571428571428]
+"agedb_30": [0.8548333333333333, 0.8815, 0.8921666666666667]
+```
+```sh
+# EB4 840, GDC
+"loss": [2.727688789367676, 0.633741557598114, 0.4151850938796997, 0.3108983337879181]
+"accuracy": [0.5822311043739319, 0.8653680086135864, 0.9080367684364319, 0.9288726449012756]
+"lfw": [0.9876666666666667, 0.9881666666666666, 0.9911666666666666, 0.9913333333333333]
+"cfp_fp": [0.909, 0.918, 0.922, 0.9178571428571428]
+"agedb_30": [0.884, 0.9041666666666667, 0.9115, 0.9076666666666666]
+```
+- [Group Convolution分组卷积，以及Depthwise Convolution和Global Depthwise Convolution](https://cloud.tencent.com/developer/article/1394912)
+- [深度学习中的卷积方式](https://zhuanlan.zhihu.com/p/75972500)

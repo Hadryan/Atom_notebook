@@ -75,6 +75,7 @@ function generate_exclude_list_base {
 /root/.gvfs
 /var/crash
 /var/log
+/swapfile
 `ls -1 /home/*/.gvfs 2>/dev/null`
 `ls -1 /lib/modules/\`uname -r\`/volatile/ 2>/dev/null`
 `ls -1 /var/cache/apt/archives/partial/ 2>/dev/null`
@@ -147,7 +148,7 @@ if [ $WORK_MODE != "BACKUP" ]; then
     umount $DIST_ROOT_PATH
 
     mkfs.ext4 $DIST_ROOT_PATH
-    mkfs.ext4 $DIST_HOME_PATH
+    mkfs.ext4 $DIST_HOME_PATH # Select 'n' if you don't want to format HOME disk.
     mkswap $DIST_SWAP_PATH
 
     # if [ $? -ne 0 ]; then echo "mkfs error"; exit; fi
@@ -252,17 +253,18 @@ else
     mksquashfs / "$SQUASHFS_BACKUP_TO" -no-duplicates -ef $EXCLUDE_FILE -e "$SQUASHFS_BACKUP_TO"
     if [ $? -ne 0 ]; then echo "mksquashfs error"; exit; fi
 
-    mkdir -p $TEMP_SYSTEM_DIR && \
-        cd $TEMP_SYSTEM_DIR && \
-        mkdir -p $SYS_PATH_EXCLUDED && \
-        chmod 1777 tmp
-    if [ $? -ne 0 ]; then echo "make system dirs error"; exit; fi
+	# Error here: Failed to read existing filesystem - will not overwrite - ABORTING!
+    # mkdir -p $TEMP_SYSTEM_DIR && \
+    #     cd $TEMP_SYSTEM_DIR && \
+    #     mkdir -p $SYS_PATH_EXCLUDED && \
+    #     chmod 1777 tmp
+    # if [ $? -ne 0 ]; then echo "make system dirs error"; exit; fi
 
-    mksquashfs $TEMP_SYSTEM_DIR "$SQUASHFS_BACKUP_TO" -no-duplicates
-    if [ $? -ne 0 ]; then echo "mksquashfs error"; exit; fi
+    # mksquashfs $TEMP_SYSTEM_DIR "$SQUASHFS_BACKUP_TO" -no-duplicates
+    # if [ $? -ne 0 ]; then echo "mksquashfs error"; exit; fi
 
-    cd -
-    rm $TEMP_SYSTEM_DIR -rf
+    # cd -
+    # rm $TEMP_SYSTEM_DIR -rf
     rm $EXCLUDE_FILE -f
 
     BACKUP_SIZE=`ls $SQUASHFS_BACKUP_TO -lh | cut -d ' ' -f 5`
