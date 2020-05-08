@@ -1,13 +1,57 @@
-- [Codewalk: First-Class Functions in Go](https://golang.org/doc/codewalk/functions/)
-- [《The Way to Go》中文译本，中文正式名《Go 入门指南》](https://github.com/Unknwon/the-way-to-go_ZH_CN)
-- [Github jdeng/goface](https://github.com/jdeng/goface)
-- [Data Science In Go: A Cheat Sheet by chewxy](https://www.cheatography.com/chewxy/cheat-sheets/data-science-in-go-a/)
-- [golang/go/Mobile](https://github.com/golang/go/wiki/Mobile)
-- [Go语言标准库](https://books.studygolang.com/The-Golang-Standard-Library-by-Example/)
-- [Go语言圣经（中文版）](https://books.studygolang.com/gopl-zh/)
-- [Go入门指南](https://books.studygolang.com/the-way-to-go_ZH_CN/)
-- [Sharing Golang packages to C and Go](http://blog.ralch.com/tutorial/golang-sharing-libraries/)
-- [GoFrame 开发框架](https://goframe.org/index)
+# ___2020 - 01 - 06 Go Modules___
+***
+# 目录
+  <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
+
+  - [___2020 - 01 - 06 Go Modules___](#2020-01-06-go-modules)
+  - [目录](#目录)
+  - [链接](#链接)
+  - [Go Log](#go-log)
+  	- [Log](#log)
+  	- [Zap](#zap)
+  	- [Logrus](#logrus)
+  - [Tensorflow](#tensorflow)
+  	- [Install TensorFlow for C](#install-tensorflow-for-c)
+  	- [Install TensorFlow for Go](#install-tensorflow-for-go)
+  	- [Install tfgo](#install-tfgo)
+  	- [Model load and predict](#model-load-and-predict)
+  	- [SessionOptions](#sessionoptions)
+  - [Sync data from mysql and calculate dot values](#sync-data-from-mysql-and-calculate-dot-values)
+  	- [mysql](#mysql)
+  	- [struct](#struct)
+  	- [strings and strconv](#strings-and-strconv)
+  	- [time](#time)
+  	- [gonum mat](#gonum-mat)
+  	- [gonum blas netlib](#gonum-blas-netlib)
+  	- [flag](#flag)
+  	- [dataframe](#dataframe)
+  - [Images](#images)
+  	- [Decode](#decode)
+  	- [Draw](#draw)
+  	- [仿射变换 WarpAffine](#仿射变换-warpaffine)
+  	- [Python skimage umeyama](#python-skimage-umeyama)
+  	- [Go 自定义 Umeyama](#go-自定义-umeyama)
+  - [Tensorflow images](#tensorflow-images)
+  	- [Tensorflow images](#tensorflow-images)
+  	- [tfgo images](#tfgo-images)
+  - [onnx-go](#onnx-go)
+  - [go-tflite](#go-tflite)
+
+  <!-- /TOC -->
+***
+
+# 链接
+  - [Codewalk: First-Class Functions in Go](https://golang.org/doc/codewalk/functions/)
+  - [《The Way to Go》中文译本，中文正式名《Go 入门指南》](https://github.com/Unknwon/the-way-to-go_ZH_CN)
+  - [Github jdeng/goface](https://github.com/jdeng/goface)
+  - [Data Science In Go: A Cheat Sheet by chewxy](https://www.cheatography.com/chewxy/cheat-sheets/data-science-in-go-a/)
+  - [golang/go/Mobile](https://github.com/golang/go/wiki/Mobile)
+  - [Go语言标准库](https://books.studygolang.com/The-Golang-Standard-Library-by-Example/)
+  - [Go语言圣经（中文版）](https://books.studygolang.com/gopl-zh/)
+  - [Go入门指南](https://books.studygolang.com/the-way-to-go_ZH_CN/)
+  - [Sharing Golang packages to C and Go](http://blog.ralch.com/tutorial/golang-sharing-libraries/)
+  - [GoFrame 开发框架](https://goframe.org/index)
+***
 
 # Go Log
 ## Log
@@ -1191,8 +1235,6 @@
     echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
     sudo apt update && sudo apt install bazel
     sudo apt install openjdk-11-jdk
-
-    bazel build --config android_arm --config monolithic //tensorflow/lite:libtensorflowlite.so --verbose_failures
     ```
   - Build tensorflowlite c lib from source
     ```sh
@@ -1204,7 +1246,7 @@
 
     file bazel-bin/tensorflow/lite/c/libtensorflowlite_c.so
     ```
-  - Build go-tflite
+  - **Build go-tflite**
     ```sh
     export CGO_LDFLAGS=-L$HOME/workspace/tensorflow/bazel-bin/tensorflow/lite/c
     export CGO_CFLAGS=-I$HOME/workspace/tensorflow/
@@ -1216,21 +1258,24 @@
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/workspace/tensorflow/bazel-bin/tensorflow/lite/c
     jupyter-notebook
     ```
-  - Run test
+  - **Run test**
     ```go
     %go111module off
     import (
         "github.com/mattn/go-tflite"
     )
     model := tflite.NewModelFromFile("mobilefacenet_tf2.tflite")
-    interp := tflite.NewInterpreter(model, nil)
+    options := tflite.NewInterpreterOptions()
+
+    interp := tflite.NewInterpreter(model, options)
     status := interp.AllocateTensors()
+
     input := interp.GetInputTensor(0)
     in := input.Float32s()
     len(in) // 37632
+
     status = interp.Invoke()
-    output := interp.GetOutputTensor(0)
-    output.Float32s()
+    output := interp.GetOutputTensor(0).Float32s()
 
     imm := make([]byte, 37632 * 4)
     input.CopyFromBuffer(imm)
@@ -1238,32 +1283,22 @@
     imm := make([]float32, 37632)
     input.SetFloat32s(imm)
     ```
-    ```go
-    model := tflite.NewModelFromFile("sin_model.tflite")
-    if model == nil {
-    	log.Fatal("cannot load model")
-    }
-    defer model.Delete()
-
-    options := tflite.NewInterpreterOptions()
-    defer options.Delete()
-
-    interpreter := tflite.NewInterpreter(model, options)
-    defer interpreter.Delete()
-
-    interpreter.AllocateTensors()
-
-    v := float64(1.2) * math.Pi / 180.0
-    input := interpreter.GetInputTensor(0)
-    input.Float32s()[0] = float32(v)
-    interpreter.Invoke()
-    got := float64(interpreter.GetOutputTensor(0).Float32s()[0])
-    ```
   - [Build TensorFlow Lite for ARM64 boards](https://www.tensorflow.org/lite/guide/build_arm64)
     ```sh
+    bazel build --config android_arm --config monolithic //tensorflow/lite:libtensorflowlite.so --verbose_failures
+    bazel build --config android_arm --config monolithic //tensorflow/lite/c:libtensorflowlite_c.so --verbose_failures
+
     sudo apt-get install crossbuild-essential-arm64
     ./tensorflow/lite/tools/make/download_dependencies.sh
     ./tensorflow/lite/tools/make/build_aarch64_lib.sh
     ls tensorflow/lite/tools/make/gen/linux_aarch64/lib/libtensorflow-lite.a
+    ```
+    ```sh
+    export CGO_LDFLAGS=-L$HOME/workspace/tensorflow.arm/bazel-bin/tensorflow/lite/c
+    export CGO_CFLAGS=-I$HOME/workspace/tensorflow.arm/
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/workspace/tensorflow.arm/bazel-bin/tensorflow/lite/c
+    env GOOS=android GOARCH=arm go build tdFace.mobile/faceModelTflite
+
+    gomobile bind -v -o dest/faceModel.aar -target=android/arm tdFace.mobile/faceModelTflite
     ```
 ***

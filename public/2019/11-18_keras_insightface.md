@@ -18,10 +18,9 @@
   	- [Project](#project)
   	- [Data](#data)
   	- [Arcface loss](#arcface-loss)
-  	- [Soft arcface](#soft-arcface)
+  	- [Softmax](#softmax)
   	- [Offline Triplet loss train SUB](#offline-triplet-loss-train-sub)
   	- [TF 通用函数](#tf-通用函数)
-  	- [模型测试](#模型测试)
   - [人脸旋转角度与侧脸](#人脸旋转角度与侧脸)
   - [nmslib dot svm dist calculation comparing](#nmslib-dot-svm-dist-calculation-comparing)
   - [Centerface](#centerface)
@@ -363,62 +362,32 @@
   - **Loading data by Dataset**
     ```py
     import data
-    train_ds, steps_per_epoch, classes = data.prepare_for_training('/datasets/faces_emore_112x112_folders/')
+    train_ds, steps_per_epoch, classes = data.prepare_dataset('/datasets/faces_emore_112x112_folders/')
     # 5822653 5822653 85742
 
     image_batch, label_batch = next(iter(train_ds))
-    print(image_batch.shape, label_batch.shape)
-    # (128, 112, 112, 3) (128, 85742)
+    print(image_batch.shape, label_batch.shape, np.min(image_batch), np.max(image_batch))
+    # (128, 112, 112, 3) (128, 85742) -1.0 1.0
+
+    cc = (image_batch + 1) / 2
+    plt.imshow(np.vstack([np.hstack(cc[ii * 16:(ii+1)*16]) for ii in range(int(np.ceil(cc.shape[0] / 16)))]))
     ```
-  - **ImageDataGenerator 加载数据集** 可以应用 **数据增强**，分割 **训练/验证数据集**，但单独使用速度慢，可以结合 `tf.data.Dataset` 使用
+    ![](images/faces_dataset.jpg)
+  - **ImageDataGenerator 加载数据集** 可以应用 **数据增强 / autoaugment**，分割 **训练/验证数据集**，但速度慢
     ```py
-    ''' flow_from_dataframe '''
-    import glob2
-    import pickle
-    image_names = glob2.glob('/datasets/faces_emore_112x112_folders/*/*.jpg')
-    image_names = np.random.permutation(image_names).tolist()
-    image_classes = [int(os.path.basename(os.path.dirname(ii))) for ii in image_names]
+    import data_gen
 
-    with open('faces_emore_112x112_folders_shuffle.pkl', 'wb') as ff:
-        pickle.dump({'image_names': image_names, "image_classes": image_classes}, ff)
-
-    import pickle
-    from tensorflow.keras.preprocessing.image import ImageDataGenerator
-    AUTOTUNE = tf.data.experimental.AUTOTUNE
-    with open('faces_emore_112x112_folders_shuffle.pkl', 'rb') as ff:
-        aa = pickle.load(ff)
-    image_names, image_classes = aa['image_names'], aa['image_classes']
-    image_names = np.random.permutation(image_names).tolist()
-    image_classes = [int(os.path.basename(os.path.dirname(ii))) for ii in image_names]
-    print(len(image_names), len(image_classes))
-    # 5822653 5822653
-
-    data_df = pd.DataFrame({"image_names": image_names, "image_classes": image_classes})
-    data_df.image_classes = data_df.image_classes.map(str)
-    # image_gen = ImageDataGenerator(rescale=1./255, horizontal_flip=True, validation_split=0.1)
-    image_gen = ImageDataGenerator(rescale=1./255, horizontal_flip=True, validation_split=0.05)
-    train_data_gen = image_gen.flow_from_dataframe(data_df, directory=None, x_col='image_names', y_col="image_classes", class_mode='categorical', target_size=(112, 112), batch_size=128, subset='training', validate_filenames=False)
-    # Found 5240388 non-validated image filenames belonging to 85742 classes.
-    val_data_gen = image_gen.flow_from_dataframe(data_df, directory=None, x_col='image_names', y_col="image_classes", class_mode='categorical', target_size=(112, 112), batch_size=128, subset='validation', validate_filenames=False)
-    # Found 582265 non-validated image filenames belonging to 85742 classes.
-
-    classes = data_df.image_classes.unique().shape[0]
-    steps_per_epoch = np.ceil(len(train_data_gen.classes) / 128)
-    validation_steps = np.ceil(len(val_data_gen.classes) / 128)
-
-    ''' Convert to tf.data.Dataset '''
-    train_ds = tf.data.Dataset.from_generator(lambda: train_data_gen, output_types=(tf.float32, tf.int32), output_shapes=([None, 112, 112, 3], [None, classes]))
-    # train_ds = train_ds.cache()
-    # train_ds = train_ds.shuffle(buffer_size=128 * 1000)
-    train_ds = train_ds.repeat()
-    train_ds = train_ds.prefetch(buffer_size=AUTOTUNE)
-
-    val_ds = tf.data.Dataset.from_generator(lambda: val_data_gen, output_types=(tf.float32, tf.int32), output_shapes=([None, 112, 112, 3], [None, classes]))
-
-    xx, yy = next(iter(train_ds))
-    print(xx.shape, yy.shape)
-    # (128, 112, 112, 3) (128, 85742)
+    train_ds, steps_per_epoch, classes = data_gen.prepare_dataset('/datasets/faces_emore_112x112_folders/', random_status=3)
+    image_batch, label_batch = next(iter(train_ds))
+    print(image_batch.shape, label_batch.shape, np.min(image_batch), np.max(image_batch))
+    # (128, 112, 112, 3) (128, 85742) -1.0 1.0
     ```
+    ![](images/faces_random_aug.jpg)
+    ```py
+    # AutoAugment
+    train_ds, steps_per_epoch, classes = data_gen.prepare_dataset('/datasets/faces_emore_112x112_folders/', random_status=-1)
+    ```
+    ![](images/faces_autoaugment.jpg)
 ## Arcface loss
   - **Mxnet Insigntface Arcface loss**
     ```py
@@ -487,34 +456,9 @@
     plt.title('Insightface')
     fig.tight_layout()
     ```
-    ![](images/arcface_loss_limit_values.png)
-  - **Training result**
-    ```py
-    # Fine tune on softmax
-    Epoch 00016
-    45490/45490 [==============================] - 7650s 168ms/step - loss: 7.4638 - logits_accuracy: 0.9441
-    45490/45490 [==============================] - 7673s 169ms/step - loss: 6.7531 - logits_accuracy: 0.9505
-    45490/45490 [==============================] - 7673s 169ms/step - loss: 6.2979 - logits_accuracy: 0.9545
-    45490/45490 [==============================] - 7669s 169ms/step - loss: 5.9736 - logits_accuracy: 0.9573
-    45490/45490 [==============================] - 7684s 169ms/step - loss: 5.7335 - logits_accuracy: 0.9594
-    Epoch 00021
-    45490/45490 [==============================] - 7696s 169ms/step - loss: 5.5467 - logits_accuracy: 0.9611
-    45490/45490 [==============================] - 7658s 168ms/step - loss: 5.4025 - logits_accuracy: 0.9623
-    45490/45490 [==============================] - 7704s 169ms/step - loss: 5.2873 - logits_accuracy: 0.9634
-    45490/45490 [==============================] - 7685s 169ms/step - loss: 5.1977 - logits_accuracy: 0.9641
-    45490/45490 [==============================] - 7678s 169ms/step - loss: 5.1219 - logits_accuracy: 0.9648
-    Epoch 00026
-    45490/45490 [==============================] - 7701s 169ms/step - loss: 5.0629 - logits_accuracy: 0.9653
-    45490/45490 [==============================] - 7674s 169ms/step - loss: 5.0147 - logits_accuracy: 0.9657
-    45490/45490 [==============================] - 7674s 169ms/step - loss: 4.9736 - logits_accuracy: 0.9661
-    45490/45490 [==============================] - 7672s 169ms/step - loss: 4.9430 - logits_accuracy: 0.9663
-    45490/45490 [==============================] - 7670s 169ms/step - loss: 4.9173 - logits_accuracy: 0.9665
-    Epoch 00031
-    45490/45490 [==============================] - 7667s 169ms/step - loss: 4.8958 - logits_accuracy: 0.9667
-    45490/45490 [==============================] - 7663s 168ms/step - loss: 4.8778 - logits_accuracy: 0.9669
-    ```
-## Soft arcface
-  - **Soft Arcface loss** 直接调整 softmax 值
+    ![](images/arcface_loss_limit_values.svg)
+## Softmax
+  - **Margin Softmax loss** 直接调整 softmax 值
     ```py
     xx = np.arange(0, 1, 0.01)
     plt.plot(xx, xx, label="xx")
@@ -535,94 +479,18 @@
     plt.grid()
     plt.tight_layout()
     ```
-    ![](images/softarc_loss.png)
-  - **Soft Arcface loss train and analysis**
+    ![](images/softarc_loss.svg)
+  - **scale softmax loss**
     ```py
-    # (xx ** 3 + xx) / 2 * 0.9 ./keras_checkpoints_arc.h5
-    Epoch 1/200
-    45490/45490 [==============================] - 7550s 166ms/step - loss: 3.0022 - accuracy: 0.6337
-    45490/45490 [==============================] - 7413s 163ms/step - loss: 1.7561 - accuracy: 0.8070
-    45490/45490 [==============================] - 7409s 163ms/step - loss: 1.5444 - accuracy: 0.8411
-    45490/45490 [==============================] - 7405s 163ms/step - loss: 1.4415 - accuracy: 0.8576
-    45490/45490 [==============================] - 7435s 163ms/step - loss: 1.3726 - accuracy: 0.8682
-    Epoch 6/200
-    45490/45490 [==============================] - 7417s 163ms/step - loss: 1.3179 - accuracy: 0.8761
-    45490/45490 [==============================] - 7396s 163ms/step - loss: 1.2761 - accuracy: 0.8820
-
-    >>>> lfw evaluation max accuracy: 0.978333, thresh: 215.697418, overall max accuracy: 0.978333
-    >>>> cfp_fp evaluation max accuracy: 0.836286, thresh: 100.552765, overall max accuracy: 0.837286
-    >>>> agedb_30 evaluation max accuracy: 0.890667, thresh: 166.642136, overall max accuracy: 0.890667
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    axes[0].plot(xx, tf.nn.softmax(xx), label="softmax")
+    axes[1].plot(xx, tf.nn.softmax(xx * 64), label="softmax scale=64")
+    axes[1].plot(xx, tf.nn.softmax(xx * 32), label="softmax scale=32")
+    axes[0].legend()
+    axes[1].legend()
+    fig.tight_layout()
     ```
-  - **softarc comparing arcface transform**
-    ```py
-    ee = model.predict(image_batch)
-    print((label_batch.numpy().argmax(1) == ee.argmax(1)).sum())
-    # 118
-    bb = ee[(label_batch.numpy().argmax(1) != ee.argmax(1))]
-    print(bb.max(1))
-    # [0.3375861, 0.6404413, 0.48641488, 0.5133861, 0.5124478, 0.25524074, 0.44766012, 0.12621331, 0.38196886, 0.98597974]
-
-    cc = ee[(label_batch.numpy().argmax(1) == ee.argmax(1))]
-    print(cc.max(1).min())
-    # 0.77941155
-
-    np.sort(bb, 1)[:, -3:]
-    yy = lambda xx: (xx ** 3 + xx) / 2 * 0.9
-    yy(bb.max(1))
-    ```
-    ```py
-    from sklearn.preprocessing import normalize
-
-    # margin1, margin2, margin3 = 0.9 ,0.4, 0.15
-    # margin1, margin2, margin3 = 1.0 ,0.3, 0.2
-    margin1, margin2, margin3 = 1.0 ,0.5, 0
-    # margin1, margin2, margin3 = 1.0, 0, 0.35
-    aa = np.random.uniform(-1, 1, (200, 100))
-    cc = np.zeros_like(aa)
-    dd = np.random.choice(100, 200)
-    for ii, jj in enumerate(dd):
-        cc[ii, jj] = 1
-        aa[ii, jj] = ii * 0.5 - 50
-        # print(aa[ii, jj])
-
-    bb = normalize(aa)
-    ff = keras.activations.softmax(tf.convert_to_tensor(bb)).numpy()
-
-    ee = bb.copy()
-    for ii, jj in enumerate(dd):
-        tt = np.cos(np.math.acos(ee[ii, jj]) * margin1 + margin2) - margin3
-        # print(ee[ii, jj], tt)
-        ee[ii, jj] = np.min([tt, ee[ii, jj]])
-
-    gg = keras.activations.softmax(tf.convert_to_tensor(ee)).numpy()
-    xx = np.arange(-50, 50, 0.5)
-    fig = plt.figure()
-    ax = plt.subplot(2, 2, 1)
-    plt.plot(xx, [bb[ii, jj] for ii, jj in enumerate(dd)], label='Original logits l2_normalize')
-    plt.plot(xx, [ee[ii, jj] for ii, jj in enumerate(dd)], label='Arcface logits l2_normalize')
-    plt.title("Logits l2_normalize")
-    plt.grid()
-    plt.legend()
-    ax = plt.subplot(2, 2, 2)
-    plt.plot(xx, [ff[ii, jj] for ii, jj in enumerate(dd)], label="Original logits to softmax")
-    plt.plot(xx, [gg[ii, jj] for ii, jj in enumerate(dd)], label="Arcface logits to softmax")
-    plt.plot(xx, [ff[ii, jj] - gg[ii, jj] for ii, jj in enumerate(dd)], label="Original softmax - Arcface softmax")
-    plt.title("Logits to softmax")
-    plt.grid()
-    plt.legend()
-    ax = plt.subplot(2, 2, 3)
-    plt.plot(xx, [gg[ii, jj] / ff[ii, jj] for ii, jj in enumerate(dd)], label="Arcface softmax / Original softmax")
-    plt.title("Softmax change along logits")
-    plt.grid()
-    plt.legend()
-    ax = plt.subplot(2, 2, 4)
-    plt.plot([ff[ii, jj] for ii, jj in enumerate(dd)], [gg[ii, jj] / ff[ii, jj] for ii, jj in enumerate(dd)], label="Arcface softmax / Original softmax")
-    plt.title("Softmax change along Original softmax")
-    plt.grid()
-    plt.legend()
-    plt.tight_layout()
-    ```
-    ![](images/arcface_softarc.png)
+    ![](images/scale_softmax.svg)
 ## Offline Triplet loss train SUB
   ```py
   import pickle
@@ -880,41 +748,17 @@
     print(tf.matmul(tf.nn.l2_normalize(aa, 1), tf.nn.l2_normalize(bb, 0)).numpy())
     # [[0.8944272  0.98994946]]
     ```
-## 模型测试
-  ```py
-  def model_verification_images(model_interf, iaa, ibb):
-      eea = model_interf(tf.convert_to_tensor([iaa]))
-      eeb = model_interf(tf.convert_to_tensor([ibb]))
-      return np.dot(normalize(eea), normalize(eeb).T)
-
-  model_verification_images(lambda xx: mm.predict(xx), aa / 255, bb / 255)
-  ```
-  ```py
-  from tensorflow.keras import layers
-  basic_model = keras.models.load_model('./keras_checkpoints_mobilenet_hard_63.h5', compile=False)
-  inputs = basic_model.inputs[0]
-  embedding = basic_model.outputs[0]
-  norm_emb = layers.Lambda(tf.nn.l2_normalize, name='norm_embedding', arguments={'axis': 1})(embedding)
-  norm_basic_model = keras.models.Model(inputs, norm_emb)
-  norm_basic_model.summary()
-  tf.saved_model.save(norm_basic_model, './model_mobilenet_norm_hard_63')
-  ```
-  ```py
-  def register_detect(model, regist_image, detect_images):
-      aa = imread(regist_image)
-      bb, cc, pp = model.get_face_location(aa)
-      ee = model.get_embedded_feature(aa, bb, pp)[0]
-      uus = []
-      for ii in detect_images:
-          aa = imread(ii)
-          bb, cc, pp = model.get_face_location(aa)
-          if len(bb) > 0:
-              uus.append(model.get_embedded_feature(aa, bb, pp)[0])
-      unk = normalize(np.vstack(uus))
-      known = normalize(ee)
-      dists = np.dot(unk, known.T)
-      return unk, known, dists
-  ```
+  - **模型输出添加 l2_normalize 层**
+    ```py
+    from tensorflow.keras import layers
+    basic_model = keras.models.load_model('./keras_checkpoints_mobilenet_hard_63.h5', compile=False)
+    inputs = basic_model.inputs[0]
+    embedding = basic_model.outputs[0]
+    norm_emb = layers.Lambda(tf.nn.l2_normalize, name='norm_embedding', arguments={'axis': 1})(embedding)
+    norm_basic_model = keras.models.Model(inputs, norm_emb)
+    norm_basic_model.summary()
+    tf.saved_model.save(norm_basic_model, './model_mobilenet_norm_hard_63')
+    ```
 ***
 
 # 人脸旋转角度与侧脸
@@ -1093,69 +937,3 @@
         dtype=float32))
   ```
 ***
-```sh
-# Mobilefacenet 160
-"loss": [5.0583, 1.6944, 1.2544, 1.0762]
-"accuracy": [0.2964, 0.6755, 0.7532, 0.7862]
-"lfw": [0.9715, 0.98, 0.986, 0.988]
-"cfp_fp": [0.865714, 0.893, 0.898857, 0.91]
-"agedb_30": [0.829167, 0.8775, 0.892667, 0.903167]
-```
-```sh
-# Mobilefacenet 768
-"loss": [4.82409207357388, 1.462764699449328, 1.011261948830721, 0.8042656191418587]
-"accuracy": [0.3281610608100891, 0.7102007865905762, 0.7921959757804871, 0.8312187790870667]
-"lfw": [0.9733333333333334, 0.9781666666666666, 0.9833333333333333, 0.983]
-"cfp_fp": [0.8654285714285714, 0.8935714285714286, 0.9002857142857142, 0.9004285714285715]
-"agedb_30": [0.8253333333333334, 0.8801666666666667, 0.8983333333333333, 0.8911666666666667]
-```
-```sh
-# Renet100 128
-"loss": [6.3005, 1.6274, 1.0608]
-"accuracy": [0.2196, 0.6881, 0.7901, 0.8293]
-"lfw": [0.97, 0.983, 0.981667, 0.986167]
-"cfp_fp": [0.865571, 0.894714, 0.903571, 0.910714]
-"agedb_30": [0.831833, 0.870167, 0.886333, 0.895833]
-```
-```sh
-# Renet100 1024
-"loss": [3.3549567371716877, 0.793737195027363, 0.518424223161905, 0.3872658337998814]
-"accuracy": [0.5023580193519592, 0.8334693908691406, 0.8864460587501526, 0.9125881195068359]
-"lfw": [0.9826666666666667, 0.9861666666666666, 0.9858333333333333, 0.99]
-"cfp_fp": [0.8998571428571429, 0.914, 0.9247142857142857, 0.9264285714285714]
-"agedb_30": [0.8651666666666666, 0.8876666666666667, 0.9013333333333333, 0.899]
-```
-```sh
-# EB0 160, Orign Conv + flatten + Dense
-"loss": [4.234781265258789, 1.6501317024230957],
-"accuracy": [0.35960495471954346, 0.6766131520271301],
-"lfw": [0.9816666666666667, 0.987, 0.9826666666666667],
-"cfp_fp": [0.9005714285714286, 0.9105714285714286],
-"agedb_30": [0.848, 0.8835]
-```
-```sh
-# EB0 160, GlobalAveragePooling
-"loss": [3.5231969356536865, 1.188686490058899, 0.8824349641799927, 0.7483137249946594],
-"accuracy": [0.45284023880958557, 0.7619950771331787, 0.8200176358222961, 0.8461616039276123],
-"lfw": 0.9826666666666667, 0.9855, 0.9886666666666667, 0.9856666666666667],
-"cfp_fp": [0.9022857142857142, 0.9201428571428572, 0.9212857142857143, 0.922],
-"agedb_30": [0.8531666666666666, 0.8805, 0.8891666666666667, 0.8966666666666666]
-```
-```sh
-# EB0 160, GDC
-"loss": [3.9325125217437744, 1.5069712400436401, 1.1851387023925781]
-"accuracy": [0.40046197175979614, 0.7043213248252869, 0.7628725171089172]
-"lfw": [0.9823333333333333, 0.9851666666666666, 0.99]
-"cfp_fp": [0.8962857142857142, 0.9145714285714286, 0.9158571428571428]
-"agedb_30": [0.8548333333333333, 0.8815, 0.8921666666666667]
-```
-```sh
-# EB4 840, GDC
-"loss": [2.727688789367676, 0.633741557598114, 0.4151850938796997, 0.3108983337879181]
-"accuracy": [0.5822311043739319, 0.8653680086135864, 0.9080367684364319, 0.9288726449012756]
-"lfw": [0.9876666666666667, 0.9881666666666666, 0.9911666666666666, 0.9913333333333333]
-"cfp_fp": [0.909, 0.918, 0.922, 0.9178571428571428]
-"agedb_30": [0.884, 0.9041666666666667, 0.9115, 0.9076666666666666]
-```
-- [Group Convolution分组卷积，以及Depthwise Convolution和Global Depthwise Convolution](https://cloud.tencent.com/developer/article/1394912)
-- [深度学习中的卷积方式](https://zhuanlan.zhihu.com/p/75972500)

@@ -2,6 +2,7 @@
 ***
 
 - [Github ResNeSt](https://github.com/zhanghang1989/ResNeSt)
+- [Github bleakie/MaskInsightface](https://github.com/bleakie/MaskInsightface)
 
 # 数据整理
 ## 预处理
@@ -573,6 +574,17 @@ with ss.scope():
     - 第三部分是定时检测，通过在更新的部分中加入一个定时器来做定时人脸检测，从而判断中途是否有新人脸的加入，本项目在定时人脸检测中使用了一个trick就是将已跟踪的人脸所在位置利用蒙版遮蔽起来，避免了人脸检测的重复检测，减少其计算量，从而提高了检测速度
 ***
 ```sh
+资料：建议用谷歌浏览器或QQ浏览器浏览可以直接网页翻译！
+文档汇总： https://docs.khadas.com/vim3/index.html
+烧录教程： https://docs.khadas.com/vim3/UpgradeViaUSBCable.html
+硬件资料： https://docs.khadas.com/vim3/HardwareDocs.html
+安卓固件下载： https://docs.khadas.com/vim3/FirmwareAndroid.html
+Ubuntu固件下载： https://docs.khadas.com/vim3/FirmwareUbuntu.html
+第三方操作系统： https://docs.khadas.com/vim3/FirmwareThirdparty.html#AndroidTV
+
+VIM3释放 NPU资料流程: https://www.khadas.com/npu-toolkit-vim3
+```
+```sh
 git clone https://github.com/opencv/opencv.git
 cd opencv
 mkdir build && cd build && cmake ..
@@ -586,12 +598,8 @@ g++ main.cpp mtcnn.cpp -I../../ncnn/build/install/include/ncnn/ -I/usr/local/inc
 import cv2
 import shutil
 import glob2
-import insightface
 from tqdm import tqdm
 from skimage.transform import SimilarityTransform
-
-retina = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
-retina.prepare(0)
 
 def face_align_landmarks(img, landmarks, image_size=(112, 112)):
     ret = []
@@ -613,34 +621,200 @@ def face_align_landmarks(img, landmarks, image_size=(112, 112)):
 
     return np.array(ret)
 
-aa = glob2.glob('./face_image/*/*.jpg')
-dest_single = 'tdevals'
-dest_multi = dest_single + '_multi'
-dest_none = dest_single + '_none'
-os.makedirs(dest_none, exist_ok=True)
-for ii in tqdm(aa[:50]):
+def extract_face_images(source_reg, dest_path, detector, limit=-1):
+    aa = glob2.glob(source_reg)
+    dest_single = dest_path
+    dest_multi = dest_single + '_multi'
+    dest_none = dest_single + '_none'
+    os.makedirs(dest_none, exist_ok=True)
+    if limit != -1:
+        aa = aa[:limit]
+    for ii in tqdm(aa):
+        imm = imread(ii)
+        bbs, pps = detector(imm)
+        if len(bbs) == 0:
+            shutil.copy(ii, os.path.join(dest_none, '_'.join(ii.split('/')[-2:])))
+            continue
+        user_name, image_name = ii.split('/')[-2], ii.split('/')[-1]
+        if len(bbs) == 1:
+            dest_path = os.path.join(dest_single, user_name)
+        else:
+            dest_path = os.path.join(dest_multi, user_name)
+
+        if not os.path.exists(dest_path):
+            os.makedirs(dest_path)
+        # if len(bbs) != 1:
+        #     shutil.copy(ii, dest_path)
+
+        nns = face_align_landmarks(imm, pps)
+        image_name_form = '%s_{}.%s' % tuple(image_name.split('.'))
+        for id, nn in enumerate(nns):
+            dest_name = os.path.join(dest_path, image_name_form.format(id))
+            imsave(dest_name, nn)
+
+import insightface
+os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
+# retina = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+retina = insightface.model_zoo.face_detection.retinaface_r50_v1()
+retina.prepare(0)
+detector = lambda imm: retina.detect(imm)
+
+sys.path.append('/home/leondgarse/workspace/samba/tdFace-flask')
+from face_model.face_model import FaceModel
+det = FaceModel(None)
+
+def detector(imm):
+    bbox, confid, points  = det.get_face_location(imm)
+    return bbox, points
+extract_face_images("./face_image/*/*.jpg", 'tdevals', detector)
+extract_face_images("./tdface_Register/*/*.jpg", 'tdface_Register_cropped', detector)
+extract_face_images("./tdface_Register/*/*.jpg", 'tdface_Register_mtcnn', detector)
+
+''' Review _multi and _none folder by hand, then do detection again on _none folder using another detector '''
+inn = glob2.glob('tdface_Register_mtcnn_none/*.jpg')
+for ii in tqdm(inn):
     imm = imread(ii)
-    bbs, pps = retina.detect(imm)
-    if len(bbs) == 0:
-        shutil.copy(ii, os.path.join(dest_none, '_'.join(.split('/')[-2:])))
-        continue
-    user_name, image_name = ii.split('/')[-2], ii.split('/')[-1]
-    if len(bbs) == 1:
-        dest_path = os.path.join(dest_single, user_name)
-    else:
-        dest_path = os.path.join(dest_multi, user_name)
+    bbs, pps = detector(imm)
+    if len(bbs) != 0:
+        image_name = os.path.basename(ii)
+        user_name = image_name.split('_')[0]
+        dest_path = os.path.join(os.path.dirname(ii), user_name)
+        os.makedirs(dest_path, exist_ok=True)
+        nns = face_align_landmarks(imm, pps)
+        image_name_form = '%s_{}.%s' % tuple(image_name.split('.'))
+        for id, nn in enumerate(nns):
+            dest_name = os.path.join(dest_path, image_name_form.format(id))
+            imsave(dest_name, nn)
+            os.rename(ii, os.path.join(dest_path, image_name))
 
-    if not os.path.exists(dest_path):
-        os.makedirs(dest_path)
-    if len(bbs) != 1:
-        shutil.copy(ii, dest_path)
+''' Similar images between users '''
+src = 'tdface_Register_mtcnn'
+dst = 'tdface_Register_mtcnn_simi'
+with open('tdface_Register_mtcnn.foo', 'r') as ff:
+    aa = ff.readlines()
+for id, ii in tqdm(enumerate(aa), total=len(aa)):
+    first, second, simi = [jj.split(': ')[1] for jj in ii.split(', ')]
+    dest_path = os.path.join(dst, str(id) + '_' + simi)
+    os.makedirs(dest_path, exist_ok=True)
+    for pp in os.listdir(os.path.join(src, first)):
+        src_path = os.path.join(src, first, pp)
+        shutil.copy(src_path, os.path.join(dest_path, first + '_' + pp))
+    for pp in os.listdir(os.path.join(src, second)):
+        src_path = os.path.join(src, second, pp)
+        shutil.copy(src_path, os.path.join(dest_path, second + '_' + pp))
 
-    nns = face_align_landmarks(imm, pps)
-    image_name = '%s_{}.%s' % tuple(image_name.split('.'))
-    for id, ii in enumerate(nns):
-        dest_name = os.path.join(dest_path, image_name.format(id))
-        imsave(dest_name, ii)
+''' Pos & Neg dists '''
+batch_size = 128
+gg = ImageDataGenerator(rescale=1./255, preprocessing_function=lambda img: (img - 0.5) * 2)
+tt = gg.flow_from_directory('./tdevals', target_size=(112, 112), batch_size=batch_size)
+steps = int(np.ceil(tt.classes.shape[0] / batch_size))
+embs = []
+classes = []
+for _ in tqdm(range(steps), total=steps):
+    aa, bb = tt.next()
+    emb = interp(aa)
+    embs.extend(emb)
+    classes.extend(np.argmax(bb, 1))
+embs = np.array(embs)
+classes = np.array(classes)
+class_matrix = np.equal(np.expand_dims(classes, 0), np.expand_dims(classes, 1))
+dists = np.dot(embs, embs.T)
+pos_dists = np.where(class_matrix, dists, np.ones_like(dists))
+neg_dists = np.where(np.logical_not(class_matrix), dists, np.zeros_like(dists))
+(neg_dists.max(1) <= pos_dists.min(1)).sum()
 ```
 ```sh
 cp ./face_image/2818/1586472495016.jpg ./face_image/4609/1586475252234.jpg ./face_image/3820/1586472950858.jpg ./face_image/4179/1586520054080.jpg ./face_image/2618/1586471583221.jpg ./face_image/6696/1586529149923.jpg ./face_image/5986/1586504872276.jpg ./face_image/1951/1586489518568.jpg ./face_image/17/1586511238696.jpg ./face_image/17/1586511110105.jpg ./face_image/17/1586511248992.jpg ./face_image/4233/1586482466485.jpg ./face_image/5500/1586493019872.jpg ./face_image/4884/1586474119164.jpg ./face_image/5932/1586471784905.jpg ./face_image/7107/1586575911740.jpg ./face_image/4221/1586512334133.jpg ./face_image/5395/1586578437529.jpg ./face_image/4204/1586506059923.jpg ./face_image/4053/1586477985553.jpg ./face_image/7168/1586579239307.jpg ./face_image/7168/1586489559660.jpg ./face_image/5477/1586512847480.jpg ./face_image/4912/1586489637333.jpg ./face_image/5551/1586502762688.jpg ./face_image/5928/1586579219121.jpg ./face_image/6388/1586513897953.jpg ./face_image/4992/1586471873460.jpg ./face_image/5934/1586492793214.jpg ./face_image/5983/1586490703112.jpg ./face_image/5219/1586492929098.jpg ./face_image/5203/1586487204198.jpg ./face_image/6099/1586490074263.jpg ./face_image/5557/1586490232722.jpg ./face_image/4067/1586491778846.jpg ./face_image/4156/1586512886040.jpg ./face_image/5935/1586492829221.jpg ./face_image/2735/1586513495061.jpg ./face_image/5264/1586557233625.jpg ./face_image/1770/1586470942329.jpg ./face_image/7084/1586514100804.jpg ./face_image/5833/1586497276529.jpg ./face_image/2200/1586577699180.jpg tdevals_none
 ```
+
+
+```sh
+# Mobilefacenet 160
+"loss": [5.0583, 1.6944, 1.2544, 1.0762]
+"accuracy": [0.2964, 0.6755, 0.7532, 0.7862]
+"lfw": [0.9715, 0.98, 0.986, 0.988]
+"cfp_fp": [0.865714, 0.893, 0.898857, 0.91]
+"agedb_30": [0.829167, 0.8775, 0.892667, 0.903167]
+```
+```sh
+# Mobilefacenet 768
+"loss": [4.82409207357388, 1.462764699449328, 1.011261948830721, 0.8042656191418587]
+"accuracy": [0.3281610608100891, 0.7102007865905762, 0.7921959757804871, 0.8312187790870667]
+"lfw": [0.9733333333333334, 0.9781666666666666, 0.9833333333333333, 0.983]
+"cfp_fp": [0.8654285714285714, 0.8935714285714286, 0.9002857142857142, 0.9004285714285715]
+"agedb_30": [0.8253333333333334, 0.8801666666666667, 0.8983333333333333, 0.8911666666666667]
+```
+```sh
+# Renet100 128
+"loss": [6.3005, 1.6274, 1.0608]
+"accuracy": [0.2196, 0.6881, 0.7901, 0.8293]
+"lfw": [0.97, 0.983, 0.981667, 0.986167]
+"cfp_fp": [0.865571, 0.894714, 0.903571, 0.910714]
+"agedb_30": [0.831833, 0.870167, 0.886333, 0.895833]
+```
+```sh
+# Renet100 1024
+"loss": [3.3549567371716877, 0.793737195027363, 0.518424223161905, 0.3872658337998814]
+"accuracy": [0.5023580193519592, 0.8334693908691406, 0.8864460587501526, 0.9125881195068359]
+"lfw": [0.9826666666666667, 0.9861666666666666, 0.9858333333333333, 0.99]
+"cfp_fp": [0.8998571428571429, 0.914, 0.9247142857142857, 0.9264285714285714]
+"agedb_30": [0.8651666666666666, 0.8876666666666667, 0.9013333333333333, 0.899]
+```
+```sh
+# EB0 160, Orign Conv + flatten + Dense
+"loss": [4.234781265258789, 1.6501317024230957],
+"accuracy": [0.35960495471954346, 0.6766131520271301],
+"lfw": [0.9816666666666667, 0.987, 0.9826666666666667],
+"cfp_fp": [0.9005714285714286, 0.9105714285714286],
+"agedb_30": [0.848, 0.8835]
+```
+```sh
+# EB0 160, GlobalAveragePooling
+"loss": [3.5231969356536865, 1.188686490058899, 0.8824349641799927, 0.7483137249946594],
+"accuracy": [0.45284023880958557, 0.7619950771331787, 0.8200176358222961, 0.8461616039276123],
+"lfw": 0.9826666666666667, 0.9855, 0.9886666666666667, 0.9856666666666667],
+"cfp_fp": [0.9022857142857142, 0.9201428571428572, 0.9212857142857143, 0.922],
+"agedb_30": [0.8531666666666666, 0.8805, 0.8891666666666667, 0.8966666666666666]
+```
+```sh
+# EB0 160, GDC
+"loss": [3.9325125217437744, 1.5069712400436401, 1.1851387023925781]
+"accuracy": [0.40046197175979614, 0.7043213248252869, 0.7628725171089172]
+"lfw": [0.9823333333333333, 0.9851666666666666, 0.99]
+"cfp_fp": [0.8962857142857142, 0.9145714285714286, 0.9158571428571428]
+"agedb_30": [0.8548333333333333, 0.8815, 0.8921666666666667]
+```
+```sh
+# EB4 840, GDC
+"loss": [2.727688789367676, 0.633741557598114, 0.4151850938796997, 0.3108983337879181]
+"accuracy": [0.5822311043739319, 0.8653680086135864, 0.9080367684364319, 0.9288726449012756]
+"lfw": [0.9876666666666667, 0.9881666666666666, 0.9911666666666666, 0.9913333333333333]
+"cfp_fp": [0.909, 0.918, 0.922, 0.9178571428571428]
+"agedb_30": [0.884, 0.9041666666666667, 0.9115, 0.9076666666666666]
+```
+```sh
+# MobileNet, 128, keras.losses.CategoricalCrossentropy, label_smoothing=0
+"loss": [5.324231072016197, 1.9473355543105044, 1.4203207439133088]
+"accuracy": [0.2530779540538788, 0.6315819621086121, 0.7252941727638245]
+"lfw": [0.9741666666666666, 0.9798333333333333, 0.9815]
+"cfp_fp": [0.8307142857142857, 0.8412857142857143, 0.8465714285714285]
+"agedb_30": [0.8403333333333334, 0.8608333333333333, 0.8725]
+```
+```sh
+# MobileNet, 128, keras.losses.CategoricalCrossentropy, label_smoothing=0.1
+"loss": [6.335052917359504, 3.5849099863856986, 3.1803239681401547]
+"accuracy": [0.279971718788147, 0.6559497714042664, 0.7314797639846802]
+"lfw": [0.9761666666666666, 0.9821666666666666, 0.9845]
+"cfp_fp": [0.824, 0.8487142857142858, 0.8571428571428571]
+"agedb_30": [0.8406666666666667, 0.8761666666666666, 0.8918333333333334]
+```
+```sh
+# MobileNet, 128, Epoch 8, ArcfaceLoss, label_smoothing=0
+"loss": [15.097385468255506, 14.698767092024056, 14.411642811109166]
+"accuracy": [0.92729651927948, 0.9315400719642639, 0.934310257434845]
+"lfw": [0.9895, 0.9906666666666667, 0.99]
+"cfp_fp": [0.8511428571428571, 0.8585714285714285, 0.8574285714285714]
+"agedb_30": [0.916, 0.9146666666666666, 0.9166666666666666]
+```
+- [Group Convolution分组卷积，以及Depthwise Convolution和Global Depthwise Convolution](https://cloud.tencent.com/developer/article/1394912)
+- [深度学习中的卷积方式](https://zhuanlan.zhihu.com/p/75972500)

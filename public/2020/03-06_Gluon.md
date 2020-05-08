@@ -1,2 +1,0 @@
-- [Github Deep-Learning-with-TensorFlow-book](https://github.com/dragen1860/Deep-Learning-with-TensorFlow-book)
-- [Github Tensorflow 2.0 动手学深度学习](https://github.com/TrickyGo/Dive-into-DL-TensorFlow2.0)
