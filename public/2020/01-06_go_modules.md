@@ -145,6 +145,79 @@
   ```
 ***
 
+# Binary 二进制文件读写
+## EE
+  ```go
+  import (
+      "math/rand"
+      "encoding/binary"
+      "fmt"
+      "os"
+      "bytes"
+  )
+
+  type elem struct {
+      aa float32
+      bb float64
+      cc uint32
+  }
+
+  nums := 3
+  ss := make([]elem, nums)
+  rr := rand.New(rand.NewSource(0))
+
+  fmt.Println("Write elements:")
+  for ii := 0; ii < nums; ii++ {
+      ss[ii] = elem{rr.Float32(), rr.Float64(), rr.Uint32()}
+      fmt.Println(ss[ii])
+  }
+
+  var binBuf bytes.Buffer
+  binary.Write(&binBuf, binary.BigEndian, ss)
+  file, err := os.Create("test.bin")
+  // defer file.Close()
+  file.Write(binBuf.Bytes())
+  file.Close()
+
+  ee := elem{}
+  fmt.Println("Element size: ", binary.Size(ee))
+
+  fmt.Println("Read elements:")
+  file, err := os.Open("test.bin")
+  // defer file.Close()
+  binBuf2 := make([]byte, binary.Size(ee))
+  for ii := 0; ii < nums; ii++ {
+      file.Read(binBuf2)
+      binary.Read(bytes.NewBuffer(binBuf2), binary.BigEndian, &ee)
+      fmt.Println(ee)
+  }
+
+  fmt.Println("Read elements batch:")
+  file, err := os.Open("test.bin")
+  // defer file.Close()
+  binBuf3 := make([]byte, binary.Size(ee) * nums)
+  file.Read(binBuf3)
+
+  dd := make([]elem, nums)
+  binary.Read(bytes.NewBuffer(binBuf3), binary.BigEndian, &dd)
+  fmt.Println(dd)
+  ```
+  **运行**
+  ```go
+  Write elements:
+  {0.94519615 0.24496508529377975 2817310706}
+  {0.05434384 0.36758720663245853 1243308993}
+  {0.1924386 0.6553321508148324 3853314576}
+  Element size:  16
+  Read elements:
+  {0.94519615 0.24496508529377975 2817310706}
+  {0.05434384 0.36758720663245853 1243308993}
+  {0.1924386 0.6553321508148324 3853314576}
+  Read elements batch:
+  [{0.94519615 0.24496508529377975 2817310706} {0.05434384 0.36758720663245853 1243308993} {0.1924386 0.6553321508148324 3853314576}]
+  ```
+***
+
 # Tensorflow
 ## Install TensorFlow for C
   - [Install TensorFlow for C](https://www.tensorflow.org/install/lang_c)
@@ -480,6 +553,15 @@
 
   fmt.Println(time.Since(aa))
   // 19.548µs
+
+  rr := 100
+  ss := time.Now()
+  for ii := 0; ii < rr; ii++ {
+      // Do nothing
+  }
+  tt := time.Since(ss).Seconds()
+  fmt.Println("Repeat: ", rr, ", Total: ", tt * 1e6, "µs, Mean: ", tt * 1e6 / float64(rr), "µs")
+  // Repeat:  100 , Total:  6.022 µs, Mean:  0.06022 µs
   ```
 ## gonum mat
   - [Gonum](https://www.gonum.org/)
@@ -1228,6 +1310,7 @@
 ***
 
 # go-tflite
+## Native x86 64
   - [Github mattn/go-tflite](https://github.com/mattn/go-tflite)
   - [Install bazel](https://docs.bazel.build/versions/master/install-ubuntu.html)
     ```sh
@@ -1283,22 +1366,76 @@
     imm := make([]float32, 37632)
     input.SetFloat32s(imm)
     ```
-  - [Build TensorFlow Lite for ARM64 boards](https://www.tensorflow.org/lite/guide/build_arm64)
+## Android ARM
+  - [Build TensorFlow Lite for ARM boards](https://www.tensorflow.org/lite/guide/build_arm64)
     ```sh
     bazel build --config android_arm --config monolithic //tensorflow/lite:libtensorflowlite.so --verbose_failures
     bazel build --config android_arm --config monolithic //tensorflow/lite/c:libtensorflowlite_c.so --verbose_failures
 
+    bazel build --config android_arm64 --config monolithic //tensorflow/lite:libtensorflowlite.so --verbose_failures
+    bazel build --config android_arm64 --config monolithic //tensorflow/lite/c:libtensorflowlite_c.so --verbose_failures
+    ```
+    Or build a `.a` lib using tensorflow tools
+    ```sh
     sudo apt-get install crossbuild-essential-arm64
     ./tensorflow/lite/tools/make/download_dependencies.sh
     ./tensorflow/lite/tools/make/build_aarch64_lib.sh
     ls tensorflow/lite/tools/make/gen/linux_aarch64/lib/libtensorflow-lite.a
     ```
+  - `gomobile bind`
     ```sh
     export CGO_LDFLAGS=-L$HOME/workspace/tensorflow.arm/bazel-bin/tensorflow/lite/c
     export CGO_CFLAGS=-I$HOME/workspace/tensorflow.arm/
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/workspace/tensorflow.arm/bazel-bin/tensorflow/lite/c
-    env GOOS=android GOARCH=arm go build tdFace.mobile/faceModelTflite
 
-    gomobile bind -v -o dest/faceModel.aar -target=android/arm tdFace.mobile/faceModelTflite
+    gomobile bind -v -o hello.aar -target=android/arm github.com/mattn/go-tflite
+    gomobile bind -v -o hello.aar -target=android/arm64 github.com/mattn/go-tflite
     ```
+  - `go build` for Android ARM [Error cross-compile for ARM binary file](https://github.com/mattn/go-tflite/issues/28)
+    ```sh
+    git diff tflite.go
+    # -#cgo linux LDFLAGS: -ldl -lrt
+    # +#cgo linux LDFLAGS: -ldl
+
+    CGO_ENABLED=1 GOOS=android GOARCH=arm CC="$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi29-clang" go build github.com/mattn/go-tflite
+    CGO_ENABLED=1 GOOS=android GOARCH=arm64 CC="$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang -Wl,-rpath-link,$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/29" go build github.com/mattn/go-tflite
+    ```
+    **test_tflite.go**
+    ```go
+    package main
+
+    import (
+            "github.com/mattn/go-tflite"
+    )
+
+    func main() {
+            _ = tflite.NewModelFromFile("/data/model.tflite")
+    }
+    ```
+    **Compile and run**
+    ```sh
+    CGO_ENABLED=1 GOOS=android GOARCH=arm CC="$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi29-clang " go build test_tflite.go
+    CGO_ENABLED=1 GOOS=android GOARCH=arm64 CC="$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang -Wl,-rpath-link,$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/29" go build test_tflite.go
+
+    adb push test_tflite model.tflite $HOME/workspace/tensorflow.arm/bazel-bin/tensorflow/lite/c/libtensorflowlite_c.so /data
+
+    adb shell 'chmod a+x /data/test_tflite; LD_LIBRARY_PATH=/data /data/test_tflite'
+    ```
+## Linux ARM
+  ```sh
+  CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=./aarch64-unknown-linux-gnueabi-5.4.0-2.23-4.4.6/bin/aarch64-unknown-linux-gnueabi-gcc go build xxx.go
+  CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=./aarch64-unknown-linux-gnueabi-5.4.0-2.23-4.4.6/bin/aarch64-unknown-linux-gnueabi-gcc -Wall -std=c++11 -Llib -isystem/aarch64/usr/include -L/aarch64/lib -ldl -lpthread -Wl,-rpath-link,/aarch64/lib -L/aarch64/lib/aarch64-linux-gnu -L/aarch64/usr/lib -I/aarch64/usr/include -L/aarch64/usr/lib/aarch64-linux-gnu -ldl -lpthread -Wl,-rpath-link,/aarch64/usr/lib/aarch64-linux-gnu -lphonon -lcurl -lprotobuf go build xxx.go
+
+  -L/home/leondgarse/Android/Sdk/ndk/20.0.5594570/platforms/android-29/arch-arm64/usr/lib
+
+  CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC="$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang -lstdc++ -L/usr/aarch64-linux-gnu/lib -lstdc++ -lc -lpthread -ldl -Wl,-rpath-link,$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/29 -lc -landroid -lstdc++" go build github.com/mattn/go-tflite
+
+  CGO_ENABLED=1 GOARCH=arm64 CC="$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang -lstdc++ -L/usr/aarch64-linux-gnu/lib -lstdc++ -lc -lpthread -ldl -Wl,-rpath-link,$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/29 -lc -lstdc++" go build github.com/mattn/go-tflite
+
+  CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC="/usr/bin/aarch64-linux-gnu-gcc -Wl,-rpath-link,$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/29" go build github.com/mattn/go-tflite
+
+  CGO_ENABLED=1 GOARCH=arm64 CC="/usr/bin/aarch64-linux-gnu-gcc -L/usr/aarch64-linux-gnu/lib -lstdc++ -lc -lpthread -ldl -Wl,-rpath-link,$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/29" go build github.com/mattn/go-tflite
+
+  CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC="/usr/bin/aarch64-linux-gnu-gcc -Wl,-rpath-link,$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/29" go build github.com/mattn/go-tflite
+  ```
 ***

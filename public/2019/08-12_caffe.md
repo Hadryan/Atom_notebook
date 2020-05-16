@@ -6,49 +6,54 @@
   - [Caffe Installation](http://caffe.berkeleyvision.org/installation.html)
 ## git clone
   ```sh
-  git clone https://github.com/BVLC/caffe --depth=10
-  cd caffe/
-  git pull --depth=100000
+  $ git clone https://github.com/BVLC/caffe --depth=10
+  $ cd caffe/
+  $ git pull --depth=100000
   ```
 ## Makefile.config
   ```sh
-  $ diff Makefile.config Makefile.config.example
+  $ cp Makefile.config.example Makefile.config
+  ```
+  ```sh
+  $ diff Makefile.config.example Makefile.config
   5c5
-  < USE_CUDNN := 1
+  < # USE_CUDNN := 1
   ---
-  > # USE_CUDNN := 1
+  > USE_CUDNN := 1
+  27c27
+  < # CUSTOM_CXX := g++
+  ---
+  > CUSTOM_CXX := g++-8
   39,40c39,40
-  < CUDA_ARCH := # -gencode arch=compute_20,code=sm_20 \
-  < 		# -gencode arch=compute_20,code=sm_21 \
+  < CUDA_ARCH := -gencode arch=compute_20,code=sm_20 \
+  <               -gencode arch=compute_20,code=sm_21 \
   ---
-  > CUDA_ARCH := -gencode arch=compute_20,code=sm_20 \
-  > 		-gencode arch=compute_20,code=sm_21 \
+  > CUDA_ARCH := # -gencode arch=compute_20,code=sm_20 \
+  >               # -gencode arch=compute_20,code=sm_21 \
   53c53
-  < BLAS := open
+  < BLAS := atlas
   ---
-  > BLAS := atlas
+  > BLAS := open
   71,72c71,72
-  < # PYTHON_INCLUDE := /usr/include/python2.7 \
-  < # 		/usr/lib/python2.7/dist-packages/numpy/core/include
+  < PYTHON_INCLUDE := /usr/include/python2.7 \
+  <               /usr/lib/python2.7/dist-packages/numpy/core/include
   ---
-  > PYTHON_INCLUDE := /usr/include/python2.7 \
-  > 		/usr/lib/python2.7/dist-packages/numpy/core/include
-  75,78c75,78
-  < ANACONDA_HOME := /opt/anaconda3
-  < PYTHON_INCLUDE := $(ANACONDA_HOME)/include \
-  < 		$(ANACONDA_HOME)/include/python3.7m \
-  < 		$(ANACONDA_HOME)/lib/python3.7/site-packages/numpy/core/include
+  > # PYTHON_INCLUDE := /usr/include/python2.7 \
+  > #             /usr/lib/python2.7/dist-packages/numpy/core/include
+  81,83c81,83
+  < # PYTHON_LIBRARIES := boost_python3 python3.5m
+  < # PYTHON_INCLUDE := /usr/include/python3.5m \
+  < #                 /usr/lib/python3.5/dist-packages/numpy/core/include
   ---
-  > # ANACONDA_HOME := $(HOME)/anaconda
-  > # PYTHON_INCLUDE := $(ANACONDA_HOME)/include \
-  > 		# $(ANACONDA_HOME)/include/python2.7 \
-  > 		# $(ANACONDA_HOME)/lib/python2.7/site-packages/numpy/core/include
+  > PYTHON_LIBRARIES := boost_python38 python3.8
+  > PYTHON_INCLUDE := /usr/include/python3.8 \
+  >                 /usr/lib/python3/dist-packages/numpy/core/include
   97,98c97,98
-  < INCLUDE_DIRS := $(PYTHON_INCLUDE) /usr/local/include /usr/include/hdf5/serial
-  < LIBRARY_DIRS := $(PYTHON_LIB) /usr/local/lib /usr/lib /usr/lib/x86_64-linux-gnu/hdf5/serial
+  < INCLUDE_DIRS := $(PYTHON_INCLUDE) /usr/local/include
+  < LIBRARY_DIRS := $(PYTHON_LIB) /usr/local/lib /usr/lib
   ---
-  > INCLUDE_DIRS := $(PYTHON_INCLUDE) /usr/local/include
-  > LIBRARY_DIRS := $(PYTHON_LIB) /usr/local/lib /usr/lib
+  > INCLUDE_DIRS := $(PYTHON_INCLUDE) /usr/local/include /usr/include/hdf5/serial /usr/include/opencv4
+  > LIBRARY_DIRS := $(PYTHON_LIB) /usr/local/lib /usr/lib /usr/lib/x86_64-linux-gnu/hdf5/serial
   ```
 ## Makefile
   ```sh
@@ -73,7 +78,7 @@
 
    endif
   -PYTHON_LIBRARIES ?= boost_python python2.7
-  +PYTHON_LIBRARIES ?= boost_python-py36
+  +PYTHON_LIBRARIES ?= boost_python38
    WARNINGS := -Wall -Wno-sign-compare
 
    ##############################
@@ -86,41 +91,70 @@
    else
           # ATLAS
   ```
+## Protobuf
+  - When set using `anaconda` in `Makefile.config`, `libprotobuf` version in system should match with `anaconda` one
+    ```sh
+    $ locate libprotobuf  # List only those matters
+    # /opt/anaconda3/pkgs/libprotobuf-3.11.4-hd408876_0/lib/libprotobuf.so
+    # /opt/anaconda3/lib/libprotobuf.so.22
+    # /usr/local/lib/libprotobuf.so
+    # /usr/local/lib/libprotobuf.so.22
+
+    $ ls /usr/local/lib/libprotobuf.so -l
+    # /usr/local/lib/libprotobuf.so -> libprotobuf.so.22.0.4
+    ```
+    Or may lead to errors like
+    ```sh
+    .build_release/lib/libcaffe.so: undefined reference to google::protobuf::internal::UnknownFieldParse
+    .build_release/lib/libcaffe.so: undefined reference to google::protobuf::RepeatedPtrField
+    ```
+  - Download the matched protobuf release `protobuf-cpp-xxx.tar.gz` from [protobuf releases](https://github.com/protocolbuffers/protobuf/releases)
+- Extract and compile:
+  ```sh
+  ./autogen.sh
+  ./configure
+  make
+  make check
+  sudo make install
+  sudo ldconfig
+  pkg-config --cflags --libs protobuf
+  ```
 ## apt install
   ```sh
   sudo apt install \
-          protobuf-c-compiler protobuf-compiler libprotobuf-dev libboost-all-dev \
+          gcc-8 g++-8 libboost-all-dev \
           libgflags-dev libgoogle-glog-dev libleveldb-dev liblmdb-dev libopencv-dev \
           libsnappy-dev libhdf5-serial-dev libopenblas-dev libatlas-base-dev
+
+  # sudo apt install protobuf-c-compiler protobuf-compiler libprotobuf-dev
   ```
 ## make
   ```sh
-  cp Makefile.config.example Makefile.config
-
   make all
   make test
   make runtest
   make pytest  # --> python/caffe/_caffe.so
-  export PYTHONPATH=/home/leondgarse/workspace/caffe/python:$PYTHONPATH
+  export PYTHONPATH=$PYTHONPATH:$HOME/workspace/caffe/python
   ```
 ## Q / A
-  - **Q: Import error: undefined symbol**
+  - **Q: libboost import error: undefined symbol**
     ```py
     import caffe
     undefined symbol: _ZN5boost6python6detail11init_moduleER11PyModuleDefPFvvE
     ```
-    A: 原因是 boost_python 的版本不匹配，Makefile 中指定的是 2.7，应使用 python 3.6
+    A: Installed `boost_python` version is `python 3.8` / `python 3.6`, not matching with Makefile which is using `2.7`
     ```sh
-    $ locate libboost_python-py
-    /usr/lib/x86_64-linux-gnu/libboost_python-py36.so
+    $ locate libboost_python
+    # /usr/lib/x86_64-linux-gnu/libboost_python38.so
 
     $ ls /usr/lib/x86_64-linux-gnu/libboost_python* -l
-    # /usr/lib/x86_64-linux-gnu/libboost_python-py36.so -> libboost_python3-py36.so
+    # /usr/lib/x86_64-linux-gnu/libboost_python38.so -> libboost_python38.so.1.71.0
 
     $ vi Makefile +208
-    PYTHON_LIBRARIES ?= boost_python-py36
+    PYTHON_LIBRARIES ?= boost_python38
+    # Or: PYTHON_LIBRARIES ?= boost_python-py36
     ```
-    重新编译 so 文件
+    Re-compile `.so`
     ```sh
     make pytest
     ```
@@ -128,9 +162,9 @@
     ```sh
     build_release/lib/libcaffe.so: undefined reference to cv::imread(cv::String const&, int)
     ```
-    A: 在Makefile中添加代码：
+    A: Add `opencv` lib in Makefile：
     ```sh
-    # vi Makefile +201
+    $ vi Makefile +201
     ifeq ($(USE_OPENCV), 2)
         LIBRARIES += opencv_core opencv_highgui opencv_imgproc opencv_imgcodecs
     endif  
@@ -139,9 +173,9 @@
     ```sh
     ./include/caffe/util/hdf5.hpp:6:18: fatal error: hdf5.h: No such file or directory
     ```
-    A: PYTHON_INCLUDE / PYTHON_LIB 中指定的路径不对
+    A: PYTHON_INCLUDE / PYTHON_LIB NOT including `hdf5` lib
     ```sh
-    # vi Makefile.config +97
+    $ vi Makefile.config +97
     < INCLUDE_DIRS := $(PYTHON_INCLUDE) /usr/local/include /usr/include/hdf5/serial
     < LIBRARY_DIRS := $(PYTHON_LIB) /usr/local/lib /usr/lib /usr/lib/x86_64-linux-gnu/hdf5/serial
     ```
@@ -152,23 +186,59 @@
     Makefile:588: recipe for target '.build_release/cuda/src/caffe/layers/reduction_layer.o' failed
     make: *** [.build_release/cuda/src/caffe/layers/reduction_layer.o] Error 1
     ```
-    A: 修改 CUDA architecture setting
+    A: Modify CUDA architecture setting
     ```sh
-    # vi Makefile.config +39
+    $ vi Makefile.config +39
     CUDA_ARCH := # -gencode arch=compute_20,code=sm_20 \
     		# -gencode arch=compute_20,code=sm_21 \
     ```
-  - **Q: build error: undefined reference to caffe::cudnn::dataType<float>::one**
+  - **Q: Build error: undefined reference to caffe::cudnn::dataType<float>::one**
     ```sh
     .build_release/lib/libcaffe.so: undefined reference to caffe::cudnn::dataType<float>::one
     collect2: error: ld returned 1 exit status
     make: *** [.build_release/tools/upgrade_net_proto_text.bin] Error 1
     ```
-    A: 使用 openblas 替换 atlas blas
+    A: Use `openblas` instead of `atlas blas`
     ```sh
-    # vi Makefile.config +53
+    $ vi Makefile.config +53
     BLAS := open
     ```
+  - **Q: Build error: ‘CV_LOAD_IMAGE_COLOR’ was not declared in this scope**
+    ```sh
+    src/caffe/util/io.cpp:76:34: error: ‘CV_LOAD_IMAGE_COLOR’ was not declared in this scope
+       76 |   int cv_read_flag = (is_color ? CV_LOAD_IMAGE_COLOR :
+          |                                  ^~~~~~~~~~~~~~~~~~~
+    src/caffe/util/io.cpp:77:5: error: ‘CV_LOAD_IMAGE_GRAYSCALE’ was not declared in this scope
+       77 |     CV_LOAD_IMAGE_GRAYSCALE);
+    ```
+    A: The error caused by the OpenCV module in version 3 and 4 has change, change `src/caffe/util/io.cpp` `src/caffe/layers/window_data_layer.cpp` `src/caffe/test/test_io.cpp`
+    ```sh
+    # From:
+    int cv_read_flag = (is_color ? CV_LOAD_IMAGE_COLOR :
+        CV_LOAD_IMAGE_GRAYSCALE);
+
+    # To:
+    int cv_read_flag = (is_color ? cv::IMREAD_COLOR :
+        cv::IMREAD_GRAYSCALE);
+    ```
+  - **Q: CUDA error: unsupported GNU version! gcc versions later than 8 are not supported!**
+    ```sh
+    In file included from /usr/local/cuda/bin/../targets/x86_64-linux/include/cuda_runtime.h:83:0,
+    /usr/local/cuda/bin/../targets/x86_64-linux/include/crt/host_config.h:138:2: error: #error — unsupported GNU version! gcc versions later than 8 are not supported!
+    ```
+    A: Install `g++-8` and set to `Makefile.config` `CUSTOM_CXX`
+    ```sh
+    $ sudo apt install gcc-8 g++-8
+
+    $ vi Makefile.config +27
+    CUSTOM_CXX := g++-8
+    ```
+  - **Q: Protobuf error: undefined reference to google::protobuf::xxx** [Undefined reference to google protobuf](https://github.com/BVLC/caffe/issues/3046)
+    ```sh
+    .build_release/lib/libcaffe.so: undefined reference to google::protobuf::internal::UnknownFieldParse
+    .build_release/lib/libcaffe.so: undefined reference to google::protobuf::RepeatedPtrField
+    ```
+    A: [Protobuf](#protobuf)
 ## Docker
   - [BVLC/caffe/docker](https://github.com/BVLC/caffe/tree/master/docker)
   ```sh

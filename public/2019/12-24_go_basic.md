@@ -82,6 +82,22 @@
     ./hello
     # Hello world
     ```
+  - **buildmode**
+    ```sh
+    $ go help buildmode
+    # -buildmode=archive
+    # -buildmode=c-archive
+    # -buildmode=c-shared
+    # -buildmode=default
+    # -buildmode=shared
+    # -buildmode=exe
+    # -buildmode=pie
+    # -buildmode=plugin
+    ```
+  - **dist list**
+    ```sh
+    $ go tool dist list
+    ```
 ## Install gophernotes
   - [Jupyter kernels](https://github.com/jupyter/jupyter/wiki/Jupyter-kernels)
   - [gophernotes - Use Go in Jupyter notebooks and interact](https://github.com/gopherdata/gophernotes)
@@ -1095,6 +1111,61 @@
     fmt.Println(len(pp_2), len(pp_2[0]), time.Since(ss))
     // 1200 800 87.393µs
     ```
+  - **数组类型转化**
+    ```go
+    a := []int{1, 2, 3, 4, 5}
+    int2float32 := func(aa []int) []float32 {
+        bb := make([]float32, len(aa))
+        for ii, vv := range(aa) {
+            bb[ii] = float32(vv)
+        }
+        return bb
+    }
+    int2float32(a)
+    // [1 2 3 4 5]
+    ```
+## string
+  - `string` 类型定义 `/usr/share/go-xxx/src/builtin/builtin.go`
+    ```go
+    // string is the set of all strings of 8-bit bytes, conventionally but not
+    // necessarily representing UTF-8-encoded text. A string may be empty, but
+    // not nil. Values of string type are immutable.
+    type string string
+    ```
+    - `string` 是 8 比特字节的集合，通常但并不一定是 UTF-8 编码的文本
+    - `string` 可以为空，但不会是 `nil`
+    - `string` 对象 **不可以修改**
+    - `string` 的数据结构包含 `首地址指针` 以及 `长度`
+    ```go
+    import "fmt"
+    aa := "hello world"
+    fmt.Println(aa[3], string(aa[3]))
+    // 108 l
+    ```
+  - `string` 方法定义 `/usr/share/go-xxx/src/runtime/string.go`
+  - **字符串拼接**
+    ```go
+    fmt.Println(aa + ", " + aa)
+    // hello world, hello world
+    ```
+    - 新字符串的内存空间是一次分配完成的，性能消耗主要在拷贝数据上
+    - 拼接过程需要遍历两次切片，第一次遍历获取总的字符串长度，据此申请内存，第二次遍历将字符串逐个拷贝过去
+  - **[]byte 与 string** 如果需要修改字符串内容，需要转化为 `[]byte`
+    ```go
+    bb := []byte(aa)
+    fmt.Println(bb)
+    // [104 101 108 108 111 32 119 111 114 108 100]
+
+    bb[1] = byte("a"[0])
+    fmt.Println(string(bb))
+    // hallo world
+    ```
+    在只是 **临时需要字符串** 的场景下，byte 切片转换成 string 时并不会拷贝内存，而是直接返回一个 string，这个 string 的指针指向切片的内存
+    ```go
+    m[string(bb)] // map 使用 string 作为 key
+    "<" + string(bb) + ">" // 字符串拼接
+    string(b) == "foo"  // 字符串比较
+    ```
 ## range 迭代遍历
   - **range** 在 for 循环中对 `slice` 或者 `map` 进行迭代遍历
     - `range` 给出的是 **元素序号, 元素值**，`for key, value := range array`
@@ -1134,19 +1205,6 @@
     // character U+672C '本' starts at byte position 3
     // character U+FFFD '�' starts at byte position 6
     // character U+8A9E '語' starts at byte position 7
-    ```
-  - **数组类型转化**
-    ```go
-    a := []int{1, 2, 3, 4, 5}
-    int2float32 := func(aa []int) []float32 {
-        bb := make([]float32, len(aa))
-        for ii, vv := range(aa) {
-            bb[ii] = float32(vv)
-        }
-        return bb
-    }
-    int2float32(a)
-    // [1 2 3 4 5]
     ```
 ## map 字典
   - **map** 键值对映射

@@ -1366,6 +1366,12 @@
     # 测试
     curl www.google.com
     ```
+  - **PAC 代理** [Github MatcherAny/whitelist.pac](https://github.com/MatcherAny/whitelist.pac.git)
+    ```sh
+    # 通过 Apache2 配置 SwitchyOmega 使用本地文件，PAC URL: http://127.0.0.1/auto.pac
+    sudo apt install apache2
+    sudo ln -s /var/www/html/auto.pac $HOME/local_bin/OmegaProfile_PAC.pac
+    ```
 ## 每次开机时弹出 System problem report detected
   - Ubuntu 有一个内建的实用程序叫做 **Apport**, 当一个程序崩溃时，可以进行通知
   - **crash 文件** 生成的错误报告，删除后避免每次重启都弹出提示
@@ -1446,6 +1452,45 @@
   ┌─┬─┐ ┏━┳━┓ ─ | ━ ┃
   ├─┼─┤ ┣━╋━┫
   └─┴─┘ ┗━┻━┛
+  ```
+## adb
+  - **Q: no permissions (user in plugdev group; are your udev rules wrong?)**
+    ```sh
+    $ adb devices
+    # List of devices attached
+    # 1234567890	no permissions (user in plugdev group; are your udev rules wrong?); see [http://developer.android.com/tools/device.html]
+    ```
+    A: install adb from Ubuntu package. This gives you a community-maintained default set of udev rules for all Android devices
+    ```sh
+    $ sudo apt install adb
+    ```
+## beep
+  ```sh
+  echo -ne '\007'
+  echo -ne '\a'
+  printf "\007"
+  Ctrl + g
+  echo -n ctrl+v ctrl+g
+
+  tput bel
+  speaker-test -t sine -f 1000 -l 1
+  paplay /usr/share/sounds/gnome/default/alerts/bark.ogg
+
+  # beep NOT working
+  sudo apt install beep
+  sudo modprobe pcspkr -vvv
+  beep
+  beep -f 500 -l 700
+  beep -f 480 -l 400
+  beep -f 470 -l 250
+  beep -f 530 -l 300 -D 100
+  beep -f 500 -l 300 -D 100
+  beep -f 500 -l 300
+  beep -f 400 -l 600
+  beep -f 300 -l 500
+  beep -f 350 -l 700
+  beep -f 250 -l 600
+
   ```
 ***
 
@@ -1857,7 +1902,7 @@
     export ADB=$HOME/Android/Sdk/platform-tools/adb
     '''
     ```
-  - [手动编译安装](https://github.com/Genymobile/scrcpy/blob/master/BUILD.md#prebuilt-server)
+  - [手动编译安装](https://github.com/Genymobile/scrcpy/blob/master/BUILD.md)
     ```sh
     ''' Q
     libsdl2-dev : Depends: libpulse-dev but it is not going to be installed
