@@ -111,6 +111,7 @@
   - Download the matched protobuf release `protobuf-cpp-xxx.tar.gz` from [protobuf releases](https://github.com/protocolbuffers/protobuf/releases)
 - Extract and compile:
   ```sh
+  cd protobuf-3.11.4
   ./autogen.sh
   ./configure
   make

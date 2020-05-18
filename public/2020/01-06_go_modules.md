@@ -146,7 +146,7 @@
 ***
 
 # Binary 二进制文件读写
-## EE
+## Test structs
   ```go
   import (
       "math/rand"
@@ -156,66 +156,189 @@
       "bytes"
   )
 
+  fmt.Println("Source basic struct:")
   type elem struct {
-      aa float32
-      bb float64
-      cc uint32
+      AA float32
+      BB float64
+      CC uint32
   }
 
   nums := 3
-  ss := make([]elem, nums)
-  rr := rand.New(rand.NewSource(0))
+  rr := rand.New(rand.NewSource(rand.Int63()))
 
-  fmt.Println("Write elements:")
+  ss := make([]elem, nums)
+
   for ii := 0; ii < nums; ii++ {
       ss[ii] = elem{rr.Float32(), rr.Float64(), rr.Uint32()}
       fmt.Println(ss[ii])
   }
 
-  var binBuf bytes.Buffer
-  binary.Write(&binBuf, binary.BigEndian, ss)
-  file, err := os.Create("test.bin")
-  // defer file.Close()
-  file.Write(binBuf.Bytes())
-  file.Close()
-
-  ee := elem{}
-  fmt.Println("Element size: ", binary.Size(ee))
-
-  fmt.Println("Read elements:")
-  file, err := os.Open("test.bin")
-  // defer file.Close()
-  binBuf2 := make([]byte, binary.Size(ee))
-  for ii := 0; ii < nums; ii++ {
-      file.Read(binBuf2)
-      binary.Read(bytes.NewBuffer(binBuf2), binary.BigEndian, &ee)
-      fmt.Println(ee)
+  fmt.Println("Source slice struct:")
+  type selem struct {
+      AA float32
+      BB float64
+      CC []uint32
   }
+  elemSliceNum := 4
 
-  fmt.Println("Read elements batch:")
-  file, err := os.Open("test.bin")
-  // defer file.Close()
-  binBuf3 := make([]byte, binary.Size(ee) * nums)
-  file.Read(binBuf3)
+  sss := make([]selem, nums)
+  for ii := 0; ii < nums; ii++ {
+      sss[ii].CC = make([]uint32, elemSliceNum)
+      sss[ii].AA = rr.Float32()
+      sss[ii].BB = rr.Float64()
+      for jj := 0; jj < elemSliceNum; jj++ {
+          sss[ii].CC[jj] = rr.Uint32()
+      }
 
-  dd := make([]elem, nums)
-  binary.Read(bytes.NewBuffer(binBuf3), binary.BigEndian, &dd)
-  fmt.Println(dd)
+      fmt.Println(sss[ii])
+  }
   ```
-  **运行**
   ```go
-  Write elements:
-  {0.94519615 0.24496508529377975 2817310706}
-  {0.05434384 0.36758720663245853 1243308993}
-  {0.1924386 0.6553321508148324 3853314576}
-  Element size:  16
-  Read elements:
-  {0.94519615 0.24496508529377975 2817310706}
-  {0.05434384 0.36758720663245853 1243308993}
-  {0.1924386 0.6553321508148324 3853314576}
-  Read elements batch:
-  [{0.94519615 0.24496508529377975 2817310706} {0.05434384 0.36758720663245853 1243308993} {0.1924386 0.6553321508148324 3853314576}]
+  Source basic struct:
+  {0.9406326 0.3607466532834925 4263448410}
+  {0.39402485 0.6147623204876898 1909146124}
+  {0.73707014 0.8170595655807201 140346952}
+  Source slice struct:
+  {0.9325033 0.5209825014348924 [1712744152 174326113 2946345882 2566003851]}
+  {0.2906545 0.7224597815694159 [2997456150 970260067 1548335504 3556833531]}
+  {0.24183238 0.8934221956199041 [2299076535 905588253 1245822197 746649276]}
   ```
+## Bytes buffer
+  - **Write**
+    ```go
+    fmt.Println("Write basic struct to bytes buffer")
+    var binBuf bytes.Buffer
+    binary.Write(&binBuf, binary.BigEndian, ss)
+
+    file, err := os.Create("test_basic.bin")
+    // defer file.Close()
+    file.Write(binBuf.Bytes())
+    file.Close()
+
+    fmt.Println("Write slice struct to bytes buffer")
+    sbinBuf := bytes.Buffer()
+    for ii := 0; ii < nums; ii++ {
+        binary.Write(&sbinBuf, binary.BigEndian, sss[ii].AA)
+        binary.Write(&sbinBuf, binary.BigEndian, sss[ii].BB)
+        for jj := 0; jj < elemSliceNum; jj++ {
+            binary.Write(&sbinBuf, binary.BigEndian, sss[ii].CC[jj])
+        }
+    }
+
+    file2, err := os.Create("test_slice.bin")
+    // defer file2.Close()
+    file2.Write(sbinBuf.Bytes())
+    file2.Close()
+    ```
+    ```go
+    $ls -lh test_basic.bin test_slice.bin
+    -rw-rw-r-- 1 leondgarse leondgarse 48 5月  18 15:48 test_basic.bin
+    -rw-r--r-- 1 leondgarse leondgarse 84 5月  18 15:48 test_slice.bin
+    ```
+  - **Read**
+    ```go
+    fmt.Println("Read basic struct:")
+    elemSize := binary.Size(elem{})
+    binsT := make([]byte, elemSize * nums)
+
+    tfile, err := os.Open("test_basic.bin")
+    // defer tfile.Close()
+    tfile.Read(binsT)
+    tfile.Close()
+
+    tt := make([]elem, nums)
+    binary.Read(bytes.NewBuffer(binsT), binary.BigEndian, &tt)
+    fmt.Println(tt)
+
+    fmt.Println("Read slice struct:")
+    ee := selem{}
+    ee.CC = make([]uint32, elemSliceNum)
+    selemSize := binary.Size(ee.AA) + binary.Size(ee.BB) + binary.Size(ee.CC)
+    sbinsT := make([]byte, selemSize * nums)
+
+    tfile2, err := os.Open("test_slice.bin")
+    // defer tfile2.Close()
+    tfile2.Read(sbinsT)
+    tfile2.Close()
+
+    stt := make([]selem, nums)
+    sbinBufT := bytes.NewBuffer(sbinsT)
+    for ii := 0; ii < nums; ii++ {
+        stt[ii].CC = make([]uint32, elemSliceNum)
+        binary.Read(sbinBufT, binary.BigEndian, &stt[ii].AA)
+        binary.Read(sbinBufT, binary.BigEndian, &stt[ii].BB)
+        for jj := 0; jj < elemSliceNum; jj++ {
+            binary.Read(sbinBufT, binary.BigEndian, &stt[ii].CC[jj])
+        }
+        fmt.Println(stt[ii])
+    }
+    ```
+    ```go
+    Read basic struct:
+    [{0.9406326 0.3607466532834925 4263448410} {0.39402485 0.6147623204876898 1909146124} {0.73707014 0.8170595655807201 140346952}]
+    Read slice struct:
+    {0.9325033 0.5209825014348924 [1712744152 174326113 2946345882 2566003851]}
+    {0.2906545 0.7224597815694159 [2997456150 970260067 1548335504 3556833531]}
+    {0.24183238 0.8934221956199041 [2299076535 905588253 1245822197 746649276]}
+    ```
+## ioutil
+  ```go
+  import "io/ioutil"
+  fmt.Println("ioutil write + read basic struct:")
+
+  // Write bytes slice to file
+  err := ioutil.WriteFile("test_slice.bin", binBuf.Bytes(), 0644)
+
+  // Read bytes slice from file
+  binsT2, err := ioutil.ReadFile("test_slice.bin")
+
+  // Decode
+  tt := make([]elem, nums)
+  binary.Read(bytes.NewBuffer(binsT2), binary.BigEndian, &tt)
+  fmt.Println(tt)
+  ```
+  ```go
+  ioutil write + read basic struct:
+  [{0.9406326 0.3607466532834925 4263448410} {0.39402485 0.6147623204876898 1909146124} {0.73707014 0.8170595655807201 140346952}]
+  ```
+## gob
+  - struct elements output **MUST** be **public**
+  - **encoding/gob**
+    ```go
+    import "encoding/gob"
+
+    fmt.Println("gob encode + decode basic struct:")
+    gfile, err := os.Create("./test_basic.gob")
+    encoder := gob.NewEncoder(gfile)
+    encoder.Encode(ss)
+    gfile.Close()
+
+    gfile2, err := os.Open("./test_basic.gob")
+    decoder := gob.NewDecoder(gfile2)
+    tt := make([]elem, nums)
+    decoder.Decode(&tt)
+    gfile2.Close()
+    fmt.Println(tt)
+
+    fmt.Println("gob encode + decode slice struct:")
+    gfile, err := os.Create("./test_slice.gob")
+    encoder := gob.NewEncoder(gfile)
+    encoder.Encode(sss)
+    gfile.Close()
+
+    gfile2, err := os.Open("./test_slice.gob")
+    decoder := gob.NewDecoder(gfile2)
+    stt := make([]selem, nums)
+    decoder.Decode(&stt)
+    gfile2.Close()
+    fmt.Println(stt)
+    ```
+    ```go
+    gob encode + decode basic struct:
+    [{0.9406326 0.3607466532834925 4263448410} {0.39402485 0.6147623204876898 1909146124} {0.73707014 0.8170595655807201 140346952}]
+    gob encode + decode slice struct:
+    [{0.9325033 0.5209825014348924 [1712744152 174326113 2946345882 2566003851]} {0.2906545 0.7224597815694159 [2997456150 970260067 1548335504 3556833531]} {0.24183238 0.8934221956199041 [2299076535 905588253 1245822197 746649276]}]
+    ```
 ***
 
 # Tensorflow

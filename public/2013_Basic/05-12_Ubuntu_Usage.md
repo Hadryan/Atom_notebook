@@ -1368,10 +1368,11 @@
     ```
   - **PAC 代理** [Github MatcherAny/whitelist.pac](https://github.com/MatcherAny/whitelist.pac.git)
     ```sh
-    # 通过 Apache2 配置 SwitchyOmega 使用本地文件，PAC URL: http://127.0.0.1/auto.pac
+    # 通过 Apache2 配置 SwitchyOmega 使用本地文件，PAC URL: http://127.0.0.1/whitelist.pac
     sudo apt install apache2
-    sudo ln -s /var/www/html/auto.pac $HOME/local_bin/OmegaProfile_PAC.pac
+    sudo ln -s /var/www/html/whitelist.pac $HOME/local_bin/OmegaProfile_PAC.pac
     ```
+    ![](images/pac_proxy.png)
 ## 每次开机时弹出 System problem report detected
   - Ubuntu 有一个内建的实用程序叫做 **Apport**, 当一个程序崩溃时，可以进行通知
   - **crash 文件** 生成的错误报告，删除后避免每次重启都弹出提示
@@ -1791,6 +1792,13 @@
     - 配置 `Keyboard shortcuts` 指定快捷键
     - 配置 `Intellihide` 指定何时隐藏顶栏
   - [proxy-switcher](https://extensions.gnome.org/extension/771/proxy-switcher/)
+  - **隐藏侧边栏的磁盘图标**
+    - 安装 [dash-to-dock](https://extensions.gnome.org/extension/307/dash-to-dock/)
+    - 打开 `gnome-tweak-tool` -> `Extensions` -> `Dash to dock` 配置
+    - Lanchers -> 关闭 `Show mounted volumes and devices`
+    - 打开 `Intelligent autohide`
+    - 打开 `Panel mode: extend to the screen edge`
+    - 关闭系统 dock: `sudo mv /usr/share/gnome-shell/extensions/ubuntu-dock@ubuntu.com{,.bak}`
 ## 多线程下载 mwget axel aria2
   - **mwget**
     ```sh
