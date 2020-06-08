@@ -344,6 +344,9 @@
 # Tensorflow
 ## Install TensorFlow for C
   - [Install TensorFlow for C](https://www.tensorflow.org/install/lang_c)
+    ```sh
+    sudo tar -C /usr/local -xzf libtensorflow-*.tar.gz
+    ```
   - **hello world**
     ```c
     #include <stdio.h>

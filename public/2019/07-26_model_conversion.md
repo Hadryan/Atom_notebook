@@ -1463,3 +1463,32 @@
           ofile.write(frozen_graph.SerializeToString())
   ```
 ***
+
+# TF15 to TF13
+  - [Error in loading a keras model saved by tf 1.15 from tf 1.14](https://github.com/tensorflow/tensorflow/issues/33479)
+  - Load in TF > 1.15 and convert to `weights` + `json model`
+    ```py
+    tf.__version__
+    # '2.1.0'
+
+    from tensorflow import keras
+    mm = keras.models.load_model('./model/se_mobile_facenet_256.h5')
+    mm.save_weights("model/weights_only.h5")
+    json_config = mm.to_json()
+    with open('model/model_config.json', 'w') as json_file:
+        json_file.write(json_config)
+    ```
+  - Modify `model/model_config.json`, delete `"ragged": false`
+  - Reload in TF13 and save `h5`
+    ```py
+    tf.__version__
+    # '1.13.1'
+
+    from tensorflow import keras
+    with open('model/model_config.json') as json_file:
+        json_config = json_file.read()
+    new_model = keras.models.model_from_json(json_config)
+    new_model.load_weights('model/weights_only.h5')
+    new_model.save('./model/se_mobile_facenet_256_13.h5')
+    ```
+***

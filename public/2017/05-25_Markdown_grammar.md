@@ -486,9 +486,11 @@ ___2017 - 05 - 25 Markdown Grammar___
   - atom 打开 markdown，背景选择白色，save as html
   - calibre add books 添加转化后的html
   - convert books，TOC 指定自动生成标题，并使用
-    - //h:h1
-    - //h:h2
-    - //h:h3
+    ```sh
+    //h:h1
+    //h:h2
+    //h:h3
+    ```
 ## Basket Notebook 格式分析
   - 转化的 HTML 中的特殊字符
     ``` python

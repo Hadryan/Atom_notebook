@@ -1746,7 +1746,7 @@
   - **imageio** 可以使用 `ffmpeg` 读取视频文件，需要加载整个视频文件到内存
     ```py
     !pip install imageio-ffmpeg
-    
+
     import imageio
 
     vid = imageio.get_reader(vv,  'ffmpeg')

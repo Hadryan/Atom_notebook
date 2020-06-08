@@ -1343,7 +1343,7 @@
     # curl 测试
     proxychains curl www.google.com
     ```
-  - **privoxy** 将 http 请求转发到 socks5 端口，配置全局代理
+  - **privoxy** 将 http 请求转发到 socks5 端口，配置全局代理，不使用 http 代理可不配置
     ```sh
     sudo apt install privoxy
 
@@ -1370,7 +1370,7 @@
     ```sh
     # 通过 Apache2 配置 SwitchyOmega 使用本地文件，PAC URL: http://127.0.0.1/whitelist.pac
     sudo apt install apache2
-    sudo ln -s /var/www/html/whitelist.pac $HOME/local_bin/OmegaProfile_PAC.pac
+    sudo ln -s $HOME/workspace/SSS_PAC/whitelist.pac /var/www/html/whitelist.pac
     ```
     ![](images/pac_proxy.png)
 ## 每次开机时弹出 System problem report detected
@@ -1382,6 +1382,7 @@
     ```
   - **Approt 配置文件** `/etc/default/apport`，将 `enabled=1` 修改为 `0` 可以禁止 `approt` 服务
 ## Nvidia
+  - 配置文件 `/etc/X11/xorg.conf`
   - Fan speed
     ```sh
     sudo nvidia-xconfig --enable-all-gpus
@@ -1448,12 +1449,20 @@
     ```sh
     alias Tmux="tmux attach || if [[ -e $HOME/.tmux/resurrect/last ]]; then tmux new-session -d; tmux run-shell $HOME/.tmux/plugins/tmux-resurrect/scripts/restore.sh; tmux attach; else tmux; fi"
     ```
-## 制表符
-  ```sh
-  ┌─┬─┐ ┏━┳━┓ ─ | ━ ┃
-  ├─┼─┤ ┣━╋━┫
-  └─┴─┘ ┗━┻━┛
-  ```
+## 特殊符号
+  - [Unicode Character Table](https://unicode-table.com)
+  - **制表符**
+    ```sh
+    ┌─┬─┐ ┏━┳━┓ ─ | ━ ┃
+    ├─┼─┤ ┣━╋━┫
+    └─┴─┘ ┗━┻━┛
+    ```
+  - **上横线** `lattin capital letter a with Macron - Ā`
+    - 使用 `字母` + [组合用上横线 Combining Overline](https://unicode-table.com/cn/0305/)，如 `M̅`
+    ```sh
+    A̅ M̅ C̅ D̅ E̅ F̅ G̅ H̅ I̅ J̅ K̅ L̅ M̅ N̅ O̅ P̅ Q̅ R̅ S̅ T̅ U̅ V̅ W̅ X̅ Y̅ Z̅
+    a̅ b̅ c̅ d̅ e̅ f̅ g̅ h̅ i̅ j̅ k̅ l̅ m̅ n̅ o̅ p̅ q̅ r̅ s̅ t̅ u̅ v̅ w̅ x̅ y̅ z̅
+    ```
 ## adb
   - **Q: no permissions (user in plugdev group; are your udev rules wrong?)**
     ```sh
@@ -1491,7 +1500,6 @@
   beep -f 300 -l 500
   beep -f 350 -l 700
   beep -f 250 -l 600
-
   ```
 ***
 
