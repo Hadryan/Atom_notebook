@@ -207,6 +207,10 @@
   - [Can not use converted ONNX -> TF graph independently ](https://github.com/onnx/onnx-tensorflow/issues/167)
   - [Train in Tensorflow, Export to ONNX](https://github.com/onnx/tutorials/blob/master/tutorials/OnnxTensorflowExport.ipynb)
     ```py
+    tf.__version__
+    # 1.15.0
+    !pip install onnx-tf
+    
     import onnx
     import numpy as np
     from onnx_tf.backend import prepare

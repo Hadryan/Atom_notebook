@@ -1257,6 +1257,10 @@
     ```shell
     mp3info -x -p "%r#%f\n" *.mp3 | grep 320 | cut -d '#' -f 2- | sed 's/ /\\ /g' | xargs rm {} \;
     ```
+  - 更新当前文件夹下所有 `git` 库
+    ```sh
+    ls -1 | xargs -I {} sh -c "cd {}; echo '>>>> $PWD/{}'; git remote -v; git pull; cd -; echo ''"
+    ```
 ***
 
 # bc 计算

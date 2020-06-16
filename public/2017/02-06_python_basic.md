@@ -408,7 +408,7 @@
     ```
   - break / continue：
     ```python
-    如果从for或while循环中终止 ,任何对应的循环else块将不执行
+    如果从 for 或 while 循环中终止，任何对应的循环 else 块将不执行
     ```
 ***
 

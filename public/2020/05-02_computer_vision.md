@@ -2,6 +2,7 @@
 ***
 
 - [Github openvino](https://github.com/openvinotoolkit/openvino.git)
+- [Github Go imaging](https://github.com/disintegration/imaging)
 
 # Basic
 ## 交互式标注 ginput
@@ -271,6 +272,27 @@
   fig.tight_layout()
   ```
   ![](images/cv_inpaint.png)
+## Video test function
+  ```py
+  import cv2
+
+  def video_test(func=None, src=0, title="Opencv"):
+      cap = cv2.VideoCapture(src)
+      while True:
+          grabbed, frame = cap.read()
+          if grabbed != True:
+              break
+          if func != None:
+              frame = func(frame)
+          cv2.imshow(title, frame)
+          key = cv2.waitKey(1) & 0xFF
+          if key == ord("q"):
+              break
+      cap.release()
+      cv2.destroyAllWindows()
+
+  video_test(func=lambda frame: cv2.Canny(frame, 50, 200))
+  ```
 ***
 
 # 图像去噪
@@ -292,7 +314,7 @@
     - 双边滤波器比高斯滤波多了一个 **高斯方差**，是基于空间分布的高斯滤波函数
     - 在边缘附近，离的较远的像素不会太多影响到边缘上的像素值，这样就保证了边缘附近像素值的保存
     - 由于保存了过多的高频信息，对于彩色图像里的高频噪声，双边滤波器不能够干净的滤掉，只能够对于低频信息进行较好的滤波
-## skimage 示例
+## Skimage 示例
   ```py
   import numpy as np
   from skimage.util import random_noise
@@ -329,7 +351,7 @@
   fig.tight_layout()
   ```
   ![](images/cv_skimage_denoise.png)
-## cv2 示例
+## Opencv 示例
   - **cv2.bilateralFilter**
     ```py
     bilateralFilter(src, d, sigmaColor, sigmaSpace[, dst[, borderType]]) -> dst
@@ -447,54 +469,41 @@
     ![](images/cv_denoise.png)
 ***
 
-# 目标检测
+# Opencv 移动目标检测
 ## 根据第一帧图片检测图像变化
   ```py
-  import cv2
-  import imutils
+  class DeltaDetect:
+      def __init__(self, min_area=500):
+          self.min_area = min_area         
+          self.init_frame = None
 
-  cap = cv2.VideoCapture(0)
+      def __call__(self, frame):
+          gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+          gray_frame = cv2.GaussianBlur(gray_frame, (21, 21), 0)
+          if self.init_frame is None:
+              self.init_frame = gray_frame
+              return np.hstack([frame, np.zeros_like(frame), np.zeros_like(frame)])
 
-  init_frame = None
-  while True:
-      ret, frame = cap.read()
-      text = "Unoccupied"
-      if ret != True:
-          break
-      gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-      gray = cv2.GaussianBlur(gray, (21, 21), 0)
-      if init_frame is None:
-          init_frame = gray
-          continue
+          frame_delta = cv2.absdiff(self.init_frame, gray_frame)
+          thresh = cv2.threshold(frame_delta, 25, 255, cv2.THRESH_BINARY)[1]
+          thresh = cv2.dilate(thresh, None, iterations=2)
 
-      frame = imutils.resize(frame, width=500)
-      frame_delta = cv2.absdiff(init_frame, gray)
-      thresh = cv2.threshold(frame_delta, 25, 255, cv2.THRESH_BINARY)[1]
-      thresh = cv2.dilate(thresh, None, iterations=2)
+          cnts, _hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+          bboxes = [cv2.boundingRect(cc) for cc in cnts if cv2.contourArea(cc) > self.min_area]
 
-      cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-      cnts = imutils.grab_contours(cnts)
+          for bb in bboxes:
+              x, y, w, h = bb
+              cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+          text = "Unoccupied" if len(bboxes) == 0 else "Occupied"
+          cv2.putText(frame, "Room Status: {}".format(text), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+          cv2.putText(frame, datetime.datetime.now().strftime("%A %d %B %Y %I:%M:%S%p"), (10, frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1)
 
-      for cc in cnts:
-          if cv2.contourArea(cc) < 500:
-              continue
-          x, y, w, h = cv2.boundingRect(cc)
-          cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-          text = "Occupied"
+          thresh = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
+          frame_delta = cv2.cvtColor(frame_delta, cv2.COLOR_GRAY2BGR)
 
-      cv2.putText(frame, "Room Status: {}".format(text), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-      cv2.putText(frame, datetime.datetime.now().strftime("%A %d %B %Y %I:%M:%S%p"), (10, frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1)
+          return np.hstack([frame, thresh, frame_delta])
 
-      cv2.imshow("Security Feed", frame)
-      cv2.imshow("Thresh", thresh)
-      cv2.imshow("Frame Delta", frame_delta)
-
-      key = cv2.waitKey(1) & 0xFF
-      if key == ord("q"):
-          break
-
-  cap.release()
-  cv2.destroyAllWindows()
+  video_test(func=DeltaDetect())
   ```
 ## 背景减除进行移动目标检测
   - **KNN 算法**
@@ -511,85 +520,57 @@
     - 对于生成的结果，应用 opening 操作再去除以下噪声效果会更好
   - **Python 背景减除示例**
     ```py
-    import numpy as np
-    import cv2
+    class BackgroundTest:
+        def __init__(self, method='mog'):
+            self.kernel = cv2.getStructuringElement(cv2.MORPH_OPEN, (5, 5))
+            if method.lower == 'knn':
+                self.fgbg = cv2.createBackgroundSubtractorKNN(detectShadows=True)
+            else:
+                self.fgbg = cv2.createBackgroundSubtractorMOG2(detectShadows=True)
 
-    cap = cv2.VideoCapture(os.path.expanduser('~/workspace/PyImageSearch/social-distance-detector/pedestrians.mp4'))
+        def __call__(self, frame):
+            fgmask = self.fgbg.apply(frame)
+            fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, self.kernel)
+            return fgmask
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_OPEN, (5, 5))
-    # fgbg = cv2.createBackgroundSubtractorKNN(detectShadows=True)
-    fgbg = cv2.createBackgroundSubtractorMOG2(detectShadows=True)
-
-    while True:
-        ret, frame = cap.read()
-        if ret != True:
-            break
-
-        fgmask = fgbg.apply(frame)
-        fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel)
-
-        cv2.imshow('frame',fgmask)
-        k = cv2.waitKey(30) & 0xff
-        if k == 27: # Esc
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
+    video_test(func=BackgroundTest(), src=os.path.expanduser('~/workspace/PyImageSearch/social-distance-detector/pedestrians.mp4'))
     ```
   - **根据前景面积检测运动物体**
     ```py
-    import cv2
+    class MotionDetect:
+        def __init__(self, history=20, min_area=500, max_area=3000):
+            self.history, self.min_area, self.max_area  = history, min_area, max_area    # 训练帧数
+            self.bs = cv2.createBackgroundSubtractorKNN(detectShadows=True)  # 背景减除器，设置阴影检测
+            self.bs.setHistory(self.history)
+            self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+            self.frames = 0
 
-    def detect_video(video):
-        camera = cv2.VideoCapture(video)
-        history = 20    # 训练帧数
+        def __call__(self, frame):
+            fg_mask = self.bs.apply(frame) # 获取 foreground mask
+            fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_ELLIPSE, self.kernel)
 
-        bs = cv2.createBackgroundSubtractorKNN(detectShadows=True)  # 背景减除器，设置阴影检测
-        bs.setHistory(history)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-
-        frames = 0
-        while True:
-            res, frame = camera.read()
-
-            if not res:
-                break
-
-            fg_mask = bs.apply(frame)   # 获取 foreground mask
-            fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_ELLIPSE, kernel)
-
-            if frames < history:
-                frames += 1
-                continue
-
-            # 对原始帧进行膨胀去噪
+            if self.frames < self.history:
+                self.frames += 1
+                return np.hstack([frame, np.zeros_like(frame)])
             th = cv2.threshold(fg_mask.copy(), 244, 255, cv2.THRESH_BINARY)[1]
             th = cv2.erode(th, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=2)
             dilated = cv2.dilate(th, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (8, 3)), iterations=2)
             # 获取所有检测框
             contours, hier = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
             for c in contours:
                 # 获取矩形框边界坐标
                 x, y, w, h = cv2.boundingRect(c)
                 # 计算矩形框的面积
                 area = cv2.contourArea(c)
-                if 500 < area < 3000:
+                if self.min_area < area < self.max_area:
                     cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            dilated = cv2.cvtColor(dilated, cv2.COLOR_GRAY2BGR)
+            return np.hstack([frame, dilated])
 
-            cv2.imshow("detection", frame)
-            cv2.imshow("back", dilated)
-            if cv2.waitKey(110) & 0xff == 27:
-                break
-        camera.release()
-
-    detect_video(0)
+    video_test(func=MotionDetect())
     ```
 ## YOLO 行人检测与社交距离检测
   ```py
-  import cv2
-  import imutils
-
   def yolo_detect_object(frame, net, out, obj_idx, min_conf=0.3, nms_thresh=0.3):
       hh, ww = frame.shape[:2]
       blob = cv2.dnn.blobFromImage(frame, 1 / 255.0, (416, 416), swapRB=True, crop=False)
@@ -612,222 +593,298 @@
                   boxes.append([xx, yy, int(width), int(height)])
                   centroids.append((centerX, centerY))
                   confidences.append(float(confidence))
-
       # apply non-maxima suppression to suppress weak, overlapping bounding boxes
       idxs = cv2.dnn.NMSBoxes(boxes, confidences, min_conf, nms_thresh)
       return [(confidences[ii[0]], boxes[ii[0]], centroids[ii[0]]) for ii in idxs]
 
-  def social_distance_detect(video_path=0, model_path="yolo-coco", min_distance=50, use_gpu=True):
-      config_path = os.path.join(model_path, 'yolov3.cfg')
-      weights_path = os.path.join(model_path, 'yolov3.weights')
-      labels_path = os.path.join(model_path, 'coco.names')
+  class SocialDistance:
+      def __init__(self, model_path="yolo-coco", min_distance=50, resize_width=700, use_gpu=True):
+          self.min_distance, self.resize_width = min_distance, resize_width
+          config_path = os.path.join(model_path, 'yolov3.cfg')
+          weights_path = os.path.join(model_path, 'yolov3.weights')
+          labels_path = os.path.join(model_path, 'coco.names')
 
-      with open(labels_path, 'r') as ff:
-          LABELS = ff.read().strip().split("\n")
-      personIdx = LABELS.index("person")
+          with open(labels_path, 'r') as ff:
+              LABELS = ff.read().strip().split("\n")
+          personIdx = LABELS.index("person")
 
-      net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
-      if use_gpu:
-          net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-          net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
-      ln = net.getLayerNames()
-      out = [ln[ii[0] - 1] for ii in net.getUnconnectedOutLayers()]
+          net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
+          if use_gpu:
+              net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+              net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+          ln = net.getLayerNames()
+          out = [ln[ii[0] - 1] for ii in net.getUnconnectedOutLayers()]
 
-      cap = cv2.VideoCapture(video_path)
-      while True:
-          grabbed, frame = cap.read()
-          if grabbed != True:
-              break
-          frame = imutils.resize(frame, width=700)
-          results = yolo_detect_object(frame, net, out, personIdx)
+          self.person_detector = lambda frame: yolo_detect_object(frame, net, out, personIdx)
 
+      def __call__(self, frame):
+          hh, ww = frame.shape[:2]
+          resize_height = int(hh / ww * self.resize_width)
+          frame = cv2.resize(frame, (self.resize_width, resize_height))
+          results = self.person_detector(frame)
           violate = set()
           if len(results) >= 2:
               centroids = np.array([ii[2] for ii in results])
               for id, ii in enumerate(centroids[:-1]):
                   dd = np.sqrt(((ii - centroids[id + 1:]) ** 2).sum(1)).tolist()
                   for jd, jj in enumerate(dd):
-                      if jj < min_distance:
+                      if jj < self.min_distance:
                           violate.add(id)
                           violate.add(id + jd + 1)
 
-          for (id, (prob, bbox, centroid)) in enumerate(results):
-              startX, startY, ww, hh = bbox
-              cX, cY = centroid
-              color = (0, 0, 255) if id in violate else (0, 255, 0)
-              cv2.rectangle(frame, (startX, startY), (startX + ww, startY + hh), color, 2)
-              cv2.circle(frame, (cX, cY), 5, color, 1)
+                  for (id, (prob, bbox, centroid)) in enumerate(results):
+                      startX, startY, ww, hh = bbox
+                      cX, cY = centroid
+                      color = (0, 0, 255) if id in violate else (0, 255, 0)
+                      cv2.rectangle(frame, (startX, startY), (startX + ww, startY + hh), color, 2)
+                      cv2.circle(frame, (cX, cY), 5, color, 1)
 
-          text = "Social Distancing Violations: {}".format(len(violate))
-          cv2.putText(frame, text, (10, frame.shape[0] - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 0, 255), 3)
-          cv2.imshow("Frame", frame)
-
-          key = cv2.waitKey(1) & 0xFF
-          if key == ord("q"):
-              break
-
-      cap.release()
-      cv2.destroyAllWindows()
+                  text = "Social Distancing Violations: {}".format(len(violate))
+                  cv2.putText(frame, text, (10, frame.shape[0] - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 0, 255), 3)
+          return frame
 
   video_path = os.path.expanduser('~/workspace/PyImageSearch/social-distance-detector/pedestrians.mp4')
-  social_distance_detect(video_path, min_distance=80)
+  video_test(func=SocialDistance(), src=video_path)
   ```
 ***
 
-## Opencv with CUDA
-  - CUDA needs `gcc-8` / `g++-8`
-    ```sh
-    sudo apt install gcc-8 g++-8
-    sudo rm /etc/alternatives/c++ && sudo ln -s /usr/bin/g++-8 /etc/alternatives/c++
-    sudo rm /etc/alternatives/cc && sudo ln -s /usr/bin/gcc-8 /etc/alternatives/cc
-    ```
-  - NVCUVID needs `nvcuvid.h`, Download [NVIDIA Video Codec SDK](https://developer.nvidia.com/nvidia-video-codec-sdk#Download)
-    ```sh
-    unzip Video_Codec_SDK_9.1.23.zip
-    sudo cp Video_Codec_SDK_9.1.23/include/* /usr/local/include/
+# Opencv 应用
+## Square
+  ```py
+  import numpy as np
+  import cv2
 
-    locate libnvcuvid.so
-    # /usr/lib/x86_64-linux-gnu/libnvcuvid.so
-    locate libnvidia-encode.so
-    # /usr/lib/x86_64-linux-gnu/libnvidia-encode.so
-    ```
-  - Clone opencv_contrib
-    ```sh
-    git clone https://github.com/opencv/opencv_contrib.git
-    ```
-  - OpenGL support
-    ```sh
-    sudo apt install libgtkglext1 libgtkglext1-dev
-    ```
-  - Cmake and Build opencv
-    ```sh
-    cd opencv && mkdir build && cd build
-    cmake -D CMAKE_BUILD_TYPE=Release -D WITH_CUDA=ON -D WITH_NVCUVID=ON -D ENABLE_FAST_MATH=1 -D CUDA_FAST_MATH=1 -D WITH_CUBLAS=1 -D WITH_OPENGL=ON \
-      -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
-      -D BUILD_OPENCV_PYTHON3=ON \
-      -D PYTHON3_EXECUTABLE='/opt/anaconda3/bin/python3.7m' \
-      ..
+  def angle_cos(p0, p1, p2):
+      d1, d2 = (p0 - p1).astype('float'), (p2 - p1).astype('float')
+      return abs(np.dot(d1, d2) / np.sqrt(np.dot(d1, d1) * np.dot(d2, d2)))
 
-    ls python_loader/cv2/config-3.7.py
-    make -j 8 && sudo make install
+  def find_squares(img):
+      img = cv2.GaussianBlur(img, (5, 5), 0)
+      squares = []
+      for gray in cv2.split(img):
+          for thrs in range(0, 255, 26):
+              if thrs == 0:
+                  bin = cv2.Canny(gray, 0, 50, apertureSize=5)
+                  bin = cv2.dilate(bin, None)
+              else:
+                  _retval, bin = cv2.threshold(gray, thrs, 255, cv2.THRESH_BINARY)
+              contours, _hierarchy = cv2.findContours(bin, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+              for cnt in contours:
+                  cnt_len = cv2.arcLength(cnt, True)
+                  cnt = cv2.approxPolyDP(cnt, 0.02*cnt_len, True)
+                  if len(cnt) == 4 and cv2.contourArea(cnt) > 1000 and cv2.isContourConvex(cnt):
+                      cnt = cnt.reshape(-1, 2)
+                      max_cos = np.max([angle_cos( cnt[i], cnt[(i+1) % 4], cnt[(i+2) % 4] ) for i in range(4)])
+                      if max_cos < 0.1:
+                          squares.append(cnt)
+      return squares
 
-    pip install -e python_loader  # Or: python python_loader/setup.py install
-    python -c 'import cv2; print(cv2.__version__)'
-    # 4.3.0-dev
-    ```
-  - **C++ video reader test**
-    ```sh
-    cp ../samples/gpu/video_reader.cpp ./
-    g++ video_reader.cpp  -L/usr/local/lib -lopencv_core -lopencv_highgui -lopencv_cudacodec -lopencv_videoio
-    ./a.out /media/SD/PAD/PAD_video/fake_vis_1_10.avi
-    ```
-  - **Python test**
-    ```py
-    import cv2
-    # video_path = '/media/SD/PAD/PAD_video/fake_vis_1_10.avi'
-    video_path = os.path.expanduser('~/workspace/PyImageSearch/social-distance-detector/pedestrians.mp4')
-    mm = cv2.TickMeter()
-    crr = cv2.VideoCapture(video_path)
-    ctt = []
-    while True:
-        mm.reset()
-        mm.start()
-        grabbed, cff = crr.read()
-        if grabbed != True:
-            break
-        mm.stop()
-        ctt.append(mm.getTimeMilli())
-        cv2.imshow('cpu', cff)
+  def square_test_func(frame):
+      squares = find_squares(frame)
+      cv2.drawContours(frame, squares, -1, (0, 255, 0), 3)
+      return frame
 
-    grr = cv2.cudacodec.createVideoReader(video_path)
-    gttr, gttd = [], []
-    while True:
-        mm.reset()
-        mm.start()
-        grabbed, gff = grr.nextFrame()
-        if grabbed != True:
-            break
-        mm.stop()
-        gttr.append(mm.getTimeMilli())
+  video_test(square_test_func, 0)
+  ```
+## Hough lines
+  ```py
+  def hough_line_detect_P(frame):
+      dst = cv2.Canny(frame, 100, 200)
+      cdst = cv2.cvtColor(dst, cv2.COLOR_GRAY2BGR)
+      # lines = cv2.HoughLinesP(dst, 1, np.pi / 180.0, 40, np.array([]), 50, 10)
+      lines = cv2.HoughLinesP(dst, 1, np.pi / 180.0, 40, np.array([]), 50, 10)
+      for ii in lines:
+          cv2.line(cdst, (ii[0][0], ii[0][1]), (ii[0][2], ii[0][3]), (0, 0, 255), 3, cv2.LINE_AA)
+      return cdst
 
-        mm.reset()
-        mm.start()
-        nn = gff.download()
-        mm.stop()
-        gttd.append(mm.getTimeMilli())
-        cv2.imshow('gpu', nn)
+  def hough_line_detect(frame):
+      dst = cv2.Canny(frame, 50, 200)
+      cdst = cv2.cvtColor(dst, cv2.COLOR_GRAY2BGR)
+      lines = cv2.HoughLines(dst, 1, np.pi/180.0, 50, np.array([]), 0, 0)
+      for ii in lines:
+          rho = ii[0][0]
+          theta = ii[0][1]
+          a = np.cos(theta)
+          b = np.sin(theta)
+          x0, y0 = a * rho, b * rho
+          pt1 = (int(x0 + 1000 * (-b)), int(y0 + 1000 * (a)))
+          pt2 = (int(x0 - 1000 * (-b)), int(y0 - 1000 * (a)))
+          cv2.line(cdst, pt1, pt2, (0, 0, 255), 3, cv2.LINE_AA)
+      return cdst
 
-    gtt = np.add(gttr, gttd)
-    print("CPU: %f ms/frame, GPU read: %f ms/frame, GPU download: %f ms/frame, GPU total: %f ms/frame" % (np.mean(ctt[10:]), np.mean(gttr[10:]), np.mean(gttd[10:]), np.mean(gtt[10:])))
-    # CPU: 3.479415 ms/frame, GPU read: 0.450045 ms/frame, GPU download: 1.071840 ms/frame, GPU total: 1.521885 ms/frame
+  video_test(func=hough_line_detect_P)
+  video_test(func=hough_line_detect)
+  ```
+  **skimage**
+  ```py
+  from skimage.transform import hough_line, hough_line_peaks
+  from skimage.feature import canny
 
-    plt.plot(ctt, label='CPU')
-    plt.plot(gtt, label='GPU')
-    plt.plot(gttr, label='GPU read')
-    plt.plot(gttd, label='GPU download')
-    plt.legend()
-    plt.tight_layout()
-    ```
-    ![](images/cv_opecv_cuda_video_read.png)
-## PyNvCodec
-  - [Github VideoProcessingFramework](https://github.com/NVIDIA/VideoProcessingFramework)
-  - [VideoProcessingFramework Building from source](https://github.com/NVIDIA/VideoProcessingFramework/wiki/Building-from-source)
-  - **Init import**
-    ```py
-    import PyNvCodec as nvc
-    import cv2
-    import matplotlib.pyplot as plt
+  def hough_line_detect_S(frame):
+      edges = canny(frame, 2, 1, 25)
+      # Classic straight-line Hough transform Set a precision of 0.5 degree.
+      tested_angles = np.linspace(-np.pi / 2, np.pi / 2, 360)
+      h, theta, d = hough_line(frame, theta=tested_angles)
+      origin = np.array((0, frame.shape[1]))
+      for _, angle, dist in zip(*hough_line_peaks(h, theta, d)):
+          y0, y1 = (dist - origin * np.cos(angle)) / np.sin(angle)
+          yield (origin, (y0, y1))
+  ```
+  ```py
+  from skimage.draw import line
+  img = np.zeros((15, 15), dtype=np.bool_)
+  rr, cc = line(0, 0, 14, 14)
+  img[rr, cc] = 1
+  rr, cc = line(0, 14, 14, 0)
+  img[cc, rr] = 1
+  hspace, angles, dists = hough_line(img)
+  hspace, angles, dists = hough_line_peaks(hspace, angles, dists)
+  # [15, 15], [ 0.78101046, -0.78101046], [10.74418605,  0.51162791]
 
-    encFilePath = './video.mp4'
-    # encFilePath = 'rtsp://admin:admin1234@192.168.100.11:554/cam/realmonitor?channel=1&subtype=0'
-    gpuID = 0
-    nvDec = nvc.PyNvDecoder(encFilePath, gpuID)
-    ```
-  - **PyNvCodec DecodeSingleFrame + opencv**
-    ```py
-    rawFrameNV12 = np.ndarray(shape=(nvDec.Framesize()), dtype=np.uint8)
-    nvDec.DecodeSingleFrame(rawFrameNV12)
-    height, width = int(nvDec.Height() * 1.5), int(nvDec.Width())
+  from skimage.draw import line
+  img = np.zeros((15, 15), dtype=np.bool_)
+  rr, cc = line(2, 4, 10, 12)
+  img[rr, cc] = 1
+  rr, cc = line(0, 14, 14, 0)
+  img[cc, rr] = 1
+  hspace, angles, dists = hough_line(img)
+  hspace, angles, dists = hough_line_peaks(hspace, angles, dists)
+  # [15, 15], [ 0.78101046, -0.78101046], [10.74418605,  0.51162791]
+  ```
+  ```py
+  from skimage.transform import probabilistic_hough_line
+  from skimage.feature import canny
+  from skimage.color import rgb2gray
 
-    bb = rawFrameNV12.reshape(height, width)
-    cc = cv2.cvtColor(bb, cv2.COLOR_YUV2RGB_NV12)
-    plt.imsave('cc.jpg', cc)
-    ```
-  - **PyNvCodec DecodeSingleFrame + Converter**
-    ```py
-    rawFrameNV12 = np.ndarray(shape=(nvDec.Framesize()), dtype=np.uint8)
-    nvDec.DecodeSingleFrame(rawFrameNV12)
+  def hough_line_detect_SP(frame):
+      # edges = canny(rgb2gray(frame), 2, 1, 25)
+      edges = canny(rgb2gray(frame), sigma=2)
+      lines = probabilistic_hough_line(edges, threshold=10, line_length=5, line_gap=3)
+      for ii in lines:
+          cv2.line(frame, ii[0], ii[1], (0, 0, 255), 3, cv2.LINE_AA)
+      return frame
 
-    nvUpl = nvc.PyFrameUploader(nvDec.Width(), nvDec.Height(), nvc.PixelFormat.NV12, gpuID)
-    rawSurface = nvUpl.UploadSingleFrame(rawFrameNV12)
-    rawSurface.Empty()
+  ```
+## Optical flow 光流
+  ```py
+  def draw_flow(img, flow, step=16):
+      h, w = img.shape[:2]
+      y, x = np.mgrid[step/2:h:step, step/2:w:step].reshape(2,-1).astype(int)
+      fx, fy = flow[y, x].T
+      lines = np.vstack([x, y, x+fx, y+fy]).T.reshape(-1, 2, 2)
+      lines = np.int32(lines + 0.5)
+      vis = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+      cv2.polylines(vis, lines, 0, (0, 255, 0))
+      for (x1, y1), (_x2, _y2) in lines:
+          cv2.circle(vis, (x1, y1), 1, (0, 255, 0), -1)
+      return vis
 
-    nvCvt = nvc.PySurfaceConverter(nvDec.Width(), nvDec.Height(), nvUpl.Format(), nvc.PixelFormat.RGB, gpuID)
-    cvtSurface = nvCvt.Execute(rawSurface)
-    cvtSurface.Empty()
+  def draw_hsv(flow):
+      h, w = flow.shape[:2]
+      fx, fy = flow[:, :, 0], flow[:, :, 1]
+      ang = np.arctan2(fy, fx) + np.pi
+      v = np.sqrt(fx * fx + fy * fy)
+      hsv = np.zeros((h, w, 3), np.uint8)
+      hsv[..., 0] = ang * (180 / np.pi / 2)
+      hsv[..., 1] = 255
+      hsv[..., 2] = np.minimum(v * 4, 255)
+      bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+      return bgr
 
-    rawFrame = np.ndarray(shape=(cvtSurface.HostSize()), dtype=np.uint8)
-    nvDwn = nvc.PySurfaceDownloader(cvtSurface.Width(), cvtSurface.Height(), cvtSurface.Format(), gpuID)
-    nvDwn.DownloadSingleSurface(cvtSurface, rawFrame)
+  def warp_flow(img, flow):
+      h, w = flow.shape[:2]
+      flow = -flow
+      flow[:, :, 0] += np.arange(w)
+      flow[:, :, 1] += np.arange(h)[:, np.newaxis]
+      res = cv2.remap(img, flow, None, cv2.INTER_LINEAR)
+      # bgr = cv2.cvtColor(res, cv2.COLOR_GRAY2BGR)
+      return res
 
-    aa = rawFrame.reshape(nvDec.Height(), nvDec.Width(), 3)
-    plt.imsave('dd.jpg', aa)
-    ```
-  - **PyNvCodec DecodeSingleSurface + Converter**
-    ```py
-    rawSurface = nvDec.DecodeSingleSurface()
+  class OptflowTest:
+      def __init__(self):
+          self.pre, self.cur_glitch = None, None
 
-    nvCvt = nvc.PySurfaceConverter(nvDec.Width(), nvDec.Height(), nvDec.Format(), nvc.PixelFormat.RGB, gpuID)
-    cvtSurface = nvCvt.Execute(rawSurface)
-    cvtSurface.Empty()
+      def __call__(self, frame):
+          gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+          if self.pre is None:
+              self.pre, self.cur_glitch = gray, frame
+              return np.hstack([frame, frame, frame])
 
-    rawFrame = np.ndarray(shape=(cvtSurface.HostSize()), dtype=np.uint8)
-    nvDwn = nvc.PySurfaceDownloader(cvtSurface.Width(), cvtSurface.Height(), cvtSurface.Format(), gpuID)
-    nvDwn.DownloadSingleSurface(cvtSurface, rawFrame)
+          flow = cv2.calcOpticalFlowFarneback(gray, self.pre, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+          self.pre = gray
 
-    aa = rawFrame.reshape(nvDec.Height(), nvDec.Width(), 3)
-    plt.imsave('ee.jpg', aa)
-    ```
+          rgb_flow = draw_flow(gray, flow)
+          hsv_flow = draw_hsv(flow)
+          self.cur_glitch = warp_flow(self.cur_glitch, flow)
+          return np.hstack([rgb_flow, hsv_flow, self.cur_glitch])
+
+  video_test(func=OptflowTest())
+  ```
+## Track 物体跟踪
+  ```py
+  class ObjectTrack:
+      def __init__(self, tracker='kcf', title="Opencv"):
+          self.title = title
+          OPENCV_OBJECT_TRACKERS = {
+              "csrt": cv2.TrackerCSRT_create,
+              "kcf": cv2.TrackerKCF_create,
+              "boosting": cv2.TrackerBoosting_create,
+              "mil": cv2.TrackerMIL_create,
+              "tld": cv2.TrackerTLD_create,
+              "medianflow": cv2.TrackerMedianFlow_create,
+              "mosse": cv2.TrackerMOSSE_create
+          }
+          self.tracker = OPENCV_OBJECT_TRACKERS[tracker]()
+          self.initBB = None
+
+      def __call__(self, frame):
+          # if the 's' key is selected, we are going to "select" a bounding box to track
+          key = cv2.waitKey(1) & 0xFF
+          if key == ord("s"):
+              # select the bounding box of the object we want to track (make sure you press ENTER or SPACE after selecting the ROI)
+              self.initBB = cv2.selectROI(self.title, frame, fromCenter=False, showCrosshair=True)
+              # start OpenCV object tracker using the supplied bounding box coordinates, then start the FPS throughput estimator as well
+              self.tracker = self.tracker.create()
+              ret = self.tracker.init(frame, self.initBB)
+              print("Init tracker:", ret)
+
+          # check to see if we are currently tracking an object
+          if self.initBB is not None:
+              # grab the new bounding box coordinates of the object
+              success, box = self.tracker.update(frame)
+              if success:
+                  x, y, w, h = [int(v) for v in box]
+                  cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+              cv2.putText(frame, "Success" if success else "Fail", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+          return frame
+
+  video_test(func=ObjectTrack())
+  ```
+## QR code
+  ```py
+  class QrDetect:
+      def __init__(self):
+          self.qr = cv2.QRCodeDetector()
+
+      def __call__(self, frame):
+          ret, points = self.qr.detectMulti(frame)
+
+          if ret:
+              for pp in points:
+                  cnt = pp.reshape((-1, 1, 2)).astype(np.int32)
+                  rows, cols, _ = frame.shape
+                  show_radius = 2.813 * ((rows / cols) if rows > cols else (cols / rows))
+                  contour_radius = show_radius * 0.4
+                  cv2.drawContours(frame, [cnt], 0, (0, 255, 0), int(round(contour_radius)))
+                  tpl = cnt.reshape((-1, 2))
+                  for x in tuple(tpl.tolist()):
+                      color = (255, 0, 0)
+                      cv2.circle(frame, tuple(x), int(round(contour_radius)), color, -1)
+          return frame
+
+  video_test(func=QrDetect())
+  ```
 ***
 
 # skimage segmentation
@@ -1058,140 +1115,257 @@
   ![](images/skiamge_seg_morphological_snakes.png)
 ***
 
-# Opencv
-## square
-  ```py
-  # Python 2/3 compatibility
-  from __future__ import print_function
-  import sys
-  PY3 = sys.version_info[0] == 3
+# CUDA 视频解码
+## Opencv with CUDA
+  - CUDA needs `gcc-8` / `g++-8`
+    ```sh
+    sudo apt install gcc-8 g++-8
+    sudo rm /etc/alternatives/c++ && sudo ln -s /usr/bin/g++-8 /etc/alternatives/c++
+    sudo rm /etc/alternatives/cc && sudo ln -s /usr/bin/gcc-8 /etc/alternatives/cc
+    ```
+  - NVCUVID needs `nvcuvid.h`, Download [NVIDIA Video Codec SDK](https://developer.nvidia.com/nvidia-video-codec-sdk#Download)
+    ```sh
+    unzip Video_Codec_SDK_9.1.23.zip
+    sudo cp Video_Codec_SDK_9.1.23/include/* /usr/local/include/
 
-  if PY3:
-      xrange = range
+    locate libnvcuvid.so
+    # /usr/lib/x86_64-linux-gnu/libnvcuvid.so
+    locate libnvidia-encode.so
+    # /usr/lib/x86_64-linux-gnu/libnvidia-encode.so
+    ```
+  - Clone opencv_contrib
+    ```sh
+    git clone https://github.com/opencv/opencv_contrib.git
+    ```
+  - OpenGL support
+    ```sh
+    sudo apt install libgtkglext1 libgtkglext1-dev
+    ```
+  - Cmake and Build opencv
+    ```sh
+    cd opencv && mkdir build && cd build
+    cmake -D CMAKE_BUILD_TYPE=Release -D WITH_CUDA=ON -D WITH_NVCUVID=ON -D ENABLE_FAST_MATH=1 -D CUDA_FAST_MATH=1 -D WITH_CUBLAS=1 -D WITH_OPENGL=ON \
+      -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
+      -D BUILD_OPENCV_PYTHON3=ON \
+      -D PYTHON3_EXECUTABLE='/opt/anaconda3/bin/python3.7m' \
+      ..
 
-  import numpy as np
-  import cv2 as cv
+    ls python_loader/cv2/config-3.7.py
+    make -j 8 && sudo make install
 
+    pip install -e python_loader  # Or: python python_loader/setup.py install
+    python -c 'import cv2; print(cv2.__version__)'
+    # 4.3.0-dev
+    ```
+  - **C++ video reader test**
+    ```sh
+    cp ../samples/gpu/video_reader.cpp ./
+    g++ video_reader.cpp  -L/usr/local/lib -lopencv_core -lopencv_highgui -lopencv_cudacodec -lopencv_videoio
+    ./a.out /media/SD/PAD/PAD_video/fake_vis_1_10.avi
+    ```
+  - **Python test**
+    ```py
+    import cv2
+    # video_path = '/media/SD/PAD/PAD_video/fake_vis_1_10.avi'
+    video_path = os.path.expanduser('~/workspace/PyImageSearch/social-distance-detector/pedestrians.mp4')
+    mm = cv2.TickMeter()
+    crr = cv2.VideoCapture(video_path)
+    ctt = []
+    while True:
+        mm.reset()
+        mm.start()
+        grabbed, cff = crr.read()
+        if grabbed != True:
+            break
+        mm.stop()
+        ctt.append(mm.getTimeMilli())
+        cv2.imshow('cpu', cff)
 
-  def angle_cos(p0, p1, p2):
-      d1, d2 = (p0-p1).astype('float'), (p2-p1).astype('float')
-      return abs( np.dot(d1, d2) / np.sqrt( np.dot(d1, d1)*np.dot(d2, d2) ) )
+    grr = cv2.cudacodec.createVideoReader(video_path)
+    gttr, gttd = [], []
+    while True:
+        mm.reset()
+        mm.start()
+        grabbed, gff = grr.nextFrame()
+        if grabbed != True:
+            break
+        mm.stop()
+        gttr.append(mm.getTimeMilli())
 
-  def find_squares(img):
-      img = cv.GaussianBlur(img, (5, 5), 0)
-      squares = []
-      for gray in cv.split(img):
-          for thrs in xrange(0, 255, 26):
-              if thrs == 0:
-                  bin = cv.Canny(gray, 0, 50, apertureSize=5)
-                  bin = cv.dilate(bin, None)
-              else:
-                  _retval, bin = cv.threshold(gray, thrs, 255, cv.THRESH_BINARY)
-              contours, _hierarchy = cv.findContours(bin, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
-              for cnt in contours:
-                  cnt_len = cv.arcLength(cnt, True)
-                  cnt = cv.approxPolyDP(cnt, 0.02*cnt_len, True)
-                  if len(cnt) == 4 and cv.contourArea(cnt) > 1000 and cv.isContourConvex(cnt):
-                      cnt = cnt.reshape(-1, 2)
-                      max_cos = np.max([angle_cos( cnt[i], cnt[(i+1) % 4], cnt[(i+2) % 4] ) for i in xrange(4)])
-                      if max_cos < 0.1:
-                          squares.append(cnt)
-      return squares
+        mm.reset()
+        mm.start()
+        nn = gff.download()
+        mm.stop()
+        gttd.append(mm.getTimeMilli())
+        cv2.imshow('gpu', nn)
 
-  def main():
-      from glob import glob
-      for fn in glob('../data/pic*.png'):
-          img = cv.imread(fn)
-          squares = find_squares(img)
-          cv.drawContours( img, squares, -1, (0, 255, 0), 3 )
-          cv.imshow('squares', img)
-          ch = cv.waitKey()
-          if ch == 27:
-              break
+    gtt = np.add(gttr, gttd)
+    print("CPU: %f ms/frame, GPU read: %f ms/frame, GPU download: %f ms/frame, GPU total: %f ms/frame" % (np.mean(ctt[40:]), np.mean(gttr[40:]), np.mean(gttd[40:]), np.mean(gtt[40:])))
+    # CPU: 3.505913 ms/frame, GPU read: 0.468353 ms/frame, GPU download: 1.076169 ms/frame, GPU total: 1.544522 ms/frame
 
-      print('Done')
-  ```
-## opt flow
-  ```py
-  import numpy as np
-  import cv2 as cv
+    plt.plot(ctt[40:], label='CPU')
+    plt.plot(gtt[40:], label='GPU total')
+    plt.plot(gttr[40:], label='GPU read')
+    plt.plot(gttd[40:], label='GPU download')
+    # Plot also the PyNvCodec one
+    plt.plot(aa[0][40:], label='PyNvCodec total')
+    plt.plot(aa[1][40:], label='PyNvCodec read')
+    plt.plot(aa[2][40:], label='PyNvCodec download')
+    plt.legend()
+    plt.tight_layout()
+    ```
+    ![](images/cv_opecv_cuda_video_read.png)
+## PyNvCodec
+  - [Github VideoProcessingFramework](https://github.com/NVIDIA/VideoProcessingFramework)
+  - [VideoProcessingFramework Building from source](https://github.com/NVIDIA/VideoProcessingFramework/wiki/Building-from-source)
+  - **Init import**
+    ```py
+    import PyNvCodec as nvc
+    import cv2
+    import matplotlib.pyplot as plt
 
-  import video
+    encFilePath = './video.mp4'
+    # encFilePath = 'rtsp://admin:admin1234@192.168.100.11:554/cam/realmonitor?channel=1&subtype=0'
+    gpuID = 0
+    nvDec = nvc.PyNvDecoder(encFilePath, gpuID)
+    ```
+  - **PyNvCodec DecodeSingleFrame + opencv**
+    ```py
+    rawFrameNV12 = np.ndarray(shape=(nvDec.Framesize()), dtype=np.uint8)
+    nvDec.DecodeSingleFrame(rawFrameNV12)
+    height, width = int(nvDec.Height() * 1.5), int(nvDec.Width())
 
+    bb = rawFrameNV12.reshape(height, width)
+    cc = cv2.cvtColor(bb, cv2.COLOR_YUV2RGB_NV12)
+    plt.imsave('cc.jpg', cc)
+    ```
+  - **PyNvCodec DecodeSingleFrame + Converter**
+    ```py
+    rawFrameNV12 = np.ndarray(shape=(nvDec.Framesize()), dtype=np.uint8)
+    nvDec.DecodeSingleFrame(rawFrameNV12)
 
-  def draw_flow(img, flow, step=16):
-      h, w = img.shape[:2]
-      y, x = np.mgrid[step/2:h:step, step/2:w:step].reshape(2,-1).astype(int)
-      fx, fy = flow[y,x].T
-      lines = np.vstack([x, y, x+fx, y+fy]).T.reshape(-1, 2, 2)
-      lines = np.int32(lines + 0.5)
-      vis = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
-      cv.polylines(vis, lines, 0, (0, 255, 0))
-      for (x1, y1), (_x2, _y2) in lines:
-          cv.circle(vis, (x1, y1), 1, (0, 255, 0), -1)
-      return vis
+    nvUpl = nvc.PyFrameUploader(nvDec.Width(), nvDec.Height(), nvc.PixelFormat.NV12, gpuID)
+    rawSurface = nvUpl.UploadSingleFrame(rawFrameNV12)
+    rawSurface.Empty()
 
+    nvCvt = nvc.PySurfaceConverter(nvDec.Width(), nvDec.Height(), nvUpl.Format(), nvc.PixelFormat.RGB, gpuID)
+    cvtSurface = nvCvt.Execute(rawSurface)
+    cvtSurface.Empty()
 
-  def draw_hsv(flow):
-      h, w = flow.shape[:2]
-      fx, fy = flow[:,:,0], flow[:,:,1]
-      ang = np.arctan2(fy, fx) + np.pi
-      v = np.sqrt(fx*fx+fy*fy)
-      hsv = np.zeros((h, w, 3), np.uint8)
-      hsv[...,0] = ang*(180/np.pi/2)
-      hsv[...,1] = 255
-      hsv[...,2] = np.minimum(v*4, 255)
-      bgr = cv.cvtColor(hsv, cv.COLOR_HSV2BGR)
-      return bgr
+    nvDwn = nvc.PySurfaceDownloader(nvDec.Width(), nvDec.Height(), nvCvt.Format(), gpuID)
+    rawFrame = np.ndarray(shape=(cvtSurface.HostSize()), dtype=np.uint8)
+    nvDwn.DownloadSingleSurface(cvtSurface, rawFrame)
 
+    aa = rawFrame.reshape(nvDec.Height(), nvDec.Width(), 3)
+    plt.imsave('dd.jpg', aa)
+    ```
+  - **PyNvCodec DecodeSingleSurface + Converter**
+    ```py
+    rawSurface = nvDec.DecodeSingleSurface()
 
-  def warp_flow(img, flow):
-      h, w = flow.shape[:2]
-      flow = -flow
-      flow[:,:,0] += np.arange(w)
-      flow[:,:,1] += np.arange(h)[:,np.newaxis]
-      res = cv.remap(img, flow, None, cv.INTER_LINEAR)
-      return res
+    nvCvt = nvc.PySurfaceConverter(nvDec.Width(), nvDec.Height(), nvDec.Format(), nvc.PixelFormat.RGB, gpuID)
+    cvtSurface = nvCvt.Execute(rawSurface)
+    cvtSurface.Empty()
 
-  def main():
-      import sys
-      try:
-          fn = sys.argv[1]
-      except IndexError:
-          fn = 0
+    nvDwn = nvc.PySurfaceDownloader(nvDec.Width(), nvDec.Height(), nvCvt.Format(), gpuID)
+    rawFrame = np.ndarray(shape=(cvtSurface.HostSize()), dtype=np.uint8)
+    nvDwn.DownloadSingleSurface(cvtSurface, rawFrame)
 
-      cam = video.create_capture(fn)
-      _ret, prev = cam.read()
-      prevgray = cv.cvtColor(prev, cv.COLOR_BGR2GRAY)
-      show_hsv = False
-      show_glitch = False
-      cur_glitch = prev.copy()
+    aa = rawFrame.reshape(nvDec.Height(), nvDec.Width(), 3)
+    plt.imsave('ee.jpg', aa)
+    ```
+  - **Test**
+    ```py
+    import cv2
+    import PyNvCodec as nvc
 
-      while True:
-          _ret, img = cam.read()
-          gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-          flow = cv.calcOpticalFlowFarneback(prevgray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-          prevgray = gray
+    # encFilePath = os.path.expanduser('~/workspace/PyImageSearch/social-distance-detector/pedestrians.mp4')
+    encFilePath = os.path.expanduser('~/workspace/pedestrians.mp4')
 
-          cv.imshow('flow', draw_flow(gray, flow))
-          if show_hsv:
-              cv.imshow('flow HSV', draw_hsv(flow))
-          if show_glitch:
-              cur_glitch = warp_flow(cur_glitch, flow)
-              cv.imshow('glitch', cur_glitch)
+    gpuID = 0
+    nvDec = nvc.PyNvDecoder(encFilePath, gpuID)
+    nvCvt = nvc.PySurfaceConverter(nvDec.Width(), nvDec.Height(), nvDec.Format(), nvc.PixelFormat.RGB, gpuID)
+    nvDwn = nvc.PySurfaceDownloader(nvDec.Width(), nvDec.Height(), nvCvt.Format(), gpuID)
+    rawFrame = np.ndarray(shape=(nvDec.Width() * nvDec.Height() * 3), dtype=np.uint8)
 
-          ch = cv.waitKey(5)
-          if ch == 27:
-              break
-          if ch == ord('1'):
-              show_hsv = not show_hsv
-              print('HSV flow visualization is', ['off', 'on'][show_hsv])
-          if ch == ord('2'):
-              show_glitch = not show_glitch
-              if show_glitch:
-                  cur_glitch = img.copy()
-              print('glitch is', ['off', 'on'][show_glitch])
+    mm = cv2.TickMeter()
+    nttr, nttd = [], []
+    while True:
+        mm.reset()
+        mm.start()
+        rawSurface = nvDec.DecodeSingleSurface()
+        if rawSurface.Empty() == True:
+            break
+        cvtSurface = nvCvt.Execute(rawSurface)
+        mm.stop()
+        nttr.append(mm.getTimeMilli())
 
-      print('Done')
-  ```
+        mm.reset()
+        mm.start()
+        nvDwn.DownloadSingleSurface(cvtSurface, rawFrame)
+        rawFrame.reshape(rawSurface.Height(), rawSurface.Width(), 3)
+        mm.stop()
+        nttd.append(mm.getTimeMilli())
+
+    ntt = np.add(nttr, nttd)
+    print("PyNvCodec read: %f ms/frame, PyNvCodec download: %f ms/frame, PyNvCodec total: %f ms/frame" % (np.mean(nttr[40:]), np.mean(nttd[40:]), np.mean(ntt[40:])))
+    # PyNvCodec read: 0.356000 ms/frame, PyNvCodec download: 1.403157 ms/frame, PyNvCodec total: 1.759157 ms/frame
+    ```
 ***
+
+```py
+sys.path.append(os.path.expanduser('~/workspace/samba/tdFace-flask/'))
+from mtcnn_tf.mtcnn import MTCNN
+det = MTCNN()
+imm = imread('real_fake.png')
+
+def hough_line_detect_P(frame):
+    dst = cv2.Canny(frame, 100, 200)
+    lines = cv2.HoughLinesP(dst, 1, np.pi / 180.0, 40, np.array([]), 50, 20)
+    return lines
+
+    cdst = cv2.cvtColor(dst, cv2.COLOR_GRAY2BGR)
+    # lines = cv2.HoughLinesP(dst, 1, np.pi / 180.0, 40, np.array([]), 50, 10)
+    for ii in lines:
+        cv2.line(cdst, (ii[0][0], ii[0][1]), (ii[0][2], ii[0][3]), (0, 0, 255), 3, cv2.LINE_AA)
+    return cdst
+
+bbs, ccs, pps = det.detect_faces(imm)
+
+up, left, down, right = bbs[0].astype('int')
+# [ 363.3452, 1139.0464,  581.6208, 1302.2919]
+
+ill = imm[up : down, 0 : left]
+iuu = imm[0 : up, left : right]
+irr = imm[up : down, right:]
+idd = imm[down:, left : right]
+
+fig, axes = plt.subplots(2, 4, figsize=(12, 3))
+for ax_1, ax_2, ii in zip(axes[0], axes[1], [ill, iuu, irr, idd]):
+    ax_1.imshow(ii)
+    ax_2.imshow(hough_line_detect_P(ii)[:, :, ::-1])
+
+up, left, down, right = bbs[1].astype('int')
+# (328, 517, 671, 799)
+
+ill = imm[up : down, 0 : left]
+iuu = imm[0 : up, left : right]
+irr = imm[up : down, right:]
+idd = imm[down:, left : right]
+
+fig, axes = plt.subplots(1, 4, figsize=(12, 3))
+total = 0
+for id, (ax, ii) in enumerate(zip(axes, [ill, iuu, irr, idd])):
+    ax.imshow(ii)
+    if ii.shape[0] != 0 and ii.shape[1] != 0:
+        lines = hough_line_detect_P(ii)
+        total += (max_dist_v(lines) / (down-up)) if id % 2 == 0 else (max_dist_h(lines) / (right-left))
+        print(max_dist_h(lines), max_dist_h(lines) / (right-left), max_dist_v(lines), max_dist_v(lines) / (down-up))
+        for jj in lines:
+            ax.plot(jj[0][[0, 2]], jj[0][[1, 3]])
+
+
+# max_dist_h = lambda lines: sqrt(max([(ii[0] - ii[2]) ** 2 + (ii[1] - ii[3]) ** 2 for ii in lines.squeeze() if abs(ii[0] - ii[2]) > abs(ii[1] - ii[3])]))
+max_dist_h = lambda lines: max([abs(ii[0] - ii[2]) for ii in lines.squeeze() if abs(ii[0] - ii[2]) > abs(ii[1] - ii[3])] + [0])
+max_dist_v = lambda lines: max([abs(ii[1] - ii[3]) for ii in lines.squeeze() if abs(ii[1] - ii[3]) > abs(ii[0] - ii[2])] + [0])
+```

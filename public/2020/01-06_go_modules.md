@@ -1280,6 +1280,73 @@
   fmt.Println(math.Pow(T.At(0, 0), 2) + math.Pow(T.At(0, 1), 2))
   // 1.000000000000001
   ```
+## Resize
+  - [Github nfnt/resize](https://github.com/nfnt/resize)
+    ```sh
+    go get /github.com/nfnt/resize
+    go build /github.com/nfnt/resize
+    go install /github.com/nfnt/resize
+    ```
+  - **Test**
+    ```go
+    // test_resize.go
+    package main
+
+    import (
+    	"github.com/nfnt/resize"
+    	"image/jpeg"
+    	"os"
+    	"fmt"
+        "time"
+    )
+
+    func main() {
+    	file, _ := os.Open("go_resize_test_2.jpeg")
+    	img, _ := jpeg.Decode(file)
+    	file.Close()
+
+    	methods := []resize.InterpolationFunction{resize.NearestNeighbor, resize.Bilinear, resize.Bicubic, resize.MitchellNetravali, resize.Lanczos2, resize.Lanczos3}
+    	saveNames := []string{"NearestNeighbor", "Bilinear", "Bicubic", "MitchellNetravali", "Lanczos2", "Lanczos3"}
+
+    	iter := 20
+    	for id, mm := range methods {
+    		ss := time.Now()
+    		for i := 0; i < iter; i++ {
+    			resize.Resize(2000, 0, img, mm)
+    		}
+    		dd := time.Since(ss)
+    		fmt.Println(saveNames[id], ": Iter:", iter, "Total:", dd, "Mean:", dd.Seconds() * 1000 / float64(iter), "ms")
+
+    		iss := resize.Resize(2000, 0, img, mm)
+    		out, _ := os.Create("test_resized_" + saveNames[id] + ".jpg")
+    		defer out.Close()
+    		jpeg.Encode(out, iss, nil)
+    	}
+    }
+    ```
+    **Run**
+    ```go
+    go run test_resize.go
+    // NearestNeighbor : Iter: 20 Total: 287.269807ms Mean: 14.363490350000001 ms
+    // Bilinear : Iter: 20 Total: 330.768269ms Mean: 16.53841345 ms
+    // Bicubic : Iter: 20 Total: 404.085138ms Mean: 20.2042569 ms
+    // MitchellNetravali : Iter: 20 Total: 400.273979ms Mean: 20.01369895 ms
+    // Lanczos2 : Iter: 20 Total: 405.309636ms Mean: 20.265481799999996 ms
+    // Lanczos3 : Iter: 20 Total: 478.777911ms Mean: 23.93889555 ms
+    ```
+    ```py
+    import glob2
+    imms = [imread(ii) for ii in glob2.glob('test_resized_*.jpg')]
+    fig, axes = plt.subplots(ncols=3, nrows=2)
+    axes = axes.flatten()
+    titles = "NearestNeighbor", "Bilinear", "Bicubic", "MitchellNetravali", "Lanczos2", "Lanczos3"
+    for ax, imm, title in zip(axes, imms, titles):
+        ax.imshow(imm)
+        ax.set_title(title)
+        ax.set_axis_off()
+    fig.tight_layout()
+    ```
+    ![](images/go_resize.png)
 ***
 
 # Tensorflow images
