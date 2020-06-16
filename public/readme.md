@@ -91,7 +91,7 @@
   - [01-06_go_modules.md](./2020/01-06_go_modules.md)
   - [02-11_cgo.md](./2020/02-11_cgo.md)
   - [04-10_SiW_PAD.md](./2020/04-10_SiW_PAD.md)
-  - [06-12_computer_vision.md](./2020/06-12_computer_vision.md)
+  - [05-02_computer_vision.md](./2020/05-02_computer_vision.md)
   - [images](./2020/images)
 - [Dainty_factory](./Dainty_factory)
   - [Dainty_factory.md](./Dainty_factory/Dainty_factory.md)
