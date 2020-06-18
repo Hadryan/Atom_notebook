@@ -356,11 +356,11 @@
     ```py
     bilateralFilter(src, d, sigmaColor, sigmaSpace[, dst[, borderType]]) -> dst
     ```
-	  - **src** 输入图像
-	  - **d** 在过滤期间使用的每个像素邻域的直径，如果 `d` 非 0，则 `sigmaSpace` 由 `d` 计算得出，如果 `sigmaColor` 没输入，则 `sigmaColor` 由 `sigmaSpace` 计算得出，通常考虑计算速度情况下，设置为 `5`
-	  - **sigmaColor** 色彩空间的标准方差，一般尽可能大，较大的参数值意味着像素邻域内较远的颜色会混合在一起， 从而产生更大面积的半相等颜色
-	  - **sigmaSpace** 坐标空间的标准方差，一般尽可能小，参数值越大意味着只要它们的颜色足够接近，越远的像素都会相互影响，当 `d > 0` 时，指定邻域大小而不考虑 `sigmaSpace`，否则 `d` 与 `sigmaSpace` 成正比
-	  ```py
+    - **src** 输入图像
+    - **d** 在过滤期间使用的每个像素邻域的直径，如果 `d` 非 0，则 `sigmaSpace` 由 `d` 计算得出，如果 `sigmaColor` 没输入，则 `sigmaColor` 由 `sigmaSpace` 计算得出，通常考虑计算速度情况下，设置为 `5`
+    - **sigmaColor** 色彩空间的标准方差，一般尽可能大，较大的参数值意味着像素邻域内较远的颜色会混合在一起， 从而产生更大面积的半相等颜色
+    - **sigmaSpace** 坐标空间的标准方差，一般尽可能小，参数值越大意味着只要它们的颜色足够接近，越远的像素都会相互影响，当 `d > 0` 时，指定邻域大小而不考虑 `sigmaSpace`，否则 `d` 与 `sigmaSpace` 成正比
+    ```py
     ''' 双边滤波 '''
     import cv2
     import numpy as np
@@ -646,6 +646,93 @@
   video_path = os.path.expanduser('~/workspace/PyImageSearch/social-distance-detector/pedestrians.mp4')
   video_test(func=SocialDistance(), src=video_path)
   ```
+## 目标检测更新背景
+  ```py
+  import insightface
+
+  class DeltaDetect:
+      def __init__(self, lines_plot=""):
+          self.det = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+          self.det.prepare(-1)      
+          self.init_frame = None
+          self.lines_plot = lines_plot.lower()
+          self.max_dist_h = lambda lines: max([abs(ii[0] - ii[2]) for ii in lines.reshape(-1, 4) if abs(ii[0] - ii[2]) > abs(ii[1] - ii[3])] + [0])
+          self.max_dist_v = lambda lines: max([abs(ii[1] - ii[3]) for ii in lines.reshape(-1, 4) if abs(ii[1] - ii[3]) > abs(ii[0] - ii[2])] + [0])
+
+      def __call__(self, frame):
+          bbs, pps = self.det.detect(frame)
+          gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+          gray_frame = cv2.GaussianBlur(gray_frame, (3, 3), 0)
+          bbs = bbs[:, :4].astype(int)
+          if bbs.shape[0] == 0:
+              self.init_frame = gray_frame
+              return frame
+          if self.init_frame is None:
+              self.init_frame = np.zeros_like(gray_frame)
+
+          frame_delta = cv2.absdiff(self.init_frame, gray_frame)
+          mask = cv2.threshold(frame_delta, 50, 255, cv2.THRESH_BINARY)[1]
+          mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11)), iterations=5) // 255
+          canny_dst = cv2.Canny(gray_frame, 100, 200, apertureSize=3)
+          lines = cv2.HoughLinesP(canny_dst * mask, 1, np.pi / 180.0, 40, np.array([]), 50, 20)
+          lines = [] if lines is None else lines
+
+          lines_sort_x, lines_sort_y = [], []
+          for ii in lines:
+              x1, y1, x2, y2 = ii[0][0], ii[0][1], ii[0][2], ii[0][3]
+              vh_dd = abs(y2 - y1) - abs(x2 - x1)
+              if vh_dd <= 0:
+                  # it's a horizontal line， used to detect left / right border
+                  lines_sort_y.append([y1, x1, y2, x2] if y1 < y2 else [y2, x2, y1, x1])  
+              if vh_dd >= 0:
+                  # it's a vertical line, used to detect top / bottom border
+                  lines_sort_x.append([x1, y1, x2, y2] if x1 < x2 else [x2, y2, x1, y1])
+
+          scores = []
+          for bb in bbs:
+              left, top, right, bottom = bb[:4].astype('int')
+              score_left, score_right = self._score_func(lines_sort_x, left, right, top, bottom)
+              score_top, score_bottom = self._score_func(lines_sort_y, top, bottom, left, right)
+              scores.append(sum([score_left ** 2, score_right ** 2, score_top ** 2, score_bottom ** 2]))
+
+              print(score_left, score_right, score_top, score_bottom)
+              cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+              cv2.putText(frame, "{:.4f}".format(scores[-1]), (bb[0], bb[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+          mask = np.expand_dims(mask, -1)
+          mask = np.concatenate([mask, mask, mask], -1)
+          frame = np.where(mask, frame, 0)
+
+          if self.lines_plot == "left":
+              lines = [ii for ii in lines_sort_x if ii[0] < left]
+          elif self.lines_plot == "right":
+              lines = [ii for ii in lines_sort_x if ii[2] > right]
+          elif self.lines_plot == "top":
+              lines = [[ii[1], ii[0], ii[3], ii[2]] for ii in lines_sort_y if ii[0] < top]
+          elif self.lines_plot == "bottom":
+              lines = [[ii[1], ii[0], ii[3], ii[2]] for ii in lines_sort_y if ii[2] > bottom]
+          else:
+              lines = [ii[0] for ii in lines]
+          for ii in lines:
+              # cv2.line(frame, (ii[0][0], ii[0][1]), (ii[0][2], ii[0][3]), (0, 0, 255), 3, cv2.LINE_AA)
+              cv2.line(frame, (ii[0], ii[1]), (ii[2], ii[3]), (0, 0, 255), 3, cv2.LINE_AA)
+
+          return frame
+
+      def _score_func(self, lines_sort, left, right, top, bottom):
+          score_left, score_right = [0.], [0.]
+          for x1, y1, x2, y2 in lines_sort:
+              y_min, y_max = min(y2, y1), max(y2, y1)
+              y_dd = min(y_max, bottom) - max(top, y_min)
+              if x1 < left and x2 < right:
+                  # vertical line on the left of left border
+                  score_left.append(y_dd)
+              elif x2 > right and x1 > left:
+                  # vertical line on the right of right border
+                  score_right.append(y_dd)
+          return max(score_left) / (bottom - top), max(score_right) / (bottom - top)
+
+  video_test(func=DeltaDetect())
+  ```
 ***
 
 # Opencv 应用
@@ -688,11 +775,24 @@
   ```
 ## Hough lines
   ```py
+  def hough_line_detect_P(self, frame, mask=None):
+      if len(frame.shape) == 3:
+          frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+          frame = cv2.GaussianBlur(frame, (3, 3), 0)
+      # ret, frame = cv2.threshold(frame, 0, 255, cv2.THRESH_OTSU)
+      dst = cv2.Canny(frame, 100, 200, apertureSize=3)
+      if mask is not None:
+          dst *= mask
+      lines = cv2.HoughLinesP(dst, 1, np.pi / 180.0, 40, np.array([]), 50, 20)
+      return lines, dst
+
   def hough_line_detect_P(frame):
-      dst = cv2.Canny(frame, 100, 200)
+      frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+      frame = cv2.GaussianBlur(frame, (3, 3), 0)
+      dst = cv2.Canny(frame, 100, 200, apertureSize=3)
       cdst = cv2.cvtColor(dst, cv2.COLOR_GRAY2BGR)
       # lines = cv2.HoughLinesP(dst, 1, np.pi / 180.0, 40, np.array([]), 50, 10)
-      lines = cv2.HoughLinesP(dst, 1, np.pi / 180.0, 40, np.array([]), 50, 10)
+      lines = cv2.HoughLinesP(dst, 1, np.pi / 180.0, 40, np.array([]), 50, 20)
       for ii in lines:
           cv2.line(cdst, (ii[0][0], ii[0][1]), (ii[0][2], ii[0][3]), (0, 0, 255), 3, cv2.LINE_AA)
       return cdst
@@ -885,6 +985,129 @@
 
   video_test(func=QrDetect())
   ```
+## FFT blur detection
+```py
+import matplotlib.pyplot as plt
+import numpy as np
+import cv2
+
+def detect_blur_fft(frame, center_size=60, resize_width=500):
+    hh, ww = frame.shape[:2]
+    resize_height = int(hh / ww * resize_width)
+    frame = cv2.resize(frame, (resize_width, resize_height))
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    (h, w) = gray.shape
+    (cX, cY) = (int(w / 2.0), int(h / 2.0))
+
+    # compute the FFT to find the frequency transform,
+    # then shift the zero frequency component (i.e., DC component located at the top-left corner)
+    # to the center where it will be more easy to analyze
+    fft = np.fft.fft2(gray)
+    fftShift = np.fft.fftshift(fft)
+
+    # zero-out the center of the FFT shift (i.e., remove low frequencies),
+    # apply the inverse shift such that the DC component once again becomes the top-left,
+    # and then apply the inverse FFT
+    fftShift[cY - center_size : cY + center_size, cX - center_size : cX + center_size] = 0
+    fftShift = np.fft.ifftshift(fftShift)
+    recon = np.fft.ifft2(fftShift)
+
+    # compute the magnitude spectrum of the reconstructed image,
+    # then compute the mean of the magnitude values
+    magnitude = 20 * np.log(np.abs(recon))
+    mean = np.mean(magnitude)
+    print(magnitude.min())
+
+    vis_ret = np.hstack([frame, cv2.cvtColor((magnitude + 127.5).astype('uint8'), cv2.COLOR_GRAY2BGR)])
+    return mean, vis_ret
+
+def detect_blur_fft_test(frame):
+    mean, frame = detect_blur_fft(frame)
+    cv2.putText(frame, "FFT Mean: {}".format(mean), (10, frame.shape[0] - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 0, 255), 3)
+    return frame
+
+  # check to see if we are visualizing our output
+  if vis:
+    # compute the magnitude spectrum of the transform
+    magnitude = 20 * np.log(np.abs(fftShift))
+
+    # display the original input image
+    (fig, ax) = plt.subplots(1, 2, )
+    ax[0].imshow(image, cmap="gray")
+    ax[0].set_title("Input")
+    ax[0].set_xticks([])
+    ax[0].set_yticks([])
+
+    # display the magnitude image
+    ax[1].imshow(magnitude, cmap="gray")
+    ax[1].set_title("Magnitude Spectrum")
+    ax[1].set_xticks([])
+    ax[1].set_yticks([])
+
+    # show our plots
+    plt.show()
+
+
+
+  # the image will be considered "blurry" if the mean value of the
+  # magnitudes is less than the threshold value
+  return (mean, mean <= thresh)
+```
+```py
+# USAGE
+# python blur_detector_video.py
+
+# import the necessary packages
+from imutils.video import VideoStream
+from pyimagesearch.blur_detector import detect_blur_fft
+import argparse
+import imutils
+import time
+import cv2
+
+# construct the argument parser and parse the arguments
+ap = argparse.ArgumentParser()
+ap.add_argument("-t", "--thresh", type=int, default=10,
+  help="threshold for our blur detector to fire")
+args = vars(ap.parse_args())
+
+# initialize the video stream and allow the camera sensor to warm up
+print("[INFO] starting video stream...")
+vs = VideoStream(src=0).start()
+time.sleep(2.0)
+
+# loop over the frames from the video stream
+while True:
+  # grab the frame from the threaded video stream and resize it
+  # to have a maximum width of 400 pixels
+  frame = vs.read()
+  frame = imutils.resize(frame, width=500)
+
+  # convert the frame to grayscale and detect blur in it
+  gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+  (mean, blurry) = detect_blur_fft(gray, size=60,
+    thresh=args["thresh"], vis=False)
+
+  # draw on the frame, indicating whether or not it is blurry
+  color = (0, 0, 255) if blurry else (0, 255, 0)
+  text = "Blurry ({:.4f})" if blurry else "Not Blurry ({:.4f})"
+  text = text.format(mean)
+  cv2.putText(frame, text, (10, 25), cv2.FONT_HERSHEY_SIMPLEX,
+    0.7, color, 2)
+
+  # show the output frame
+  cv2.imshow("Frame", frame)
+  key = cv2.waitKey(1) & 0xFF
+
+  # if the `q` key was pressed, break from the loop
+  if key == ord("q"):
+    break
+
+# do a bit of cleanup
+cv2.destroyAllWindows()
+vs.stop()
+```
 ***
 
 # skimage segmentation

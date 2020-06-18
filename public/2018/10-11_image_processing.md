@@ -1638,7 +1638,7 @@
     images_show([bad_connection, ioo], ['Original', 'Square=3'])
     ```
     ![](images/skimage_morphology_opening.jpg)
-  - **closing / binary_closing** 形态学闭运算，先膨胀再腐蚀，可以消除黑色噪点，并链接小的两色区块，可用来填充孔洞
+  - **closing / binary_closing** 形态学闭运算，先膨胀再腐蚀，可以消除黑色噪点，并连接小的亮色区块，可用来填充孔洞
     ```py
     closing(image, selem=None, out=None)
     ```

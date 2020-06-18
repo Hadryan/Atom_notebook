@@ -471,7 +471,7 @@
             self.context.set_binding_shape(0, imgs.shape)
             np.copyto(self.h_input[:inputs.shape[0]], inputs)
             cuda.memcpy_htod_async(self.d_input, self.h_input[:inputs.shape[0]], self.stream)
-            # Run inference.
+            # Run inference asynchronously, same function in cpp is `IExecutionContext::enqueueV2`
             self.context.execute_async_v2(bindings=[int(self.d_input), int(self.d_output)], stream_handle=self.stream.handle)
             # Transfer predictions back from the GPU.
             cuda.memcpy_dtoh_async(self.h_output[:batch_size * self.output_ravel_dim], self.d_output, self.stream)
@@ -722,353 +722,238 @@
   ```
 ***
 
-# CPP
-  ```cpp
-  #include <sys/time.h>
-  static inline unsigned long get_cur_time(void)
-  {
-      struct timespec tm;
-      clock_gettime(CLOCK_MONOTONIC, &tm);
-      return (tm.tv_sec * 1000000 + tm.tv_nsec / 1000);
-  }
+# CPP Inference
+  - **engineRT.cpp**
+    ```java
+    #include <fstream>
+    #include <iostream>
+    #include <stdio.h>
+    #include <string.h>
+    #include <vector>
+    #include <cassert>
+    #include "NvInfer.h"
+    #include "cuda_runtime_api.h"
+    #include "engineRT.h"
 
-  unsigned long start_time = get_cur_time();
-  unsigned long end_time = get_cur_time();
-  unsigned long off_time = end_time - start_time;
-  std::printf("Repeat [%d] time %.2f us per RUN. used %lu us\n", repeat_count, 1.0f * off_time / repeat_count, off_time);
-  ```
-  ```cpp
-  ICudaEngine* loadEngine(const std::string& engine, int DLACore, std::ostream& err)
-  {
-      std::ifstream engineFile(engine, std::ios::binary);
-      if (!engineFile)
-      {   
-          err << "Error opening engine file: " << engine << std::endl;
-          return nullptr;
-      }   
+    #define CHECK(status) \
+        do\
+        {\
+            auto ret = (status);\
+            if (ret != 0)\
+            {\
+                std::cerr << "Cuda failure: " << ret << std::endl;\
+                abort();\
+            }\
+        } while (0)
 
-      engineFile.seekg(0, engineFile.end);
-      long int fsize = engineFile.tellg();
-      engineFile.seekg(0, engineFile.beg);
+    #define DEVICE 0  // GPU id
 
-      std::vector<char> engineData(fsize);
-      engineFile.read(engineData.data(), fsize);
-      if (!engineFile)
-      {   
-          err << "Error loading engine file: " << engine << std::endl;
-          return nullptr;
-      }   
+    using namespace nvinfer1;
 
-      TrtUniquePtr<IRuntime> runtime{createInferRuntime(gLogger.getTRTLogger())};
-      if (DLACore != -1)
-      {   
-          runtime->setDLACore(DLACore);
-      }   
+    using Severity = nvinfer1::ILogger::Severity;
+    class Logger : public nvinfer1::ILogger {
+    public:
+        // Logger(Severity severity = Severity::kWARNING) : mReportableSeverity(severity) {}
+        void log(Severity severity, const char* msg) override {
+            // LogStreamConsumer(mReportableSeverity, severity) << "[TRT] " << std::string(msg) << std::endl;
+            // suppress info-level messages
+            if (severity != Severity::kINFO)
+                std::cout << msg << std::endl;
+        }
+    } gLogger;
 
-      return runtime->deserializeCudaEngine(engineData.data(), fsize, nullptr);
-  }
-  ```
-  ```cpp
-  #include "argsParser.h"
-  #include "buffers.h"
-  #include "common.h"
-  #include "logger.h"
-  #include "parserOnnxConfig.h"
+    class EngineInference {
+    private:
+        std::string engine_file;
+        IRuntime* runtime;
+        ICudaEngine* engine;
+        IExecutionContext* context;
+        cudaStream_t stream;
 
-  #include "NvInfer.h"
-  #include <cuda_runtime_api.h>
+        void* d_input;
+        void* d_output;
+        void * bindings[2];
 
-  #include <cstdlib>
-  #include <fstream>
-  #include <iostream>
-  #include <sstream>
+    public:
+        int max_batch_size;
+        int input_ravel_dim;
+        int output_ravel_dim;
+        int input_h;
+        int input_w;
 
-  const std::string gSampleName = "TensorRT.sample_onnx_mnist";
+    public:
+        EngineInference(const char * engine_file);
+        ~EngineInference();
+        void doInference(float* input, float* output, int batchSize);
+        const char * getDataInfo();
+    };
 
-  //! \brief  The SampleOnnxMNIST class implements the ONNX MNIST sample
-  //!
-  //! \details It creates the network using an ONNX model
-  //!
-  class SampleOnnxMNIST
-  {
-      template <typename T>
-      using SampleUniquePtr = std::unique_ptr<T, samplesCommon::InferDeleter>;
+    EngineInference::EngineInference(const char * engine_file_c) {
+        cudaSetDevice(DEVICE);
+        // create a model using the API directly and serialize it to a stream
+        char * trtModelStream{nullptr};
+        size_t size{0};
+        engine_file = std::string(engine_file_c);
 
-  public:
-      SampleOnnxMNIST(const samplesCommon::OnnxSampleParams& params)
-          : mParams(params)
-          , mEngine(nullptr)
-      {
-      }
-      bool build();
-      bool infer();
+        std::ifstream file(engine_file, std::ios::binary);
+        if (file.good()) {
+            file.seekg(0, file.end);
+            size = file.tellg();
+            file.seekg(0, file.beg);
+            trtModelStream = new char[size];
+            assert(trtModelStream);
+            file.read(trtModelStream, size);
+            file.close();
+        }
 
-  private:
-      samplesCommon::OnnxSampleParams mParams; //!< The parameters for the sample.
+        runtime = createInferRuntime(gLogger);
+        assert(runtime != nullptr);
+        engine = runtime->deserializeCudaEngine(trtModelStream, size);
+        assert(engine != nullptr);
+        assert(engine->getNbBindings() == 2);
+        context = engine->createExecutionContext();
+        assert(context != nullptr);
+        delete[] trtModelStream;
 
-      nvinfer1::Dims mInputDims;  //!< The dimensions of the input to the network.
-      nvinfer1::Dims mOutputDims; //!< The dimensions of the output to the network.
-      int mNumber{0};             //!< The number to classify
+        int inputIndex = 0;
+        int outputIndex = 1;
 
-      std::shared_ptr<nvinfer1::ICudaEngine> mEngine; //!< The TensorRT engine used to run the network
+        // auto dataType = engine->getBindingDataType(0);
+        auto input_dims = engine->getBindingDimensions(0);
+        input_ravel_dim = 1;
+        for (int ii = 1; ii < input_dims.nbDims; ii++) {
+            input_ravel_dim *= input_dims.d[ii];
+        }
+        if (input_dims.nbDims == 4) {
+            input_h = input_dims.d[1];
+            input_w = input_dims.d[2];
+        }
 
-      //!
-      //! \brief Parses an ONNX model for MNIST and creates a TensorRT network
-      //!
-      bool constructNetwork(SampleUniquePtr<nvinfer1::IBuilder>& builder,
-          SampleUniquePtr<nvinfer1::INetworkDefinition>& network, SampleUniquePtr<nvinfer1::IBuilderConfig>& config,
-          SampleUniquePtr<nvonnxparser::IParser>& parser);
+        auto output_dims = engine->getBindingDimensions(1);
+        output_ravel_dim = 1;
+        for (int ii = 1; ii < output_dims.nbDims; ii++) {
+            output_ravel_dim *= output_dims.d[ii];
+        }
 
-      //!
-      //! \brief Reads the input  and stores the result in a managed buffer
-      //!
-      bool processInput(const samplesCommon::BufferManager& buffers);
+        // Create GPU buffers on device
+        max_batch_size = engine->getMaxBatchSize();
+        CHECK(cudaMalloc(&d_input, max_batch_size * input_ravel_dim * sizeof(float)));
+        CHECK(cudaMalloc(&d_output, max_batch_size * output_ravel_dim * sizeof(float)));
+        bindings[0] = d_input;
+        bindings[1] = d_output;
 
-      //!
-      //! \brief Classifies digits and verify result
-      //!
-      bool verifyOutput(const samplesCommon::BufferManager& buffers);
-  };
+        CHECK(cudaStreamCreate(&stream));
+    }
 
-  bool SampleOnnxMNIST::build()
-  {
-      auto builder = SampleUniquePtr<nvinfer1::IBuilder>(nvinfer1::createInferBuilder(gLogger.getTRTLogger()));
-      const auto explicitBatch = 1U << static_cast<uint32_t>(NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);     
-      auto network = SampleUniquePtr<nvinfer1::INetworkDefinition>(builder->createNetworkV2(explicitBatch));
-      auto config = SampleUniquePtr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
-      auto parser = SampleUniquePtr<nvonnxparser::IParser>(nvonnxparser::createParser(*network, gLogger.getTRTLogger()));
-      auto constructed = constructNetwork(builder, network, config, parser);
-      mEngine = std::shared_ptr<nvinfer1::ICudaEngine>(
-          builder->buildEngineWithConfig(*network, *config), samplesCommon::InferDeleter());
+    EngineInference::~EngineInference() {
+        cudaStreamDestroy(stream);
+        CHECK(cudaFree(d_input));
+        CHECK(cudaFree(d_output));
+        context->destroy();
+        engine->destroy();
+        runtime->destroy();
+    }
 
-      assert(network->getNbInputs() == 1);
-      mInputDims = network->getInput(0)->getDimensions();
-      assert(mInputDims.nbDims == 4);
+    void EngineInference::doInference(float* input, float* output, int batchSize) {
+        nvinfer1::Dims dynamicDims = context->getBindingDimensions(0);
 
-      assert(network->getNbOutputs() == 1);
-      mOutputDims = network->getOutput(0)->getDimensions();
-      assert(mOutputDims.nbDims == 2);
+        int temp_batchSize = 0;
+        for (int ii = 0; ii < batchSize; ii += max_batch_size, input += max_batch_size * input_ravel_dim, output += max_batch_size * output_ravel_dim) {
+            temp_batchSize = batchSize > ii + max_batch_size ? max_batch_size : batchSize - ii;
+            // std::cout << temp_batchSize << std::endl;
 
-      return true;
-  }
+            dynamicDims.d[0] = temp_batchSize;
+            context->setBindingDimensions(0, dynamicDims);
+            // DMA input batch data to device, infer on the batch asynchronously, and DMA output back to host
+            CHECK(cudaMemcpyAsync(d_input, input, temp_batchSize * input_ravel_dim * sizeof(float), cudaMemcpyHostToDevice, stream));
+            context->enqueueV2(bindings, stream, nullptr);
+            CHECK(cudaMemcpyAsync(output, d_output, temp_batchSize * output_ravel_dim * sizeof(float), cudaMemcpyDeviceToHost, stream));
+            cudaStreamSynchronize(stream);
+        }
+    }
 
-  bool SampleOnnxMNIST::constructNetwork(SampleUniquePtr<nvinfer1::IBuilder>& builder,
-      SampleUniquePtr<nvinfer1::INetworkDefinition>& network, SampleUniquePtr<nvinfer1::IBuilderConfig>& config,
-      SampleUniquePtr<nvonnxparser::IParser>& parser)
-  {
-      auto parsed = parser->parseFromFile(
-          locateFile(mParams.onnxFileName, mParams.dataDirs).c_str(), static_cast<int>(gLogger.getReportableSeverity()));
-      builder->setMaxBatchSize(mParams.batchSize);
-      config->setMaxWorkspaceSize(16_MiB);
-      if (mParams.fp16)
-      {
-          config->setFlag(BuilderFlag::kFP16);
-      }
-      if (mParams.int8)
-      {
-          config->setFlag(BuilderFlag::kINT8);
-          samplesCommon::setAllTensorScales(network.get(), 127.0f, 127.0f);
-      }
+    // Pure c inference used for cgo or JNI
+    EngineWrapper initEngine(const char * engine_file_c) {
+        EngineInference *engine = new EngineInference(engine_file_c);
+        return (void *) engine;
+    }
 
-      samplesCommon::enableDLA(builder.get(), config.get(), mParams.dlaCore);
+    void releaseEngine(EngineWrapper engine_w) {
+        EngineInference * engine = (EngineInference *) engine_w;
+        delete engine;
+    }
 
-      return true;
-  }
+    void getFeature(EngineWrapper engine_w, float *data, int batch_size, float *feature) {
+        EngineInference * engine = (EngineInference *) engine_w;
+        engine->doInference(data, feature, batch_size);
+    }
 
-  //!
-  //! \brief Runs the TensorRT inference engine for this sample
-  //!
-  //! \details This function is the main execution function of the sample. It allocates the buffer,
-  //!          sets inputs and executes the engine.
-  //!
-  bool SampleOnnxMNIST::infer()
-  {
-      // Create RAII buffer manager object
-      samplesCommon::BufferManager buffers(mEngine, mParams.batchSize);
+    int getDataInfo_int(EngineWrapper engine_w, const char * key) {
+        EngineInference * engine = (EngineInference *) engine_w;
+        if (strcmp("input_h", key) == 0) return engine->input_h;
+        else if (strcmp("input_w", key) == 0) return engine->input_w;
+        else if (strcmp("input_ravel_dim", key) == 0) return engine->input_ravel_dim;
+        else if (strcmp("output_ravel_dim", key) == 0) return engine->output_ravel_dim;
+        else if (strcmp("max_batch_size", key) == 0) return engine->max_batch_size;
+        else return -1;
+    }
+    ```
+  - **engineRT.h**
+    ```java
+    #ifndef _ENGINE_RT_H_
+    #define _ENGINE_RT_H_
 
-      auto context = SampleUniquePtr<nvinfer1::IExecutionContext>(mEngine->createExecutionContext());
-      if (!context)
-      {
-          return false;
-      }
+    #ifdef __cplusplus
+    extern "C" {
+    #endif
+        typedef void* EngineWrapper;
+        EngineWrapper initEngine(const char * engine_file_c);
+        void releaseEngine(EngineWrapper engine_w);
+        void getFeature(EngineWrapper engine_w, float *data, int batch_size, float *feature);
+        int getDataInfo_int(EngineWrapper engine_w, const char * key);
+    #ifdef __cplusplus
+    }
+    #endif
+    #endif // _ENGINE_RT_H_
+    ```
+  - **test_engineRT.cpp**
+    ```java
+    #include <iostream>
+    #include "engineRT.h"
 
-      // Read the input data into the managed buffers
-      assert(mParams.inputTensorNames.size() == 1);
-      if (!processInput(buffers))
-      {
-          return false;
-      }
+    int main(int argc, char** argv) {
+        EngineWrapper engine = initEngine("model.engine");
 
-      // Memcpy from host input buffers to device input buffers
-      buffers.copyInputToDevice();
+        auto input_h = getDataInfo_int(engine, "input_h");
+        auto input_w = getDataInfo_int(engine, "input_w");
+        auto output_size = getDataInfo_int(engine, "output_ravel_dim");
+        auto max_batch_size = getDataInfo_int(engine, "max_batch_size");
+        std::cout << "max_batch_size: " << max_batch_size << ", input_h: " << input_h << ", input_w: " << input_w << ", output_ravel_dim: " << output_size << std::endl;
 
-      bool status = context->executeV2(buffers.getDeviceBindings().data());
-      if (!status)
-      {
-          return false;
-      }
+        // prepare input data using true image
+        int BATCH_SIZE = 1;
+        float data[BATCH_SIZE * 3 * input_h * input_w];
+        // do inference
+        float feature[BATCH_SIZE * output_size];
+        getFeature(engine, data, BATCH_SIZE, feature);
 
-      // Memcpy from device output buffers to host output buffers
-      buffers.copyOutputToHost();
+        // print the output, set to output_size to print all values
+        for (int ii = 0; ii < BATCH_SIZE; ii++) {
+            std::cout << ">>>> " << std::endl;
+            for (int jj = 0; jj < output_size; jj++) {
+                std::cout << feature[ii * output_size + jj] << ", ";
+            }
+            std::cout << std::endl;
+        }
 
-      // Verify results
-      if (!verifyOutput(buffers))
-      {
-          return false;
-      }
-
-      return true;
-  }
-
-  //!
-  //! \brief Reads the input and stores the result in a managed buffer
-  //!
-  bool SampleOnnxMNIST::processInput(const samplesCommon::BufferManager& buffers)
-  {
-      const int inputH = mInputDims.d[2];
-      const int inputW = mInputDims.d[3];
-
-      // Read a random digit file
-      srand(unsigned(time(nullptr)));
-      std::vector<uint8_t> fileData(inputH * inputW);
-      mNumber = rand() % 10;
-      readPGMFile(locateFile(std::to_string(mNumber) + ".pgm", mParams.dataDirs), fileData.data(), inputH, inputW);
-
-      // Print an ascii representation
-      gLogInfo << "Input:" << std::endl;
-      for (int i = 0; i < inputH * inputW; i++)
-      {
-          gLogInfo << (" .:-=+*#%@"[fileData[i] / 26]) << (((i + 1) % inputW) ? "" : "\n");
-      }
-      gLogInfo << std::endl;
-
-      float* hostDataBuffer = static_cast<float*>(buffers.getHostBuffer(mParams.inputTensorNames[0]));
-      for (int i = 0; i < inputH * inputW; i++)
-      {
-          hostDataBuffer[i] = 1.0 - float(fileData[i] / 255.0);
-      }
-
-      return true;
-  }
-
-  //!
-  //! \brief Classifies digits and verify result
-  //!
-  //! \return whether the classification output matches expectations
-  //!
-  bool SampleOnnxMNIST::verifyOutput(const samplesCommon::BufferManager& buffers)
-  {
-      const int outputSize = mOutputDims.d[1];
-      float* output = static_cast<float*>(buffers.getHostBuffer(mParams.outputTensorNames[0]));
-      float val{0.0f};
-      int idx{0};
-
-      // Calculate Softmax
-      float sum{0.0f};
-      for (int i = 0; i < outputSize; i++)
-      {
-          output[i] = exp(output[i]);
-          sum += output[i];
-      }
-
-      gLogInfo << "Output:" << std::endl;
-      for (int i = 0; i < outputSize; i++)
-      {
-          output[i] /= sum;
-          val = std::max(val, output[i]);
-          if (val == output[i])
-          {
-              idx = i;
-          }
-
-          gLogInfo << " Prob " << i << "  " << std::fixed << std::setw(5) << std::setprecision(4) << output[i] << " "
-                   << "Class " << i << ": " << std::string(int(std::floor(output[i] * 10 + 0.5f)), '*') << std::endl;
-      }
-      gLogInfo << std::endl;
-
-      return idx == mNumber && val > 0.9f;
-  }
-
-  //!
-  //! \brief Initializes members of the params struct using the command line args
-  //!
-  samplesCommon::OnnxSampleParams initializeSampleParams(const samplesCommon::Args& args)
-  {
-      samplesCommon::OnnxSampleParams params;
-      if (args.dataDirs.empty()) //!< Use default directories if user hasn't provided directory paths
-      {
-          params.dataDirs.push_back("data/mnist/");
-          params.dataDirs.push_back("data/samples/mnist/");
-      }
-      else //!< Use the data directory provided by the user
-      {
-          params.dataDirs = args.dataDirs;
-      }
-      params.onnxFileName = "mnist.onnx";
-      params.inputTensorNames.push_back("Input3");
-      params.batchSize = 1;
-      params.outputTensorNames.push_back("Plus214_Output_0");
-      params.dlaCore = args.useDLACore;
-      params.int8 = args.runInInt8;
-      params.fp16 = args.runInFp16;
-
-      return params;
-  }
-
-  //!
-  //! \brief Prints the help information for running this sample
-  //!
-  void printHelpInfo()
-  {
-      std::cout
-          << "Usage: ./sample_onnx_mnist [-h or --help] [-d or --datadir=<path to data directory>] [--useDLACore=<int>]"
-          << std::endl;
-      std::cout << "--help          Display help information" << std::endl;
-      std::cout << "--datadir       Specify path to a data directory, overriding the default. This option can be used "
-                   "multiple times to add multiple directories. If no data directories are given, the default is to use "
-                   "(data/samples/mnist/, data/mnist/)"
-                << std::endl;
-      std::cout << "--useDLACore=N  Specify a DLA engine for layers that support DLA. Value can range from 0 to n-1, "
-                   "where n is the number of DLA engines on the platform."
-                << std::endl;
-      std::cout << "--int8          Run in Int8 mode." << std::endl;
-      std::cout << "--fp16          Run in FP16 mode." << std::endl;
-  }
-
-  int main(int argc, char** argv)
-  {
-      samplesCommon::Args args;
-      bool argsOK = samplesCommon::parseArgs(args, argc, argv);
-      if (!argsOK)
-      {
-          gLogError << "Invalid arguments" << std::endl;
-          printHelpInfo();
-          return EXIT_FAILURE;
-      }
-      if (args.help)
-      {
-          printHelpInfo();
-          return EXIT_SUCCESS;
-      }
-
-      auto sampleTest = gLogger.defineTest(gSampleName, argc, argv);
-
-      gLogger.reportTestStart(sampleTest);
-
-      SampleOnnxMNIST sample(initializeSampleParams(args));
-
-      gLogInfo << "Building and running a GPU inference engine for Onnx MNIST" << std::endl;
-
-      if (!sample.build())
-      {
-          return gLogger.reportFail(sampleTest);
-      }
-      if (!sample.infer())
-      {
-          return gLogger.reportFail(sampleTest);
-      }
-
-      return gLogger.reportPass(sampleTest);
-  }
-  ```
+        // release
+        releaseEngine(engine);
+        return 0;
+    }
+    ```
+  - **Compile and run**
+    ```sh
+    g++ test_engineRT.cpp engineRT.cpp -I/usr/local/cuda-10.2/targets/x86_64-linux/include -L/usr/local/cuda/lib64 -lcudart -lnvinfer
+    CUDA_VISIBLE_DEVICES='0' ./a.out
+    ```
 ***
