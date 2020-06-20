@@ -178,6 +178,7 @@
 ***
 
 # ONNX
+## 链接
   - [onnx/onnx](https://github.com/onnx/onnx)
   - [onnx/models](https://github.com/onnx/models)
   - [onnx/tutorials](https://github.com/onnx/tutorials)
@@ -210,7 +211,7 @@
     tf.__version__
     # 1.15.0
     !pip install onnx-tf
-    
+
     import onnx
     import numpy as np
     from onnx_tf.backend import prepare
@@ -323,6 +324,24 @@
   # forward on the provided data batch
   mod.forward(Batch([mx.nd.array(test_image)]))
   mod.get_outputs()
+  ```
+## Caffe ONNX convert
+  ```py
+  import caffe
+  deploy = './model/MobileNetV2.prototxt'
+  net = caffe.Net(deploy, caffe.TEST)
+
+  import convertCaffe
+  onnx_path = './model/MobileNetV2.onnx'
+  prototxt_path, caffemodel_path = "./model/MobileNetV2.prototxt", "./model/MobileNetV2.caffemodel"
+  graph = convertCaffe.getGraph(onnx_path)
+  net = convertCaffe.convertToCaffe(graph, prototxt_path, caffemodel_path)
+
+  import convertCaffe
+  onnx_path = './model/MobileNetV2.onnx'
+  prototxt_path, caffemodel_path = "./model/MobileNetV2.prototxt", "./model/MobileNetV2.caffemodel"
+  graph = convertCaffe.getGraph(onnx_path)
+  net = convertCaffe.convertToCaffe(graph, prototxt_path, caffemodel_path)
   ```
 ***
 

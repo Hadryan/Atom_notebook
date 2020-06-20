@@ -552,7 +552,7 @@
             if self.frames < self.history:
                 self.frames += 1
                 return np.hstack([frame, np.zeros_like(frame)])
-            th = cv2.threshold(fg_mask.copy(), 244, 255, cv2.THRESH_BINARY)[1]
+            th = cv2.threshold(fg_mask.copy(), 50, 255, cv2.THRESH_BINARY)[1]
             th = cv2.erode(th, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=2)
             dilated = cv2.dilate(th, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (8, 3)), iterations=2)
             # 获取所有检测框
@@ -565,6 +565,7 @@
                 if self.min_area < area < self.max_area:
                     cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
             dilated = cv2.cvtColor(dilated, cv2.COLOR_GRAY2BGR)
+            frame = np.where(dilated, frame, 0)
             return np.hstack([frame, dilated])
 
     video_test(func=MotionDetect())

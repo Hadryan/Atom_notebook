@@ -955,24 +955,6 @@
   plt.plot(xx, func_curv(xx, *popt), label="func_curv fit")
   plt.legend()
   ```
-## Caffe ONNX convert
-  ```py
-  import caffe
-  deploy = './model/MobileNetV2.prototxt'
-  net = caffe.Net(deploy, caffe.TEST)
-
-  import convertCaffe
-  onnx_path = './model/MobileNetV2.onnx'
-  prototxt_path, caffemodel_path = "./model/MobileNetV2.prototxt", "./model/MobileNetV2.caffemodel"
-  graph = convertCaffe.getGraph(onnx_path)
-  net = convertCaffe.convertToCaffe(graph, prototxt_path, caffemodel_path)
-
-  import convertCaffe
-  onnx_path = './model/MobileNetV2.onnx'
-  prototxt_path, caffemodel_path = "./model/MobileNetV2.prototxt", "./model/MobileNetV2.caffemodel"
-  graph = convertCaffe.getGraph(onnx_path)
-  net = convertCaffe.convertToCaffe(graph, prototxt_path, caffemodel_path)
-  ```
 ## Multi GPU
   ```py
   tf.debugging.set_log_device_placement(True)
@@ -1041,23 +1023,6 @@
 
   with ss.scope():
     ss.run(step_fn, args=(np.ones([2, 112, 112, 3]),))
-  ```
-## 人脸跟踪
-  - [zeusees/HyperFT](https://github.com/zeusees/HyperFT)
-  - [Ncnn_FaceTrack](https://github.com/qaz734913414/Ncnn_FaceTrack)
-  - HyperFT 项目多人脸跟踪算法
-    - 第一部分是初始化，通过mtcnn的人脸检测找出第一帧的人脸位置然后将其结果对人脸跟踪进行初始化
-    - 第二部分是更新，利用模板匹配进行人脸目标位置的初步预判，再结合mtcnn中的onet来对人脸位置进行更加精细的定位，最后通过mtcnn中的rnet的置信度来判断跟踪是否为人脸，防止当有手从面前慢慢挥过去的话，框会跟着手走而无法跟踪到真正的人脸
-    - 第三部分是定时检测，通过在更新的部分中加入一个定时器来做定时人脸检测，从而判断中途是否有新人脸的加入，本项目在定时人脸检测中使用了一个trick就是将已跟踪的人脸所在位置利用蒙版遮蔽起来，避免了人脸检测的重复检测，减少其计算量，从而提高了检测速度
-  ```sh
-  git clone https://github.com/opencv/opencv.git
-  cd opencv
-  mkdir build && cd build && cmake ..
-  make && make install # /usr/local/lib /usr/local/include
-
-  git clone https://github.com/qaz734913414/Ncnn_FaceTrack.git
-  cd Ncnn_FaceTrack
-  g++ main.cpp mtcnn.cpp -I../../ncnn/build/install/include/ncnn/ -I/usr/local/include/opencv4/ -L../../ncnn/build/install/lib/ -lncnn -lopencv_core -lgomp -lopencv_highgui -lopencv_imgproc -lopencv_videoio
   ```
 ## NPU
   ```sh
@@ -1354,3 +1319,13 @@
   "agedb_30": [0.916, 0.9146666666666666, 0.9166666666666666]
   ```
 ***
+
+2020.06.15 - 2020.06.19 王国伟
+- Python Hough line 检测直线排除非活体攻击，并添加背景检测排除背景影响
+- TensorRT 前向传播 C++ 封装接口优化
+- 移动端 golang 人脸检测 + 识别框架代码优化
+- 背景减除进行移动目标检测实现与测试
+- Ncnn FaceTracking CPP 测试，类封装
+- Resnest101 人脸识别模型训练，在上周基础上继续使用 Triplet 优化
+
+- Ncnn FaceTracking Golang 封装

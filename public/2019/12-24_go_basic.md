@@ -1,58 +1,7 @@
+[TOC]
 # ___2019 - 12 - 24 Go Basic___
 ***
 # 目录
-  <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
-
-  - [___2019 - 12 - 24 Go Basic___](#2019-12-24-go-basic)
-  - [目录](#目录)
-  - [Install](#install)
-  	- [Install go](#install-go)
-  	- [Install gophernotes](#install-gophernotes)
-  	- [Install lgo](#install-lgo)
-  	- [gofmt 格式化代码](#gofmt-格式化代码)
-  	- [go doc 帮助文档](#go-doc-帮助文档)
-  - [基础语法](#基础语法)
-  	- [约定规则](#约定规则)
-  	- [Go 程序的一般结构](#go-程序的一般结构)
-  	- [import](#import)
-  	- [Go 数据类型](#go-数据类型)
-  	- [for 循环语句](#for-循环语句)
-  	- [if 条件语句](#if-条件语句)
-  	- [switch 语句](#switch-语句)
-  	- [func 函数](#func-函数)
-  	- [defer 延迟调用](#defer-延迟调用)
-  	- [init 函数](#init-函数)
-  	- [fmt 打印输出](#fmt-打印输出)
-  - [数据结构](#数据结构)
-  	- [指针](#指针)
-  	- [struct 结构体](#struct-结构体)
-  	- [数组](#数组)
-  	- [slice 切片](#slice-切片)
-  	- [range 迭代遍历](#range-迭代遍历)
-  	- [map 字典](#map-字典)
-  	- [make 与 new](#make-与-new)
-  - [方法和接口](#方法和接口)
-  	- [方法](#方法)
-  	- [接口](#接口)
-  	- [Stringers 接口](#stringers-接口)
-  	- [Error 接口](#error-接口)
-  	- [Readers 接口](#readers-接口)
-  	- [write 接口](#write-接口)
-  	- [sort 接口](#sort-接口)
-  	- [Web 服务器](#web-服务器)
-  	- [Image 图片接口](#image-图片接口)
-  - [并发](#并发)
-  	- [Goroutine](#goroutine)
-  	- [channel](#channel)
-  	- [select](#select)
-  	- [线程锁](#线程锁)
-  	- [以通信实现共享](#以通信实现共享)
-  	- [并行](#并行)
-  	- [Leaky Buffer 示例](#leaky-buffer-示例)
-  - [Panic 与 Recover](#panic-与-recover)
-  	- [foo](#foo)
-
-  <!-- /TOC -->
 ***
 
 # Install
