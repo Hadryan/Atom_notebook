@@ -241,13 +241,14 @@
   # sys.path.append('/home/leondgarse/workspace/samba/Keras_insightface')
   sys.path.append('/home/tdtest/workspace/Keras_insightface')
   import data
+  import myCallbacks
   image_names_reg = "*/*/*/*.png"
   image_classes_rule = lambda path: 0 if "live" in path else 1
   # image_names, image_classes, classes = data.pre_process_folder('detect_frame/Train', image_names_reg=image_names_reg, image_classes_rule=image_classes_rule)
-  train_ds, steps_per_epoch, classes = data.prepare_dataset('detect_frame/Train', image_names_reg=image_names_reg, image_classes_rule=image_classes_rule, batch_size=160, random_status=2)
-  test_ds, validation_steps, _ = data.prepare_dataset('detect_frame/Test', image_names_reg=image_names_reg, image_classes_rule=image_classes_rule, batch_size=160, random_status=0, is_train=False)
+  train_ds, steps_per_epoch, classes = data.prepare_dataset('detect_frame/Train', image_names_reg=image_names_reg, image_classes_rule=image_classes_rule, batch_size=160, img_shape=(48, 48), random_status=2, random_crop=(48, 48, 3))
+  test_ds, validation_steps, _ = data.prepare_dataset('detect_frame/Test', image_names_reg=image_names_reg, image_classes_rule=image_classes_rule, batch_size=160, img_shape=(48, 48), random_status=0, random_crop=(48, 48, 3), is_train=False)
 
-  aa, bb = next(iter(train_ds))
+  aa, bb = next(train_ds.as_numpy_iterator())
   plt.imshow(np.vstack([np.hstack(aa[ii * 20 : (ii + 1) * 20]) for ii in range(int(np.ceil(aa.shape[0] / 20)))]))
   plt.axis('off')
   plt.tight_layout()
@@ -267,14 +268,15 @@
       ])
 
       import train
-      bb = train.buildin_models("MobileNet", dropout=1, emb_shape=128)
+      bb = train.buildin_models("MobileNet", dropout=1, emb_shape=128, input_shape=(48, 48, 3))
       output = keras.layers.Dense(2, activation=tf.nn.softmax)(bb.outputs[0])
       model = keras.models.Model(bb.inputs[0], output)
 
       callbacks = [
           keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5),
           keras.callbacks.EarlyStopping(monitor='val_loss', patience=10),
-          keras.callbacks.ModelCheckpoint("./keras.h5", monitor='val_loss', save_best_only=True)
+          keras.callbacks.ModelCheckpoint("./keras.h5", monitor='val_loss', save_best_only=True),
+          myCallbacks.Gently_stop_callback(),
       ]
       model.compile(optimizer="adam", loss='categorical_crossentropy', metrics=["accuracy"])
       model.fit(
@@ -1134,9 +1136,16 @@
   print(">>>> 提取特征值")
   model_path = "/home/tdtest/workspace/Keras_insightface/checkpoints/keras_resnet101_emore_II_triplet_basic_agedb_30_epoch_107_0.971000.h5"
   model = tf.keras.models.load_model(model_path, compile=False)
-  interp = lambda ii: normalize(model.predict((np.array(ii) / 255. - 0.5) * 2))
+  interp = lambda ii: normalize(model.predict((np.array(ii) - 127.5) / 127))
   register_path = 'tdface_Register_mtcnn'
-  imms = glob2.glob(os.path.join(register_path, "*/*.jpg"))
+
+  backup_file = 'tdface_Register_mtcnn.npy'
+  if os.path.exists(backup_file):
+      imms = np.load('tdface_Register_mtcnn.npy')
+  else:
+      imms = glob2.glob(os.path.join(register_path, "*/*.jpg"))
+      np.save('tdface_Register_mtcnn.npy', imms)
+
   batch_size = 64
   steps = int(np.ceil(len(imms) / batch_size))
   embs = []
@@ -1319,13 +1328,111 @@
   "agedb_30": [0.916, 0.9146666666666666, 0.9166666666666666]
   ```
 ***
+```py
+plt.plot(np.arange(100), [myCallbacks.scheduler(ii, 0.001, 0.1) for ii in np.arange(100)], label="lr 0.001, decay 0.1")
 
-2020.06.15 - 2020.06.19 王国伟
-- Python Hough line 检测直线排除非活体攻击，并添加背景检测排除背景影响
-- TensorRT 前向传播 C++ 封装接口优化
-- 移动端 golang 人脸检测 + 识别框架代码优化
-- 背景减除进行移动目标检测实现与测试
-- Ncnn FaceTracking CPP 测试，类封装
-- Resnest101 人脸识别模型训练，在上周基础上继续使用 Triplet 优化
+aa = keras.experimental.CosineDecay(0.001, 100)
+plt.plot(np.arange(100), [aa(ii).numpy() for ii in np.arange(100)], label="lr 0.001, decay 0.1")
+```
+```py
+from tensorflow.python.keras import backend as K
 
-- Ncnn FaceTracking Golang 封装
+class CosineLrScheduler(keras.callbacks.Callback):
+    def __init__(self, lr_base, decay_steps, alpha=0.0, warmup_iters=0, on_batch=False):
+        super(CosineLrScheduler, self).__init__()
+        self.lr_base, self.decay_steps, self.warmup_iters = lr_base, decay_steps, warmup_iters
+        self.decay_steps -= self.warmup_iters
+        self.schedule = keras.experimental.CosineDecay(self.lr_base, self.decay_steps, alpha=alpha)
+        if on_batch == True:
+            self.on_train_batch_begin = self.__lr_sheduler__
+        else:
+            self.on_epoch_begin = self.__lr_sheduler__
+
+    def __lr_sheduler__(self, iterNum, logs=None):
+        if iterNum < self.warmup_iters:
+            lr = self.lr_base
+        else:
+            lr = self.schedule(iterNum - self.warmup_iters)
+        if self.model is not None:
+            K.set_value(self.model.optimizer.lr, lr)
+        return lr
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        logs['lr'] = K.get_value(self.model.optimizer.lr)
+```
+
+## tf dataset cache
+  - **dataset.cache** **MUST** be placed **before** data random augment and shuffle
+  ```py
+  dd = np.arange(30).reshape(3, 10)
+
+  ''' Cache before shuffle and random '''
+  ds = tf.data.Dataset.from_tensor_slices(dd)
+  # ds = ds.cache()
+  ds = ds.shuffle(dd.shape[0])
+  ds = ds.map(lambda xx: xx + tf.random.uniform((1,), 1, 10, dtype=tf.int64))
+
+  for ii in range(3):
+      print(">>>> Epoch:", ii)
+      for jj in ds:
+          print(jj)
+  # >>>> Epoch: 0
+  # tf.Tensor([ 9 10 11 12 13 14 15 16 17 18], shape=(10,), dtype=int64)
+  # tf.Tensor([13 14 15 16 17 18 19 20 21 22], shape=(10,), dtype=int64)
+  # tf.Tensor([23 24 25 26 27 28 29 30 31 32], shape=(10,), dtype=int64)
+  # >>>> Epoch: 1
+  # tf.Tensor([11 12 13 14 15 16 17 18 19 20], shape=(10,), dtype=int64)
+  # tf.Tensor([21 22 23 24 25 26 27 28 29 30], shape=(10,), dtype=int64)
+  # tf.Tensor([ 9 10 11 12 13 14 15 16 17 18], shape=(10,), dtype=int64)
+  # >>>> Epoch: 2
+  # tf.Tensor([23 24 25 26 27 28 29 30 31 32], shape=(10,), dtype=int64)
+  # tf.Tensor([12 13 14 15 16 17 18 19 20 21], shape=(10,), dtype=int64)
+  # tf.Tensor([ 3  4  5  6  7  8  9 10 11 12], shape=(10,), dtype=int64)
+
+  ''' Cache before random but after shuffle '''
+  ds2 = tf.data.Dataset.from_tensor_slices(dd)
+  ds2 = ds2.shuffle(dd.shape[0])
+  ds2 = ds2.cache()
+  ds2 = ds2.map(lambda xx: xx + tf.random.uniform((1,), 1, 10, dtype=tf.int64))
+
+  for ii in range(3):
+      print(">>>> Epoch:", ii)
+      for jj in ds2:
+          print(jj)
+  # >>>> Epoch: 0
+  # tf.Tensor([26 27 28 29 30 31 32 33 34 35], shape=(10,), dtype=int64)
+  # tf.Tensor([17 18 19 20 21 22 23 24 25 26], shape=(10,), dtype=int64)
+  # tf.Tensor([ 6  7  8  9 10 11 12 13 14 15], shape=(10,), dtype=int64)
+  # >>>> Epoch: 1
+  # tf.Tensor([22 23 24 25 26 27 28 29 30 31], shape=(10,), dtype=int64)
+  # tf.Tensor([17 18 19 20 21 22 23 24 25 26], shape=(10,), dtype=int64)
+  # tf.Tensor([ 3  4  5  6  7  8  9 10 11 12], shape=(10,), dtype=int64)
+  # >>>> Epoch: 2
+  # tf.Tensor([21 22 23 24 25 26 27 28 29 30], shape=(10,), dtype=int64)
+  # tf.Tensor([15 16 17 18 19 20 21 22 23 24], shape=(10,), dtype=int64)
+  # tf.Tensor([ 3  4  5  6  7  8  9 10 11 12], shape=(10,), dtype=int64)
+
+  ''' Cache after random and shuffle '''
+  ds3 = tf.data.Dataset.from_tensor_slices(dd)
+  ds3 = ds3.shuffle(dd.shape[0])
+  ds3 = ds3.map(lambda xx: xx + tf.random.uniform((1,), 1, 10, dtype=tf.int64))
+  ds3 = ds3.cache()
+
+  for ii in range(3):
+      print(">>>> Epoch:", ii)
+      for jj in ds3:
+          print(jj)
+  # >>>> Epoch: 0
+  # tf.Tensor([24 25 26 27 28 29 30 31 32 33], shape=(10,), dtype=int64)
+  # tf.Tensor([14 15 16 17 18 19 20 21 22 23], shape=(10,), dtype=int64)
+  # tf.Tensor([ 4  5  6  7  8  9 10 11 12 13], shape=(10,), dtype=int64)
+  # >>>> Epoch: 1
+  # tf.Tensor([24 25 26 27 28 29 30 31 32 33], shape=(10,), dtype=int64)
+  # tf.Tensor([14 15 16 17 18 19 20 21 22 23], shape=(10,), dtype=int64)
+  # tf.Tensor([ 4  5  6  7  8  9 10 11 12 13], shape=(10,), dtype=int64)
+  # >>>> Epoch: 2
+  # tf.Tensor([24 25 26 27 28 29 30 31 32 33], shape=(10,), dtype=int64)
+  # tf.Tensor([14 15 16 17 18 19 20 21 22 23], shape=(10,), dtype=int64)
+  # tf.Tensor([ 4  5  6  7  8  9 10 11 12 13], shape=(10,), dtype=int64)
+  ```

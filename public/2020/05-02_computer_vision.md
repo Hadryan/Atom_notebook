@@ -890,7 +890,7 @@
       hsv[..., 1] = 255
       hsv[..., 2] = np.minimum(v * 4, 255)
       bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-      return bgr
+      return bgr * 2
 
   def warp_flow(img, flow):
       h, w = flow.shape[:2]
@@ -902,10 +902,14 @@
       return res
 
   class OptflowTest:
-      def __init__(self):
+      def __init__(self, resize_rate=1.0):
           self.pre, self.cur_glitch = None, None
+          self.resize_rate = resize_rate
 
       def __call__(self, frame):
+          hh, ww = frame.shape[:2]
+          resize_width, resize_height = int(ww * self.resize_rate), int(hh * self.resize_rate)
+          frame = cv2.resize(frame, (resize_width, resize_height))
           gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
           if self.pre is None:
               self.pre, self.cur_glitch = gray, frame
