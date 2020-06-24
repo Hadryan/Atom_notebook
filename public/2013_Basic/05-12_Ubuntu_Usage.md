@@ -1735,9 +1735,11 @@
     New Keyring Name: [Unprotected] -> Set password as empty
     Right click on the new keyring -> Set as default    
     ```
+  - **Q: Chrome 不能保存密码**
     ```sh
-    C:\Users\leondgarse\AppData\Roaming\Macromedia\Flash Player\#SharedObjects\ZF79TSCS\localhost
-    ~/.config/google-chrome/Default/Pepper Data/Shockwave Flash/WritableRoot/#SharedObjects/NPRLVPUK/assets.kongregate.com/gamez/0016/7318/live
+    A: 删除 `Login Data`
+    $ cd ~/.config/google-chrome/Default  # Profile
+    $ rm Login\ Data*
     ```
 ## Numix FlatRemix 主题
   - Set Themes / Cursor / Icons / Shell theme using **gnome-tweak-tool**
@@ -2168,6 +2170,8 @@
     iptux ibus-pinyin intltool java-common libssl-dev locate minicom mp3info mysql-client mysql-common mysql-server net-tools nfs-common nfs-kernel-server \
     p7zip-full pidgin privoxy proxychains rename rsync samba seahorse shutter supervisor synaptic teamviewer telnet testdisk tftp tftpd tmux tree \
     unrar unzip virtualbox virtualbox-ext-pack virtualbox-guest-additions-iso vlc wget wireshark zip
+
+    # snap install shutter
 
     sudo apt-get install \
     evolution gksu openjdk-9-jdk r-base r-recommended python-gtk2 python-vte python-glade2 numix-gtk-theme numix-icon-theme numix-blue-gtk-theme numix-icon-theme-circle
