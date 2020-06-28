@@ -248,7 +248,8 @@
   train_ds, steps_per_epoch, classes = data.prepare_dataset('detect_frame/Train', image_names_reg=image_names_reg, image_classes_rule=image_classes_rule, batch_size=160, img_shape=(48, 48), random_status=2, random_crop=(48, 48, 3))
   test_ds, validation_steps, _ = data.prepare_dataset('detect_frame/Test', image_names_reg=image_names_reg, image_classes_rule=image_classes_rule, batch_size=160, img_shape=(48, 48), random_status=0, random_crop=(48, 48, 3), is_train=False)
 
-  aa, bb = next(train_ds.as_numpy_iterator())
+  aa, bb = train_ds.as_numpy_iterator().next()
+  aa = (aa + 1) / 2
   plt.imshow(np.vstack([np.hstack(aa[ii * 20 : (ii + 1) * 20]) for ii in range(int(np.ceil(aa.shape[0] / 20)))]))
   plt.axis('off')
   plt.tight_layout()
@@ -1157,7 +1158,7 @@
   dd, pp = {}, {}
   for ii, ee in zip(imms, embs):
       user = os.path.basename(os.path.dirname(ii))
-      dd[user] = np.vstack([dd.get(user, np.array([]).reshape(0, 512)), [ee]])
+      dd[user] = np.vstack([dd.get(user, np.array([]).reshape(0, embs.shape[-1])), [ee]])
       pp[user] = np.hstack([pp.get(user, []), ii])
   # dd_bak = dd.copy()
   # pp_bak = pp.copy()
