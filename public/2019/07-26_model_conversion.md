@@ -1502,6 +1502,12 @@
         json_file.write(json_config)
     ```
   - Modify `model/model_config.json`, delete `"ragged": false`
+    ```py
+    # For tf15 / tf20 saved json file, delete '"ragged": false,'
+    !sed -i 's/"ragged": false, //' model/model_config.json
+    # For tf-nightly saved json file, also replace '"class_name": "Functional"' by '"class_name": "Model"'
+    !sed -i 's/"class_name": "Functional"/"class_name": "Model"/' model/model_config.json
+    ```
   - Reload in TF13 and save `h5`
     ```py
     tf.__version__

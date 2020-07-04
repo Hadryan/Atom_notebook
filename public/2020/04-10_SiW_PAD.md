@@ -277,6 +277,7 @@
           keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5),
           keras.callbacks.EarlyStopping(monitor='val_loss', patience=10),
           keras.callbacks.ModelCheckpoint("./keras.h5", monitor='val_loss', save_best_only=True),
+          keras.callbacks.TensorBoard(log_dir='keras_logs'),
           myCallbacks.Gently_stop_callback(),
       ]
       model.compile(optimizer="adam", loss='categorical_crossentropy', metrics=["accuracy"])
@@ -1329,39 +1330,6 @@
   "agedb_30": [0.916, 0.9146666666666666, 0.9166666666666666]
   ```
 ***
-```py
-plt.plot(np.arange(100), [myCallbacks.scheduler(ii, 0.001, 0.1) for ii in np.arange(100)], label="lr 0.001, decay 0.1")
-
-aa = keras.experimental.CosineDecay(0.001, 100)
-plt.plot(np.arange(100), [aa(ii).numpy() for ii in np.arange(100)], label="lr 0.001, decay 0.1")
-```
-```py
-from tensorflow.python.keras import backend as K
-
-class CosineLrScheduler(keras.callbacks.Callback):
-    def __init__(self, lr_base, decay_steps, alpha=0.0, warmup_iters=0, on_batch=False):
-        super(CosineLrScheduler, self).__init__()
-        self.lr_base, self.decay_steps, self.warmup_iters = lr_base, decay_steps, warmup_iters
-        self.decay_steps -= self.warmup_iters
-        self.schedule = keras.experimental.CosineDecay(self.lr_base, self.decay_steps, alpha=alpha)
-        if on_batch == True:
-            self.on_train_batch_begin = self.__lr_sheduler__
-        else:
-            self.on_epoch_begin = self.__lr_sheduler__
-
-    def __lr_sheduler__(self, iterNum, logs=None):
-        if iterNum < self.warmup_iters:
-            lr = self.lr_base
-        else:
-            lr = self.schedule(iterNum - self.warmup_iters)
-        if self.model is not None:
-            K.set_value(self.model.optimizer.lr, lr)
-        return lr
-
-    def on_epoch_end(self, epoch, logs=None):
-        logs = logs or {}
-        logs['lr'] = K.get_value(self.model.optimizer.lr)
-```
 
 ## tf dataset cache
   - **dataset.cache** **MUST** be placed **before** data random augment and shuffle
@@ -1437,3 +1405,64 @@ class CosineLrScheduler(keras.callbacks.Callback):
   # tf.Tensor([14 15 16 17 18 19 20 21 22 23], shape=(10,), dtype=int64)
   # tf.Tensor([ 4  5  6  7  8  9 10 11 12 13], shape=(10,), dtype=int64)
   ```
+```py
+python -c '
+import numpy as np
+import matplotlib.pyplot as plt
+
+fig, axes = plt.subplots(2, 1, figsize=(12, 5))
+for ax, fn, title in zip(axes, ["/tmp/chrome_top_cpu_mem.data", "/tmp/Xorg_top_cpu_mem.data"], ["Chrome", "Xorg"]):
+    with open(fn, "r") as ff:
+        aa = ff.readlines()
+    bb = np.array([[float(jj) for jj in ii.strip().split(": ")[-1].split(" ")] for ii in aa])
+    ax.plot(range(bb.shape[0]), bb[:, 0], "r", alpha=0.5)
+    ax.set_ylabel("cpu", color="r")
+    ax2 = ax.twinx()
+    ax2.plot(range(bb.shape[0]), bb[:, 1], "b", alpha=0.5)
+    ax2.set_ylabel("mem", color="b")
+    ax.set_title(title)
+    ax.grid()
+fig.tight_layout()
+plt.show()
+'
+
+pp = '''#!/bin/bash
+PROCESSES=('chrome' 'Xorg')
+TOP_TEMP="/tmp/top_temp.data"
+ITER_NUM=20
+OUTPUT_DATA="/tmp/PROCESSES_cpu_mem.data"
+rm $OUTPUT_DATA -f
+for ((i=0; $i<$ITER_NUM; i=$i+1)); do
+    # echo $i
+    # top -b -n 1 > /dev/null
+    top -b -n 1 | head -n 60 | tail -n 53 > $TOP_TEMP
+    for PP in ${PROCESSES[@]}; do
+        cat $TOP_TEMP | grep -i $PP | awk -F' ' 'BEGIN {total_cpu=0; total_mem=0} {total_cpu=total_cpu+$9; total_mem=total_mem=+$10} END {print "'$PP': "total_cpu" "total_mem}' >> $OUTPUT_DATA
+    done
+done
+rm $TOP_TEMP -f
+cat $OUTPUT_DATA
+'''
+```py
+keras.activations.relu 将矩阵x内所有负值都设为零，其余的值不变
+`max(x, 0)`
+
+keras.activations.elu
+`x` if `x > 0`
+`alpha * (exp(x)-1)` if `x < 0`
+
+keras.layers.LeakyReLU
+`f(x) = alpha * x for x < 0`
+`f(x) = x for x >= 0`
+
+
+keras.layers.PReLU
+`f(x) = alpha * x for x < 0`
+`f(x) = x for x >= 0`
+where `alpha` is a learned array with the same shape as x
+
+epochs = [50, 10, 35]
+customs = ["lfw", "agedb_30", "cfp_fp"]
+axes, _ = plot.hist_plot_split("checkpoints/keras_resnet50_casia_hist.json", epochs, customs=customs, axes=None, fig_label='Resnet50, casia, BS=512')
+axes, _ = plot.hist_plot_split("checkpoints/keras_resnet50_casia_BS256_hist.json", epochs, names=["Softmax", "Bottleneck Arcface", "Arcface scale=64"], customs=customs, axes=axes, fig_label='Resnet50, casia, BS=256')
+```

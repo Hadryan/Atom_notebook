@@ -480,7 +480,7 @@
             cuda.memcpy_dtoh_async(self.h_output[:batch_size * self.output_ravel_dim], self.d_output, self.stream)
             # Synchronize the stream
             self.stream.synchronize()
-            return self.h_output[:batch_size * self.output_ravel_dim].reshape([batch_size, *self.output_dim])
+            return self.h_output[:batch_size * self.output_ravel_dim].reshape([batch_size, *self.output_dim]).copy()
 
     import tensorflow as tf
     (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
