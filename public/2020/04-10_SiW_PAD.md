@@ -1466,3 +1466,105 @@ customs = ["lfw", "agedb_30", "cfp_fp"]
 axes, _ = plot.hist_plot_split("checkpoints/keras_resnet50_casia_hist.json", epochs, customs=customs, axes=None, fig_label='Resnet50, casia, BS=512')
 axes, _ = plot.hist_plot_split("checkpoints/keras_resnet50_casia_BS256_hist.json", epochs, names=["Softmax", "Bottleneck Arcface", "Arcface scale=64"], customs=customs, axes=axes, fig_label='Resnet50, casia, BS=256')
 ```
+
+```py
+'''
+mm = keras.models.load_model('./checkpoints/keras_se_mobile_facenet_emore_VIII_basic_agedb_30_epoch_12_0.931000.h5')
+aa = mm.layers[-7]
+ii = np.arange(-1, 1, 2 / (7 * 7 * 512), dtype=np.float32)[:7 * 7 * 512].reshape([1, 7, 7, 512])
+ee = my_activate_test(ii, weights=aa.get_weights())
+np.alltrue(aa(ii) == ee)
+'''
+def my_activate_test(inputs, weights=None):
+    channel_axis = 1 if K.image_data_format() == "channels_first" else -1
+    pos = K.relu(inputs)
+    nn = DepthwiseConv2D((1, 1), depth_multiplier=1, use_bias=False)
+    if weights is not None:
+        nn.build(inputs.shape)
+        nn.set_weights([tf.reshape(weights[id], nn.weights[id].shape) for id, ii in enumerate(weights)])
+    neg = -1 * nn(K.relu(-1 * inputs))
+    return pos + neg
+```
+```py
+from backbones import mobile_facenet_mnn
+bb = mobile_facenet_mnn.mobile_facenet(256, (112, 112, 3), 0.4, use_se=True)
+bb.build((112, 112, 3))
+
+bb_id = 0
+for id, ii in enumerate(mm.layers):
+    print(id, ii.name)
+    if isinstance(ii, keras.layers.PReLU):
+        print("PReLU")
+        nn = bb.layers[bb_id + 2]
+        print(bb_id, nn.name)
+        nn.set_weights([tf.reshape(wii, nn.weights[wid].shape) for wid, wii in enumerate(ii.get_weights())])
+        bb_id += 6
+    else:
+        nn = bb.layers[bb_id]
+        print(bb_id, nn.name)
+        nn.set_weights(ii.get_weights())
+        bb_id += 1
+
+inputs = bb.inputs[0]
+embedding = bb.outputs[0]
+output = keras.layers.Dense(tt.classes, name=tt.softmax, activation="softmax")(embedding)
+model = keras.models.Model(inputs, output)
+model.layers[-1].set_weights(tt.model.layers[-2].get_weights())
+model_c = keras.models.Model(model.inputs[0], keras.layers.concatenate([bb.outputs[0], model.outputs[-1]]))
+model_c.compile(optimizer=tt.model.optimizer, loss=tt.model.loss, metrics=tt.model.metrics)
+model_c.optimizer.set_weights(tt.model.optimizer.get_weights())
+```
+
+traceroute www.baidu.com
+dig +trace www.baidu.com
+speedtest-cli
+mtr -r -c 30 -s 1024 www.baidu.com
+
+!wget http://im.tdweilai.com:38831/keras_ResNest101_emore_II_basic_agedb_30_epoch_64_0.968500.h5
+
+
+watch -tn 3 'echo ">>>> php connection:"; ss -pl | grep php | wc -l; echo ">>>> Socket status:"; ss -s; echo ">>>> 8800 connection:"; netstat -na | grep -i ":8800 " | wc -l; echo ">>>> 8812 connection:"; netstat -na | grep -i ":8812 " | wc -l; top -b -n 1'
+
+查看占用端口的进程 ss -lntpd | grep :4444
+
+ss -lntpd | grep :8800 -- pid=8431
+ss -lntpd | grep :8812 -- pid=9029
+
+ps -lax | grep 8431 -- ppid 470
+ps -lax | grep 9029 -- ppid 470
+
+docker container ls
+
+3306 docker-containerd -- 470 docker-containerd-shim tdwl_ws -- 8431 Chat-Server:master -- 8432 Chat-Server:manager -- MULTI Chat-Server:work
+                                                             -- 9029 Fs-Server:master -- 9030 Fs-Server:manager -- MULTI Fs-Server:work
+                       -- 23830 docker-containerd-shim fs -- 24107 freeswitch -nonat -nc
+                       -- 23847 bash -- 24153 fs_cli
+
+1 -- 1637 /usr/bin/dockerd -- 3306 docker-containerd
+
+ss -lntpd | grep -i freeswitch
+ss -lntpd | grep -i php
+ss -lntpd | grep -i redis
+```py
+
+```
+```sh
+if [[ -z $RMI_HOST ]]; then
+    RMI_HOST=$(grep `hostname` /etc/hosts | tail -n 1 | cut -d" " -f 0)
+fi
+RMI_HOST_DEF=-Djava.rmi.server.hostname=$RMI_HOST
+SERVER_PORT=1099
+if [[ $# -ge 1 ]]; then
+    SERVER_PORT=$1
+    shift
+fi
+echo "RMI_HOST=$RMI_HOST, SERVER_PORT=$SERVER_PORT, addition param=$@"
+
+/jmeter/bin/jmeter ${RMI_HOST_DEF} -Dserver_port=${SERVER_PORT} -s -j bin/testplan_suit/jmeter-server.log "$@"
+```
+```sh
+export RMI_HOST_DEF=-Djava.rmi.server.hostname=192.168.11.235
+export RMI_HOST=-Djava.rmi.server.hostname=192.168.11.235
+# RMI_HOST_DEF=-Djava.rmi.server.hostname=im.tdweilai.com
+${DIRNAME}/jmeter ${RMI_HOST_DEF} -Dserver_port=${SERVER_PORT:-1099} -s -j jmeter-server.log "$@"
+```
