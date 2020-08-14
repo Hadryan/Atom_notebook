@@ -1788,71 +1788,70 @@
   model.fit(train_x, train_y, batch_size=4, epochs=50, callbacks=callbacks, validation_data=(test_x, test_y))
   ```
 ## 数据增强
-```py
-from skimage.transform import resize
-sys.path.append('/home/leondgarse/workspace/samba/Keras_insightface')
-import train
-import myCallbacks
-from autoaugment import ImageNetPolicy
-policy = ImageNetPolicy()
-policy_func = lambda img: np.array(policy(tf.keras.preprocessing.image.array_to_img(img)), dtype=np.float32)
+  ```py
+  from skimage.transform import resize
+  sys.path.append('/home/leondgarse/workspace/samba/Keras_insightface')
+  import train
+  import myCallbacks
+  from autoaugment import ImageNetPolicy
+  policy = ImageNetPolicy()
+  policy_func = lambda img: np.array(policy(tf.keras.preprocessing.image.array_to_img(img)), dtype=np.float32)
 
-tt = np.load('./train_test_dataset.npz')
-train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
+  tt = np.load('./train_test_dataset.npz')
+  train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
 
-train_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in train_y])
-test_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in test_y])
+  train_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in train_y])
+  test_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in test_y])
 
-def random_crop(img, target):
-    hh, ww, _ = img.shape
-    hht, wwt = target[:2]
-    if hh < hht or ww < wwt:
-        return resize(img, target)
-    hhs = np.random.choice(hh - hht)
-    wws = np.random.choice(ww - wwt)
-    return img[hhs: hhs+hht, wws: wws+wwt]
+  def random_crop(img, target):
+      hh, ww, _ = img.shape
+      hht, wwt = target[:2]
+      if hh < hht or ww < wwt:
+          return resize(img, target)
+      hhs = np.random.choice(hh - hht)
+      wws = np.random.choice(ww - wwt)
+      return img[hhs: hhs+hht, wws: wws+wwt]
 
-def image_data_gen(xx, yy):
-    total = xx.shape[0]
-    while True:
-        tf.print("Shuffle image data...")
-        idxes = np.random.permutation(total)
-        for ii in idxes:
-            # img = policy_func(xx[ii]).astype('float32')
-            # img = random_crop(img, (48, 48)) / 255.0
-            # img = image_2_block_LBP_hist(img, n_vert=3, n_hor=3, exclude_row=None, mode="YCbCr", neighbors=8, lbp_method='nri_uniform')
-            img = xx[ii] / 255.0
+  def image_data_gen(xx, yy):
+      total = xx.shape[0]
+      while True:
+          tf.print("Shuffle image data...")
+          idxes = np.random.permutation(total)
+          for ii in idxes:
+              # img = policy_func(xx[ii]).astype('float32')
+              # img = random_crop(img, (48, 48)) / 255.0
+              # img = image_2_block_LBP_hist(img, n_vert=3, n_hor=3, exclude_row=None, mode="YCbCr", neighbors=8, lbp_method='nri_uniform')
+              img = xx[ii] / 255.0
 
-            yield (img, yy[ii])
+              yield (img, yy[ii])
 
-AUTOTUNE = tf.data.experimental.AUTOTUNE
-train_dataset = tf.data.Dataset.from_generator(lambda: image_data_gen(train_x, train_y_oh), output_types=(tf.float32, tf.int64), output_shapes=((48, 48, 3), (2,)))
-train_dataset = train_dataset.batch(160)
-train_dataset = train_dataset.prefetch(buffer_size=AUTOTUNE)
-steps_per_epoch = int(np.ceil(train_x.shape[0]/160))
+  AUTOTUNE = tf.data.experimental.AUTOTUNE
+  train_dataset = tf.data.Dataset.from_generator(lambda: image_data_gen(train_x, train_y_oh), output_types=(tf.float32, tf.int64), output_shapes=((48, 48, 3), (2,)))
+  train_dataset = train_dataset.batch(160)
+  train_dataset = train_dataset.prefetch(buffer_size=AUTOTUNE)
+  steps_per_epoch = int(np.ceil(train_x.shape[0]/160))
 
-aa, bb = train_dataset.as_numpy_iterator().next()
-plt.imshow(np.vstack([np.hstack(aa[ii * 20 : (ii + 1) * 20]) for ii in range(int(np.ceil(aa.shape[0] / 20)))]))
+  aa, bb = train_dataset.as_numpy_iterator().next()
+  plt.imshow(np.vstack([np.hstack(aa[ii * 20 : (ii + 1) * 20]) for ii in range(int(np.ceil(aa.shape[0] / 20)))]))
 
-mm = train.buildin_models('mobilenetv2', 0.4, 256, (48, 48, 3))
-model = keras.models.Model(mm.inputs[0], keras.layers.Dense(2, name='softmax', activation="softmax")(mm.outputs[0]))
-model.compile(optimizer="adam", loss='categorical_crossentropy', metrics=["accuracy"])
-callbacks = [
-    # keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5),
-    # keras.callbacks.EarlyStopping(monitor='val_loss', patience=10),
-    keras.callbacks.ModelCheckpoint("./keras.h5", monitor='val_loss', save_best_only=True),
-    # keras.callbacks.TensorBoard(log_dir='keras_logs'),
-    # myCallbacks.Gently_stop_callback(),
-]
-model.fit(train_dataset, epochs=50, callbacks=callbacks, steps_per_epoch=steps_per_epoch)
+  mm = train.buildin_models('mobilenetv2', 0.4, 256, (48, 48, 3))
+  model = keras.models.Model(mm.inputs[0], keras.layers.Dense(2, name='softmax', activation="softmax")(mm.outputs[0]))
+  model.compile(optimizer="adam", loss='categorical_crossentropy', metrics=["accuracy"])
+  callbacks = [
+      # keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5),
+      # keras.callbacks.EarlyStopping(monitor='val_loss', patience=10),
+      keras.callbacks.ModelCheckpoint("./keras.h5", monitor='val_loss', save_best_only=True),
+      # keras.callbacks.TensorBoard(log_dir='keras_logs'),
+      # myCallbacks.Gently_stop_callback(),
+  ]
+  model.fit(train_dataset, epochs=50, callbacks=callbacks, steps_per_epoch=steps_per_epoch)
 
-[(ii, model.predict(np.expand_dims(train_x[ii][:48, :48] / 255.0, 0)), model.predict(np.expand_dims(train_x[ii][48:96, 48:96] / 255.0, 0)), train_y_oh[ii]) for ii in np.random.permutation(train_x.shape[0])[:10]]
-[(ii, model.predict(np.expand_dims(test_x[ii][:48, :48] / 255.0, 0)), model.predict(np.expand_dims(test_x[ii][48:96, 48:96] / 255.0, 0)), test_y_oh[ii]) for ii in np.random.permutation(test_x.shape[0])[:10]]
+  [(ii, model.predict(np.expand_dims(train_x[ii][:48, :48] / 255.0, 0)), model.predict(np.expand_dims(train_x[ii][48:96, 48:96] / 255.0, 0)), train_y_oh[ii]) for ii in np.random.permutation(train_x.shape[0])[:10]]
+  [(ii, model.predict(np.expand_dims(test_x[ii][:48, :48] / 255.0, 0)), model.predict(np.expand_dims(test_x[ii][48:96, 48:96] / 255.0, 0)), test_y_oh[ii]) for ii in np.random.permutation(test_x.shape[0])[:10]]
 
 
-gg =
-[image_data_gen() for ii in range(10)]
-```
+  gg = [image_data_gen() for ii in range(10)]
+  ```
 ***
 
 # 其他特征

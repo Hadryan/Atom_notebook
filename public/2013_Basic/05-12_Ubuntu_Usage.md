@@ -511,7 +511,8 @@
   - **将目标服务器的共享目录挂载到/media/samba目录下**
     ```shell
     # uid / gid 为本地用户的 uid / gid
-    $ sudo mount -t cifs -o uid=1000,gid=1000,file_mode=0777,dir_mode=0777,username=leondgarse,password=123456 //192.168.7.11/leondgarse /media/samba/
+    # mfsymlinks 指定客户端可以使用 ln 创建软链接
+    $ sudo mount -t cifs -o uid=1000,gid=1000,file_mode=0777,dir_mode=0777,mfsymlinks,username=leondgarse,password=123456 //192.168.7.11/leondgarse /media/samba/
     ```
   - **开机自动启动samba服务**
     ```shell
@@ -1525,7 +1526,7 @@
   - 安装软件：
     ```c
     gocr、tesseract-ocr、libtiff-tools
-    安装tesseract中文语言包tesseract-ocr-chi-sim
+    安装 tesseract 中文语言包 tesseract-ocr-chi-sim
     ```
   - tif文件转文字tif-->text，直接使用tesseract命令即可，如：
     ```c

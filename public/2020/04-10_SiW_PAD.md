@@ -1522,8 +1522,9 @@ mtr -r -c 30 -s 1024 www.baidu.com
 
 !wget http://im.tdweilai.com:38831/keras_ResNest101_emore_II_basic_agedb_30_epoch_64_0.968500.h5
 
+netstat -na | awk -F ' ' 'BEGIN {WAIT_C=0; EST_C=0} /:6379 /{if($NF == "TIME_WAIT"){WAIT_C=WAIT_C+1}else{EST_C=EST_C+1}} END {print "TIME_WAIT: "WAIT_C", ESTABLISHED: "EST_C}'
 
-watch -tn 3 'echo ">>>> php connection:"; ss -pl | grep php | wc -l; echo ">>>> Socket status:"; ss -s; echo ">>>> 8800 connection:"; netstat -na | grep -i ":8800 " | wc -l; echo ">>>> 8812 connection:"; netstat -na | grep -i ":8812 " | wc -l; top -b -n 1'
+watch -tn 3 'echo ">>>> php connection:"; ss -pl | grep php | wc -l; echo ">>>> 8800 Chat-Server connection:"; netstat -na | grep -i ":8800 " | wc -l; echo ">>>> 8812 Fs-Server connection:"; netstat -na | grep -i ":8812 " | wc -l; echo ">>>> 6379 redis-server connection:"; netstat -na | grep -i ":6379 " | wc -l; echo ">>>> Socket status:"; ss -s; echo ">>>> top"; top -b -n 1'
 
 查看占用端口的进程 ss -lntpd | grep :4444
 
@@ -1545,8 +1546,46 @@ docker container ls
 ss -lntpd | grep -i freeswitch
 ss -lntpd | grep -i php
 ss -lntpd | grep -i redis
-```py
+```sh
+#!/bin/bash
 
+MONITOR_TEMP='monitor.sh.temp'
+
+printf ">>>> php connection: "
+ss -pl | grep php | wc -l
+
+
+function calc_wait_established_conn() {
+    awk -F ' ' 'BEGIN {WAIT_C=0; EST_C=0; TOTAL_C=0} /:'$PORT_NUM' /{if($NF == "TIME_WAIT"){WAIT_C=WAIT_C+1}else{EST_C=EST_C+1}; TOTAL_C=TOTAL_C+1} END {print "Total: "TOTAL_C", TIME_WAIT: "WAIT_C", ESTABLISHED: "EST_C}' $MONITOR_TEMP
+}
+
+function calc_wait_established_conn_grep() {
+    WAIT_C=$(grep ':6379 *TIME_WAIT' monitor.sh.temp | wc -l)
+    EST_C=$(grep ':6379 *ESTABLISHED' monitor.sh.temp | wc -l)
+    TOTAL_C=$(($WAIT_C+$EST_C))
+    echo "Total: $TOTAL_C, TIME_WAIT: $WAIT_C, ESTABLISHED: $EST_C"
+}
+
+netstat -an > $MONITOR_TEMP
+printf ">>>> 8800 Chat-Server connection  | "
+# grep -i ":8800 " | wc -l $MONITOR_TEMP
+PORT_NUM=8800
+calc_wait_established_conn
+
+printf ">>>> 8812 Fs-Server connection    | "
+PORT_NUM=8812
+calc_wait_established_conn
+
+printf ">>>> 6379 redis-server connection | "
+PORT_NUM=6379
+calc_wait_established_conn
+
+
+echo ">>>> Socket status:"
+ss -s
+
+echo ">>>> top"
+top -b -n 1 | head -n 20
 ```
 ```sh
 if [[ -z $RMI_HOST ]]; then
@@ -1563,8 +1602,76 @@ echo "RMI_HOST=$RMI_HOST, SERVER_PORT=$SERVER_PORT, addition param=$@"
 /jmeter/bin/jmeter ${RMI_HOST_DEF} -Dserver_port=${SERVER_PORT} -s -j bin/testplan_suit/jmeter-server.log "$@"
 ```
 ```sh
-export RMI_HOST_DEF=-Djava.rmi.server.hostname=192.168.11.235
-export RMI_HOST=-Djava.rmi.server.hostname=192.168.11.235
-# RMI_HOST_DEF=-Djava.rmi.server.hostname=im.tdweilai.com
-${DIRNAME}/jmeter ${RMI_HOST_DEF} -Dserver_port=${SERVER_PORT:-1099} -s -j jmeter-server.log "$@"
+#!/bin/sh
+HOST_IP=`hostname`
+SERVER_PORT=1099
+if [[ $# -ge 1 ]]; then
+    HOST_IP=$1
+    shift
+fi
+if [[ $# -ge 1 ]]; then
+    SERVER_PORT=$1
+    shift
+fi
+RMI_PORT=$SERVER_PORT
+if [[ $# -ge 1 ]]; then
+    RMI_PORT=$1
+    shift
+fi
+
+echo "HOST_IP=$HOST_IP, SERVER_PORT=$SERVER_PORT, RMI_PORT=$RMI_PORT, addition_param=$@"
+
+/jmeter/bin/jmeter \
+    -Jserver.rmi.ssl.disable=true \
+    -Djava.rmi.server.hostname=$HOST_IP \
+    -Jserver.rmi.localport=$RMI_PORT \
+    -Dserver_port=$SERVER_PORT \
+    -j /jmeter/bin/testplan_suit/jmeter-server.log \
+    --server "$@"
+```
+
+```py
+big, baxes = plt.subplots(5, 5)
+baxes = baxes.flatten()
+styles = plt.style.available
+if 'dark_background' in styles: styles.remove('dark_background')
+for bax, style in zip(baxes, styles):
+    fn = style + '.png'
+    if not os.path.exists(fn):
+        plt.style.use(style)
+        fig, axes = plt.subplots(2, 2)
+        axes[0][0].plot(np.random.randint(1, 10, 10), label='aa')
+        axes[0][0].plot(np.random.randint(1, 10, 10), label='bb')
+        axes[0][0].legend()
+        axes[0][1].scatter(np.random.randint(1, 10, 10), np.random.randint(1, 10, 10))
+        axes[1][0].hist(np.random.randint(1, 10, 10))
+        rect = plt.Rectangle((0.2, 0.75), 0.4, 0.15, color='k', alpha=0.3)
+        axes[1][1].add_patch(rect)
+        fig.suptitle(style)
+        fig.savefig(fn)
+        plt.close()
+    bax.imshow(plt.imread(fn))
+    bax.axis('off')
+big.tight_layout()
+```
+
+```py
+(train_images, train_labels), (test_images, test_labels) = keras.datasets.cifar10.load_data()
+train_images, test_images = train_images / 255.0, test_images / 255.0
+
+model = models.Sequential()
+model.add(layers.Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 3)))
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+model.add(layers.Flatten())
+model.add(layers.Dense(64, activation='relu'))
+model.add(layers.Dense(10))
+
+model.compile(optimizer='adam',
+              loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+              metrics=['accuracy'])
+
+history = model.fit(train_images, train_labels, epochs=50, validation_data=(test_images, test_labels))
 ```

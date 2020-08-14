@@ -113,6 +113,11 @@
   loss.arcface.loss_m1 = 1.0
   loss.arcface.loss_m2 = 0.5
   loss.arcface.loss_m3 = 0.0
+
+  # default settings
+  default.lr = 0.1
+  default.wd = 0.0005
+  default.mom = 0.9
   ```
   **mobilenet 模型训练**
   ```sh

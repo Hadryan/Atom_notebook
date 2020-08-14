@@ -38,6 +38,7 @@
 
 # 模型量化 Post-training quantization
 ## 量化 Optimization techniques
+  - [Model optimization](https://www.tensorflow.org/lite/performance/model_optimization)
   - 模型优化常用方法
     - **剪枝 pruning** 减少模型参数数量，简化模型
     - **量化 quantization** 降低表示精度
@@ -48,11 +49,11 @@
     - 一般可以再 GPU 运算时使用 16-bit float，CPU 计算时使用 8-bit int
   - **稀疏与剪枝 Sparsity and pruning** 将某些张量置零，即将层间的连接剪枝，使模型更稀疏化
 ## 模型量化方法
-  - **模型量化示例** 前向过程的大部分计算使用 int 替换 float
+  - **动态范围量化 Dynamic range quantization** 前向过程的大部分计算使用 int 替换 float
     ```py
     import tensorflow as tf
     converter = tf.lite.TFLiteConverter.from_saved_model(saved_model_dir)
-    converter.optimizations = [tf.lite.Optimize.OPTIMIZE_FOR_SIZE]
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
     tflite_quant_model = converter.convert()
     ```
   - **权重和激活的全整数量化 Full integer quantization of weights and activations** 需要提供一个小的表示数据集 representative data set，模型的输入输出依然可以是浮点值
@@ -69,6 +70,14 @@
     converter.representative_dataset = representative_dataset_gen
     tflite_quant_model = converter.convert()
     ```
+  - **TFLite 量化方法**
+
+    | 方式                | 数据要求         | 模型大小减少 | 准确度           | 支持的硬件                                  |
+    | ------------------- | ---------------- | ------------ | ---------------- | ------------------------------------------- |
+    | 训练后 float16 量化 | 无               | 最大 50%     | 无损失           | CPU / GPU                                   |
+    | 训练后动态范围量化  | 无               | 最大 75%     | 有准确度降低     | CPU / GPU (Android)                         |
+    | 训练后整型量化      | 无标签的表示数据 | 最大 75%     | 较小的准确度降低 | CPU / GPU (Android) / EdgeTPU / Hexagon DSP |
+    | 训练中量化          | 有标签的训练数据 | 最大 75%     | 最小的准确度降低 | CPU / GPU (Android) / EdgeTPU / Hexagon DSP |
 ## MNIST 权重量化
   - 训练 keras MNIST 模型[Keras MNIST](https://github.com/leondgarse/Atom_notebook/blob/master/public/2018/09-06_tensorflow_tutotials.md#keras-mnist)
   - **模型保存**

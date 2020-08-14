@@ -231,24 +231,24 @@
     ```py
     model = keras.Sequential([
         keras.layers.Flatten(input_shape=(28, 28)),
-        keras.layers.Dense(128, activation=tf.nn.relu),
-        keras.layers.Dense(10, activation=tf.nn.softmax)
+        keras.layers.Dense(128, activation="relu"),
+        keras.layers.Dense(10, activation="softmax")
     ])
 
-    model.compile(optimizer=tf.train.AdamOptimizer(), loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    model.fit(train_images, train_labels, epochs=5)
-    # Epoch 1/5
-    # 60000/60000 [==============================] - 17s 280us/step - loss: 0.4958 - acc: 0.8248
-    # Epoch 2/5
-    # 60000/60000 [==============================] - 16s 269us/step - loss: 0.3766 - acc: 0.8640
-    # Epoch 3/5
-    # 60000/60000 [==============================] - 16s 275us/step - loss: 0.3366 - acc: 0.8748
-    # Epoch 4/5
-    # 60000/60000 [==============================] - 16s 275us/step - loss: 0.3129 - acc: 0.8851
-    # Epoch 5/5
-    # 60000/60000 [==============================] - 18s 303us/step - loss: 0.2952 - acc: 0.8914
+    model.compile(optimizer="adam", loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    model.fit(train_images, train_labels, epochs=10)
+    # Epoch 1/10
+    # 1875/1875 [==============================] - 1s 559us/step - loss: 0.4995 - accuracy: 0.8248
+    # Epoch 2/10
+    # 1875/1875 [==============================] - 1s 557us/step - loss: 0.3753 - accuracy: 0.8648
+    # Epoch 3/10
+    # 1875/1875 [==============================] - 1s 557us/step - loss: 0.3386 - accuracy: 0.8772
+    # ...
+    # Epoch 10/10
+    # 1875/1875 [==============================] - 1s 558us/step - loss: 0.2397 - accuracy: 0.9103
 
-    test_loss, test_acc = model.evaluate(test_images, test_labels)
+    test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=2)
+    # 313/313 - 0s - loss: 0.3427 - accuracy: 0.8806
     print("Test loss = {}, Test accuracy = {}".format(test_loss, test_acc))
     # Test loss = 0.3613173280715942, Test accuracy = 0.868
     ```

@@ -339,6 +339,41 @@
     gob encode + decode slice struct:
     [{0.9325033 0.5209825014348924 [1712744152 174326113 2946345882 2566003851]} {0.2906545 0.7224597815694159 [2997456150 970260067 1548335504 3556833531]} {0.24183238 0.8934221956199041 [2299076535 905588253 1245822197 746649276]}]
     ```
+## Encode and Decode by bytes array
+  ```go
+  $ls -l test_slice.gob
+  // -rw-rw-r-- 1 leondgarse leondgarse 196 5月  18 16:07 test_slice.gob
+
+  import (
+    "encoding/gob"
+    "os"
+    "fmt"
+    "bytes"
+  )
+
+  type selem struct {
+    AA float32
+    BB float64
+    CC []uint32
+  }
+  nums := 3
+
+  tfile2, err := os.Open("test_slice.gob")
+  gbin := make([]byte, 196)
+  tfile2.Read(gbin)
+  tfile2.Close()
+
+  // Decode
+  dec := gob.NewDecoder(bytes.NewReader(gbin))
+  stt2 := make([]selem, nums)
+  dec.Decode(&stt2)
+
+  // Encode
+  bbb := bytes.NewBuffer(nil)
+  encoder := gob.NewEncoder(bbb)
+  bbb.Bytes()
+  encoder.Encode(stt2)
+  ```
 ***
 
 # Tensorflow
@@ -510,7 +545,7 @@
     list(map(hex, tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True), allow_soft_placement=True, intra_op_parallelism_threads=0, inter_op_parallelism_threads=0).SerializeToString()))
     # Out[29]: [0x32, 0x2, 0x20, 0x1, 0x38, 0x1]
 
-    list(map(hex, tf.ConfigProto(device_count={'GPU': 0}, allow_soft_placement=True, intra_op_parallelism_threads=0, inter_op_parallelism_threads=0).SerializeToString()))                                    
+    list(map(hex, tf.ConfigProto(device_count={'GPU': 0}, allow_soft_placement=True, intra_op_parallelism_threads=0, inter_op_parallelism_threads=0).SerializeToString()))
     # Out[39]: ['0xa', '0x7', '0xa', '0x3', '0x47', '0x50', '0x55', '0x10', '0x0', '0x38', '0x1']
     ```
   - Go 生成 `tf.SessionOptions`
@@ -1259,9 +1294,9 @@
   **Run**
   ```go
   src_list := []float64{440.2207, 370.8417, 495.93146, 379.2145, 468.10645, 408.5712,
-      428.82767, 423.77728, 476.17242, 430.34576})
+      428.82767, 423.77728, 476.17242, 430.34576}
   dst_list := []float64{38.2946, 51.6963, 73.5318, 51.5014, 56.0252, 71.7366,
-      41.5493, 92.3655, 70.729904, 92.2041})
+      41.5493, 92.3655, 70.729904, 92.2041}
 
   import "time"
   aa := time.Now()
@@ -1456,6 +1491,7 @@
     open('./test.onnx', 'wb').write(content)
 
     sess = onnxruntime.InferenceSession('./test.onnx')
+    sess.run(None, {sess.get_inputs()[0].name: np.ones([1, 3, 112, 112], dtype='float32')})
     ```
   - [Github owulveryck/onnx-go](https://github.com/owulveryck/onnx-go)
     ```go
@@ -1517,8 +1553,8 @@
     cd ~/workspace
     git clone https://github.com/tensorflow/tensorflow.git && cd tensorflow
     ./configure
-    bazel build --config opt --config monolithic //tensorflow/lite:libtensorflowlite.so
-    bazel build --config opt --config monolithic //tensorflow/lite/c:libtensorflowlite_c.so
+    bazel build --config opt --config monolithic --define tflite_with_xnnpack=false //tensorflow/lite:libtensorflowlite.so
+    bazel build --config opt --config monolithic --define tflite_with_xnnpack=false //tensorflow/lite/c:libtensorflowlite_c.so
 
     file bazel-bin/tensorflow/lite/c/libtensorflowlite_c.so
     ```
@@ -1562,11 +1598,14 @@
 ## Android ARM
   - [Build TensorFlow Lite for ARM boards](https://www.tensorflow.org/lite/guide/build_arm64)
     ```sh
-    bazel build --config android_arm --config monolithic //tensorflow/lite:libtensorflowlite.so --verbose_failures
-    bazel build --config android_arm --config monolithic //tensorflow/lite/c:libtensorflowlite_c.so --verbose_failures
+    ./configure
+    # Please specify the (min) Android NDK API level to use: 18
+    bazel build --config android_arm --config monolithic --define tflite_with_xnnpack=false //tensorflow/lite:libtensorflowlite.so --verbose_failures
+    bazel build --config android_arm --config monolithic --define tflite_with_xnnpack=false //tensorflow/lite/c:libtensorflowlite_c.so --verbose_failures
 
-    bazel build --config android_arm64 --config monolithic //tensorflow/lite:libtensorflowlite.so --verbose_failures
-    bazel build --config android_arm64 --config monolithic //tensorflow/lite/c:libtensorflowlite_c.so --verbose_failures
+    ./configure
+    bazel build --config android_arm64 --config monolithic --define tflite_with_xnnpack=false //tensorflow/lite:libtensorflowlite.so --verbose_failures
+    bazel build --config android_arm64 --config monolithic --define tflite_with_xnnpack=false //tensorflow/lite/c:libtensorflowlite_c.so --verbose_failures
     ```
     Or build a `.a` lib using tensorflow tools
     ```sh
@@ -1577,9 +1616,9 @@
     ```
   - `gomobile bind`
     ```sh
-    export CGO_LDFLAGS=-L$HOME/workspace/tensorflow.arm/bazel-bin/tensorflow/lite/c
-    export CGO_CFLAGS=-I$HOME/workspace/tensorflow.arm/
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/workspace/tensorflow.arm/bazel-bin/tensorflow/lite/c
+    export CGO_LDFLAGS=-L$HOME/workspace/tensorflow.arm64/bazel-bin/tensorflow/lite/c
+    export CGO_CFLAGS=-I$HOME/workspace/tensorflow.arm64/
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/workspace/tensorflow.arm64/bazel-bin/tensorflow/lite/c
 
     gomobile bind -v -o hello.aar -target=android/arm github.com/mattn/go-tflite
     gomobile bind -v -o hello.aar -target=android/arm64 github.com/mattn/go-tflite

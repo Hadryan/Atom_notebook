@@ -293,6 +293,28 @@
 
   video_test(func=lambda frame: cv2.Canny(frame, 50, 200))
   ```
+  **Multi cameras test**
+  ```py
+  import cv2
+
+  def videos_test(func=None, src=[0], title="Opencv"):
+      caps = [cv2.VideoCapture(ii) for ii in src]
+      while True:
+          rets = [ii.read() for ii in caps]
+          frames = [ff for gg, ff in rets if gg]
+          if len(frames) == 0:
+              break
+          if func != None:
+              frames = [func(ii) for ii in frames]
+          cv2.imshow(title, np.hstack(frames))
+          key = cv2.waitKey(1) & 0xFF
+          if key == ord("q"):
+              break
+      [ii.release() for ii in caps]
+      cv2.destroyAllWindows()
+
+  videos_test(func=lambda frame: cv2.Canny(frame, 50, 200))
+  ```
 ***
 
 # 图像去噪
@@ -991,128 +1013,128 @@
   video_test(func=QrDetect())
   ```
 ## FFT blur detection
-```py
-import matplotlib.pyplot as plt
-import numpy as np
-import cv2
+  ```py
+  import matplotlib.pyplot as plt
+  import numpy as np
+  import cv2
 
-def detect_blur_fft(frame, center_size=60, resize_width=500):
-    hh, ww = frame.shape[:2]
-    resize_height = int(hh / ww * resize_width)
-    frame = cv2.resize(frame, (resize_width, resize_height))
+  def detect_blur_fft(frame, center_size=60, resize_width=500):
+      hh, ww = frame.shape[:2]
+      resize_height = int(hh / ww * resize_width)
+      frame = cv2.resize(frame, (resize_width, resize_height))
+      gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+      (h, w) = gray.shape
+      (cX, cY) = (int(w / 2.0), int(h / 2.0))
+
+      # compute the FFT to find the frequency transform,
+      # then shift the zero frequency component (i.e., DC component located at the top-left corner)
+      # to the center where it will be more easy to analyze
+      fft = np.fft.fft2(gray)
+      fftShift = np.fft.fftshift(fft)
+
+      # zero-out the center of the FFT shift (i.e., remove low frequencies),
+      # apply the inverse shift such that the DC component once again becomes the top-left,
+      # and then apply the inverse FFT
+      fftShift[cY - center_size : cY + center_size, cX - center_size : cX + center_size] = 0
+      fftShift = np.fft.ifftshift(fftShift)
+      recon = np.fft.ifft2(fftShift)
+
+      # compute the magnitude spectrum of the reconstructed image,
+      # then compute the mean of the magnitude values
+      magnitude = 20 * np.log(np.abs(recon))
+      mean = np.mean(magnitude)
+      print(magnitude.min())
+
+      vis_ret = np.hstack([frame, cv2.cvtColor((magnitude + 127.5).astype('uint8'), cv2.COLOR_GRAY2BGR)])
+      return mean, vis_ret
+
+  def detect_blur_fft_test(frame):
+      mean, frame = detect_blur_fft(frame)
+      cv2.putText(frame, "FFT Mean: {}".format(mean), (10, frame.shape[0] - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 0, 255), 3)
+      return frame
+
+    # check to see if we are visualizing our output
+    if vis:
+      # compute the magnitude spectrum of the transform
+      magnitude = 20 * np.log(np.abs(fftShift))
+
+      # display the original input image
+      (fig, ax) = plt.subplots(1, 2, )
+      ax[0].imshow(image, cmap="gray")
+      ax[0].set_title("Input")
+      ax[0].set_xticks([])
+      ax[0].set_yticks([])
+
+      # display the magnitude image
+      ax[1].imshow(magnitude, cmap="gray")
+      ax[1].set_title("Magnitude Spectrum")
+      ax[1].set_xticks([])
+      ax[1].set_yticks([])
+
+      # show our plots
+      plt.show()
+
+
+
+    # the image will be considered "blurry" if the mean value of the
+    # magnitudes is less than the threshold value
+    return (mean, mean <= thresh)
+  ```
+  ```py
+  # USAGE
+  # python blur_detector_video.py
+
+  # import the necessary packages
+  from imutils.video import VideoStream
+  from pyimagesearch.blur_detector import detect_blur_fft
+  import argparse
+  import imutils
+  import time
+  import cv2
+
+  # construct the argument parser and parse the arguments
+  ap = argparse.ArgumentParser()
+  ap.add_argument("-t", "--thresh", type=int, default=10,
+    help="threshold for our blur detector to fire")
+  args = vars(ap.parse_args())
+
+  # initialize the video stream and allow the camera sensor to warm up
+  print("[INFO] starting video stream...")
+  vs = VideoStream(src=0).start()
+  time.sleep(2.0)
+
+  # loop over the frames from the video stream
+  while True:
+    # grab the frame from the threaded video stream and resize it
+    # to have a maximum width of 400 pixels
+    frame = vs.read()
+    frame = imutils.resize(frame, width=500)
+
+    # convert the frame to grayscale and detect blur in it
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    (mean, blurry) = detect_blur_fft(gray, size=60,
+      thresh=args["thresh"], vis=False)
 
-    (h, w) = gray.shape
-    (cX, cY) = (int(w / 2.0), int(h / 2.0))
+    # draw on the frame, indicating whether or not it is blurry
+    color = (0, 0, 255) if blurry else (0, 255, 0)
+    text = "Blurry ({:.4f})" if blurry else "Not Blurry ({:.4f})"
+    text = text.format(mean)
+    cv2.putText(frame, text, (10, 25), cv2.FONT_HERSHEY_SIMPLEX,
+      0.7, color, 2)
 
-    # compute the FFT to find the frequency transform,
-    # then shift the zero frequency component (i.e., DC component located at the top-left corner)
-    # to the center where it will be more easy to analyze
-    fft = np.fft.fft2(gray)
-    fftShift = np.fft.fftshift(fft)
+    # show the output frame
+    cv2.imshow("Frame", frame)
+    key = cv2.waitKey(1) & 0xFF
 
-    # zero-out the center of the FFT shift (i.e., remove low frequencies),
-    # apply the inverse shift such that the DC component once again becomes the top-left,
-    # and then apply the inverse FFT
-    fftShift[cY - center_size : cY + center_size, cX - center_size : cX + center_size] = 0
-    fftShift = np.fft.ifftshift(fftShift)
-    recon = np.fft.ifft2(fftShift)
+    # if the `q` key was pressed, break from the loop
+    if key == ord("q"):
+      break
 
-    # compute the magnitude spectrum of the reconstructed image,
-    # then compute the mean of the magnitude values
-    magnitude = 20 * np.log(np.abs(recon))
-    mean = np.mean(magnitude)
-    print(magnitude.min())
-
-    vis_ret = np.hstack([frame, cv2.cvtColor((magnitude + 127.5).astype('uint8'), cv2.COLOR_GRAY2BGR)])
-    return mean, vis_ret
-
-def detect_blur_fft_test(frame):
-    mean, frame = detect_blur_fft(frame)
-    cv2.putText(frame, "FFT Mean: {}".format(mean), (10, frame.shape[0] - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 0, 255), 3)
-    return frame
-
-  # check to see if we are visualizing our output
-  if vis:
-    # compute the magnitude spectrum of the transform
-    magnitude = 20 * np.log(np.abs(fftShift))
-
-    # display the original input image
-    (fig, ax) = plt.subplots(1, 2, )
-    ax[0].imshow(image, cmap="gray")
-    ax[0].set_title("Input")
-    ax[0].set_xticks([])
-    ax[0].set_yticks([])
-
-    # display the magnitude image
-    ax[1].imshow(magnitude, cmap="gray")
-    ax[1].set_title("Magnitude Spectrum")
-    ax[1].set_xticks([])
-    ax[1].set_yticks([])
-
-    # show our plots
-    plt.show()
-
-
-
-  # the image will be considered "blurry" if the mean value of the
-  # magnitudes is less than the threshold value
-  return (mean, mean <= thresh)
-```
-```py
-# USAGE
-# python blur_detector_video.py
-
-# import the necessary packages
-from imutils.video import VideoStream
-from pyimagesearch.blur_detector import detect_blur_fft
-import argparse
-import imutils
-import time
-import cv2
-
-# construct the argument parser and parse the arguments
-ap = argparse.ArgumentParser()
-ap.add_argument("-t", "--thresh", type=int, default=10,
-  help="threshold for our blur detector to fire")
-args = vars(ap.parse_args())
-
-# initialize the video stream and allow the camera sensor to warm up
-print("[INFO] starting video stream...")
-vs = VideoStream(src=0).start()
-time.sleep(2.0)
-
-# loop over the frames from the video stream
-while True:
-  # grab the frame from the threaded video stream and resize it
-  # to have a maximum width of 400 pixels
-  frame = vs.read()
-  frame = imutils.resize(frame, width=500)
-
-  # convert the frame to grayscale and detect blur in it
-  gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-  (mean, blurry) = detect_blur_fft(gray, size=60,
-    thresh=args["thresh"], vis=False)
-
-  # draw on the frame, indicating whether or not it is blurry
-  color = (0, 0, 255) if blurry else (0, 255, 0)
-  text = "Blurry ({:.4f})" if blurry else "Not Blurry ({:.4f})"
-  text = text.format(mean)
-  cv2.putText(frame, text, (10, 25), cv2.FONT_HERSHEY_SIMPLEX,
-    0.7, color, 2)
-
-  # show the output frame
-  cv2.imshow("Frame", frame)
-  key = cv2.waitKey(1) & 0xFF
-
-  # if the `q` key was pressed, break from the loop
-  if key == ord("q"):
-    break
-
-# do a bit of cleanup
-cv2.destroyAllWindows()
-vs.stop()
-```
+  # do a bit of cleanup
+  cv2.destroyAllWindows()
+  vs.stop()
+  ```
 ***
 
 # skimage segmentation
@@ -1541,59 +1563,422 @@ vs.stop()
     ```
 ***
 
-```py
-sys.path.append(os.path.expanduser('~/workspace/samba/tdFace-flask/'))
-from mtcnn_tf.mtcnn import MTCNN
-det = MTCNN()
-imm = imread('real_fake.png')
+# 检测上下左右区域内的直线
+  ```py
+  sys.path.append(os.path.expanduser('~/workspace/samba/tdFace-flask/'))
+  from mtcnn_tf.mtcnn import MTCNN
+  det = MTCNN()
+  imm = imread('real_fake.png')
 
-def hough_line_detect_P(frame):
-    dst = cv2.Canny(frame, 100, 200)
-    lines = cv2.HoughLinesP(dst, 1, np.pi / 180.0, 40, np.array([]), 50, 20)
-    return lines
+  def hough_line_detect_P(frame):
+      dst = cv2.Canny(frame, 100, 200)
+      lines = cv2.HoughLinesP(dst, 1, np.pi / 180.0, 40, np.array([]), 50, 20)
+      return lines
 
-    cdst = cv2.cvtColor(dst, cv2.COLOR_GRAY2BGR)
-    # lines = cv2.HoughLinesP(dst, 1, np.pi / 180.0, 40, np.array([]), 50, 10)
-    for ii in lines:
-        cv2.line(cdst, (ii[0][0], ii[0][1]), (ii[0][2], ii[0][3]), (0, 0, 255), 3, cv2.LINE_AA)
-    return cdst
+      cdst = cv2.cvtColor(dst, cv2.COLOR_GRAY2BGR)
+      # lines = cv2.HoughLinesP(dst, 1, np.pi / 180.0, 40, np.array([]), 50, 10)
+      for ii in lines:
+          cv2.line(cdst, (ii[0][0], ii[0][1]), (ii[0][2], ii[0][3]), (0, 0, 255), 3, cv2.LINE_AA)
+      return cdst
 
-bbs, ccs, pps = det.detect_faces(imm)
+  bbs, ccs, pps = det.detect_faces(imm)
 
-up, left, down, right = bbs[0].astype('int')
-# [ 363.3452, 1139.0464,  581.6208, 1302.2919]
+  up, left, down, right = bbs[0].astype('int')
+  # [ 363.3452, 1139.0464,  581.6208, 1302.2919]
 
-ill = imm[up : down, 0 : left]
-iuu = imm[0 : up, left : right]
-irr = imm[up : down, right:]
-idd = imm[down:, left : right]
+  ill = imm[up : down, 0 : left]
+  iuu = imm[0 : up, left : right]
+  irr = imm[up : down, right:]
+  idd = imm[down:, left : right]
 
-fig, axes = plt.subplots(2, 4, figsize=(12, 3))
-for ax_1, ax_2, ii in zip(axes[0], axes[1], [ill, iuu, irr, idd]):
-    ax_1.imshow(ii)
-    ax_2.imshow(hough_line_detect_P(ii)[:, :, ::-1])
+  fig, axes = plt.subplots(2, 4, figsize=(12, 3))
+  for ax_1, ax_2, ii in zip(axes[0], axes[1], [ill, iuu, irr, idd]):
+      ax_1.imshow(ii)
+      ax_2.imshow(hough_line_detect_P(ii)[:, :, ::-1])
 
-up, left, down, right = bbs[1].astype('int')
-# (328, 517, 671, 799)
+  up, left, down, right = bbs[1].astype('int')
+  # (328, 517, 671, 799)
 
-ill = imm[up : down, 0 : left]
-iuu = imm[0 : up, left : right]
-irr = imm[up : down, right:]
-idd = imm[down:, left : right]
+  ill = imm[up : down, 0 : left]
+  iuu = imm[0 : up, left : right]
+  irr = imm[up : down, right:]
+  idd = imm[down:, left : right]
 
-fig, axes = plt.subplots(1, 4, figsize=(12, 3))
-total = 0
-for id, (ax, ii) in enumerate(zip(axes, [ill, iuu, irr, idd])):
-    ax.imshow(ii)
-    if ii.shape[0] != 0 and ii.shape[1] != 0:
-        lines = hough_line_detect_P(ii)
-        total += (max_dist_v(lines) / (down-up)) if id % 2 == 0 else (max_dist_h(lines) / (right-left))
-        print(max_dist_h(lines), max_dist_h(lines) / (right-left), max_dist_v(lines), max_dist_v(lines) / (down-up))
-        for jj in lines:
-            ax.plot(jj[0][[0, 2]], jj[0][[1, 3]])
+  fig, axes = plt.subplots(1, 4, figsize=(12, 3))
+  total = 0
+  for id, (ax, ii) in enumerate(zip(axes, [ill, iuu, irr, idd])):
+      ax.imshow(ii)
+      if ii.shape[0] != 0 and ii.shape[1] != 0:
+          lines = hough_line_detect_P(ii)
+          total += (max_dist_v(lines) / (down-up)) if id % 2 == 0 else (max_dist_h(lines) / (right-left))
+          print(max_dist_h(lines), max_dist_h(lines) / (right-left), max_dist_v(lines), max_dist_v(lines) / (down-up))
+          for jj in lines:
+              ax.plot(jj[0][[0, 2]], jj[0][[1, 3]])
 
 
-# max_dist_h = lambda lines: sqrt(max([(ii[0] - ii[2]) ** 2 + (ii[1] - ii[3]) ** 2 for ii in lines.squeeze() if abs(ii[0] - ii[2]) > abs(ii[1] - ii[3])]))
-max_dist_h = lambda lines: max([abs(ii[0] - ii[2]) for ii in lines.squeeze() if abs(ii[0] - ii[2]) > abs(ii[1] - ii[3])] + [0])
-max_dist_v = lambda lines: max([abs(ii[1] - ii[3]) for ii in lines.squeeze() if abs(ii[1] - ii[3]) > abs(ii[0] - ii[2])] + [0])
-```
+  # max_dist_h = lambda lines: sqrt(max([(ii[0] - ii[2]) ** 2 + (ii[1] - ii[3]) ** 2 for ii in lines.squeeze() if abs(ii[0] - ii[2]) > abs(ii[1] - ii[3])]))
+  max_dist_h = lambda lines: max([abs(ii[0] - ii[2]) for ii in lines.squeeze() if abs(ii[0] - ii[2]) > abs(ii[1] - ii[3])] + [0])
+  max_dist_v = lambda lines: max([abs(ii[1] - ii[3]) for ii in lines.squeeze() if abs(ii[1] - ii[3]) > abs(ii[0] - ii[2])] + [0])
+  ```
+# RGB IR detect
+  ```py
+  class RGB_IR_Detect:
+      def __init__(self, det=None):
+          if det is None:
+              import insightface
+              self.det = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+              self.det.prepare(-1)
+              def foo(det, frame): bbs, pps = det.detect(frame); return bbs[:, :4], bbs[:, -1], pps
+              self.det.detect_faces = lambda frame: foo(self.det, frame)
+          else:
+              self.det = det
+          self.prev_rgb_frame, self.prev_rgb_bbox = None, None
+
+      def __call__(self, frame):
+          bbs, ccs, pps = self.det.detect_faces(frame)
+          bbs = bbs.astype('int')
+          if self.prev_rgb_frame is None:
+              # It's a RGB frame
+              self.prev_rgb_frame, self.prev_rgb_bbox = frame, bbs
+              self.draw_polyboxes(frame, bbs, (0, 255, 0)) # Green
+          else:
+              # RGB detect info saved, it's an IR frame
+              self.draw_polyboxes(frame, bbs, (0, 0, 255)) # Red for IR
+              self.draw_polyboxes(frame, self.prev_rgb_bbox, (0, 255, 0)) # Green for RGB
+
+              for bb in bbs:
+                  ious = [self.compute_iou(bb, ii) for ii in self.prev_rgb_bbox]
+                  iou_max = max(ious) if len(ious) != 0 else 0
+                  if iou_max > 0.2:
+                      cv2.putText(frame, "IOU: {:.4f}".format(iou_max), (bb[0] - 10, bb[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
+              self.prev_rgb_frame, self.prev_rgb_bbox = None, None
+          return frame
+
+      def draw_polyboxes(self, frame, bbs, color=(0, 0, 255)):
+          for idx, bb in enumerate(bbs):
+              left, up, right, down = bb
+              cv2.line(frame, (left, up), (right, up), color, 3, cv2.LINE_AA)
+              cv2.line(frame, (right, up), (right, down), color, 3, cv2.LINE_AA)
+              cv2.line(frame, (right, down), (left, down), color, 3, cv2.LINE_AA)
+              cv2.line(frame, (left, down), (left, up), color, 3, cv2.LINE_AA)
+
+      def compute_iou(self, rec1, rec2):
+          left_column_max = max(rec1[0], rec2[0])
+          right_column_min = min(rec1[2], rec2[2])
+          up_row_max = max(rec1[1], rec2[1])
+          down_row_min = min(rec1[3], rec2[3])
+          if left_column_max >= right_column_min or down_row_min <= up_row_max:
+              # 两矩形无相交区域
+              return 0
+          else:
+              # 计算两个矩形框面积
+              S1 = (rec1[2] - rec1[0]) * (rec1[3] - rec1[1])
+              S2 = (rec2[2] - rec2[0]) * (rec2[3] - rec2[1])
+              # 计算交集面积
+              inter_area = (down_row_min - up_row_max) * (right_column_min - left_column_max)
+              # 计算交并比
+              return inter_area / (S1 + S2 - inter_area)
+
+  videos_test(func=RGB_IR_Detect(), src=[2, 4])
+  ```
+# FaceTrack by match template
+  ```py
+  from skimage.feature import match_template
+
+  def compute_iou(rec1,rec2):
+      left_column_max = max(rec1[0], rec2[0])
+      right_column_min = min(rec1[2], rec2[2])
+      up_row_max = max(rec1[1], rec2[1])
+      down_row_min = min(rec1[3], rec2[3])
+      if left_column_max >= right_column_min or down_row_min <= up_row_max:
+          # 两矩形无相交区域
+          return 0
+      else:
+          # 计算两个矩形框面积
+          S1 = (rec1[2]-rec1[0])*(rec1[3]-rec1[1])
+          S2 = (rec2[2]-rec2[0])*(rec2[3]-rec2[1])
+          # 计算交集面积
+          inter_area = (down_row_min - up_row_max) * (right_column_min - left_column_max)
+          # 计算交并比
+          return inter_area / (S1 + S2 - inter_area)
+
+  class TrackByMatchTemplate:
+      def __init__(self, det=None, iou_min=0.6, temp_match_min=0.4, enlarge_border=0.5, skip_frame=1):
+          if det is None:
+              import insightface
+              self.det = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+              self.det.prepare(-1)
+              def foo(det, frame): bbs, pps = det.detect(frame); return bbs[:, :4], bbs[:, -1], pps
+              self.det.detect_faces = lambda frame: foo(self.det, frame)
+          else:
+              self.det = det
+          self.iou_min, self.temp_match_min, self.enlarge_border, self.skip_frame = iou_min, temp_match_min, enlarge_border, skip_frame
+          self.prev_frame, self.prev_gray_frame, self.prev_matched_bbs, self.prev_bbox = None, None, [], None
+          self.cur_frame = 0
+
+      def __call__(self, frame):
+          if self.cur_frame % self.skip_frame != 0:
+              self.cur_frame += 1
+              return self.prev_matched_bbs, self.prev_bbox, [], []
+          else:
+              self.cur_frame = 1
+          bbs, ccs, pps = self.det.detect_faces(frame)
+          if len(bbs) == 0:
+              # print("No face in frame...")
+              self.prev_frame = None
+              return [], bbs, ccs, pps
+
+          bbs = bbs.astype('int')
+          gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+          if self.prev_frame is None:
+              # print("Init...")
+              self.prev_frame, self.prev_gray_frame, self.prev_bbox = frame, gray_frame, bbs
+              return [], bbs, ccs, pps
+
+          ''' Filter bbox by IOU '''
+          prev_valid = []
+          for prev_bb in self.prev_bbox:
+              ious = [compute_iou(prev_bb, ii) for ii in bbs]
+              cur_bb_idx = np.argmax(ious)
+              iou_max = ious[cur_bb_idx]
+              # print("prev_bb:", prev_bb, "iou_max:", iou_max)
+              if iou_max > self.iou_min:
+                  prev_valid.append((prev_bb, cur_bb_idx))
+
+          ''' Match by template to track '''
+          matched_bbs = []
+          for prev_bb, cur_bb_idx in prev_valid:
+              left, up, right, down = prev_bb
+              up, down = max(0, up), min(self.prev_frame.shape[0], down)
+              left, right = max(0, left), min(self.prev_frame.shape[1], right)
+              prev_obj = self.prev_gray_frame[up:down, left:right]
+
+              left, up, right, down = bbs[cur_bb_idx]
+              ww, hh = right - left, down - up
+              mm_up = max(0, int(up - ww * self.enlarge_border))
+              mm_down = min(gray_frame.shape[0], int(down + ww * self.enlarge_border))
+              mm_left = max(0, int(left - hh * self.enlarge_border))
+              mm_right = min(gray_frame.shape[1], int(right + hh * self.enlarge_border))
+              cur_obj = gray_frame[mm_up:mm_down, mm_left:mm_right]
+
+              prev_obj = prev_obj[:mm_down-mm_up, :mm_right-mm_left] # ValueError: Image must be larger than template
+              max_match = match_template(cur_obj, prev_obj).max()
+              if max_match < 0.8:
+                  print("max_match:", max_match)
+              if max_match > self.temp_match_min:
+                  matched_bbs.append(cur_bb_idx)
+
+          self.prev_frame, self.prev_gray_frame, self.prev_bbox, self.prev_matched_bbs = frame, gray_frame, bbs, matched_bbs
+          # print("matched_bbs:", matched_bbs)
+          return matched_bbs, bbs, ccs, pps
+
+  def test_func(frame, tracker):
+      matched_bbs, bbs, ccs, pps = tracker(frame)
+      for idx, bb in enumerate(bbs):
+          left, up, right, down = bb
+          # Green for presented one, red for new one
+          color = (0, 255, 0) if idx in matched_bbs else (0, 0, 255)
+
+          cv2.line(frame, (left, up), (right, up), color, 3, cv2.LINE_AA)
+          cv2.line(frame, (right, up), (right, down), color, 3, cv2.LINE_AA)
+          cv2.line(frame, (right, down), (left, down), color, 3, cv2.LINE_AA)
+          cv2.line(frame, (left, down), (left, up), color, 3, cv2.LINE_AA)
+      return frame
+
+  tracker = TrackByMatchTemplate()
+  video_test(lambda frame: test_func(frame, tracker))
+  ```
+# FaceTrack by ImageHash
+  ```py
+  import imagehash
+  from PIL import Image
+
+  def compute_iou(rec1, rec2):
+      left_column_max = max(rec1[0], rec2[0])
+      right_column_min = min(rec1[2], rec2[2])
+      up_row_max = max(rec1[1], rec2[1])
+      down_row_min = min(rec1[3], rec2[3])
+      if left_column_max >= right_column_min or down_row_min <= up_row_max:
+          # 两矩形无相交区域
+          return 0
+      else:
+          # 计算两个矩形框面积
+          S1 = (rec1[2]-rec1[0])*(rec1[3]-rec1[1])
+          S2 = (rec2[2]-rec2[0])*(rec2[3]-rec2[1])
+          # 计算交集面积
+          inter_area = (down_row_min - up_row_max) * (right_column_min - left_column_max)
+          # 计算交并比
+          return inter_area / (S1 + S2 - inter_area)
+
+  class TrackByImageHash:
+      def __init__(self, det=None, iou_min=0.2, hash_thresh=0.6, hash_size=8, skip_frame=1):
+          if det is None:
+              import insightface
+              self.det = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+              self.det.prepare(-1)
+              def foo(det, frame): bbs, pps = det.detect(frame); return bbs[:, :4], bbs[:, -1], pps
+              self.det.detect_faces = lambda frame: foo(self.det, frame)
+          else:
+              self.det = det
+          self.iou_min, self.hash_thresh, self.hash_size, self.skip_frame = iou_min, hash_thresh, hash_size, skip_frame
+          self.hash_total = hash_size * hash_size
+          self.hash_func = lambda frame, bb: imagehash.average_hash(Image.fromarray(frame[bb[1]:bb[3], bb[0]:bb[2]]), hash_size=hash_size)
+          # self.hash_func = lambda frame, bb: imagehash.phash(Image.fromarray(frame[bb[1]:bb[3], bb[0]:bb[2]]), hash_size=hash_size)
+          # self.hash_func = lambda frame, bb: image_hash_vvs(frame[bb[1]:bb[3], bb[0]:bb[2]], hash_size=hash_size)
+          self.dist_func = lambda hha, hhb: (hha.hash == hhb.hash).sum() / self.hash_total
+          # self.dist_func = lambda hha, hhb: ((hha - hhb) ** 2).sum()
+          self.prev_frame, self.prev_gray_frame, self.prev_bbox, self.prev_matched_bbs, self.pre_hash = None, None, None, [], None
+          self.cur_frame = 0
+
+      def __call__(self, frame):
+          if self.cur_frame % self.skip_frame != 0:
+              self.cur_frame += 1
+              return self.prev_matched_bbs, self.prev_bbox, [], []
+          else:
+              self.cur_frame = 1
+          bbs, ccs, pps = self.det.detect_faces(frame)
+          if len(bbs) == 0:
+              # print("No face in frame...")
+              self.prev_frame = None
+              return [], bbs, ccs, pps
+
+          bbs = bbs.astype('int')
+          gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+          hashes = [self.hash_func(gray_frame, bb) for bb in bbs]
+          if self.prev_frame is None:
+              # print("Init...")
+              self.prev_frame, self.prev_gray_frame, self.prev_bbox = frame, gray_frame, bbs
+              self.pre_hash = hashes
+              return [], bbs, ccs, pps
+
+          ''' Filter bbox by IOU '''
+          prev_valid = []
+          for prev_bb, pre_hash in zip(self.prev_bbox, self.pre_hash):
+              ious = [compute_iou(prev_bb, ii) for ii in bbs]
+              cur_bb_idx = np.argmax(ious)
+              iou_max = ious[cur_bb_idx]
+              # print("prev_bb:", prev_bb, "iou_max:", iou_max)
+              if iou_max > self.iou_min:
+                  prev_valid.append((prev_bb, pre_hash, cur_bb_idx))
+
+          ''' Match by ImageHash to track '''
+          matched_bbs = []
+          for prev_bb, pre_hash, cur_bb_idx in prev_valid:
+              cur_hash = hashes[cur_bb_idx]
+              dd = self.dist_func(cur_hash, pre_hash)
+              if dd < 0.8:
+                  print("hash dist:", dd)
+
+              if dd > self.hash_thresh:
+                  matched_bbs.append(cur_bb_idx)
+
+          self.prev_frame, self.prev_gray_frame, self.prev_bbox, self.prev_matched_bbs, self.pre_hash = frame, gray_frame, bbs, matched_bbs, hashes
+          # print("matched_bbs:", matched_bbs)
+          return matched_bbs, bbs, ccs, pps
+
+  def test_func(frame, tracker):
+      matched_bbs, bbs, ccs, pps = tracker(frame)
+      for idx, bb in enumerate(bbs):
+          left, up, right, down = bb
+          # Green for presented one, red for new one
+          color = (0, 255, 0) if idx in matched_bbs else (0, 0, 255)
+
+          cv2.line(frame, (left, up), (right, up), color, 3, cv2.LINE_AA)
+          cv2.line(frame, (right, up), (right, down), color, 3, cv2.LINE_AA)
+          cv2.line(frame, (right, down), (left, down), color, 3, cv2.LINE_AA)
+          cv2.line(frame, (left, down), (left, up), color, 3, cv2.LINE_AA)
+      return frame
+
+  tracker = TrackByImageHash()
+  video_test(lambda frame: test_func(frame, tracker))
+  ```
+***
+
+# ImageHash
+  - [Github JohannesBuchner/imagehash](https://github.com/JohannesBuchner/imagehash)
+  ```py
+  import cv2
+
+  def image_show_multi(images):
+      ss = len(images)
+      fig, axes = plt.subplots(1, ss, figsize=(4 * ss, 4))
+      for imm, ax in zip(images, axes):
+          ax.imshow(imm)
+          ax.axis('off')
+      fig.tight_layout()
+
+  def capture(num=4):
+      images = []
+      for ii in range(num):
+          input('Capture [%d], press any key to continue: ' % (ii))
+          cap = cv2.VideoCapture(0)
+          grabbed, iaa = cap.read()
+          cap.release()
+          images.append(iaa)
+      return np.array(images)
+
+  images = capture()
+  plt.imshow(np.hstack(images[:, :, :, ::-1]))
+
+  import insightface
+  det = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+  det.prepare(-1)
+
+  imms = []
+  idxes = [0, 0, 0, 0]
+  for imm, idx in zip(images, idxes):
+      bbs, pps = det.detect(imm)
+      bb = bbs[idx].astype('int')
+      imms.append(imm[bb[1]:bb[3], bb[0]:bb[2], ::-1])
+  image_show_multi(imms)
+
+  import imagehash
+  from PIL import Image
+  def image_hashes(imgs, hash_func):
+      hashes = [hash_func(Image.fromarray(imm)) for imm in imgs]
+      hash_sub = [[ii - jj for jj in hashes] for ii in hashes]
+      hash_sum = [[(ii.hash == jj.hash).sum() for jj in hashes] for ii in hashes]
+      return np.array(hash_sub), np.array(hash_sum)
+
+  image_hashes(imms, imagehash.average_hash)
+
+  # imagehash.colorhash
+  hash_size=8
+  hhs = [imagehash.average_hash, imagehash.phash, imagehash.dhash, imagehash.whash]
+  for hh in hhs:
+      hash_sub, hash_sum = image_hashes(imms, hh)
+      print(hh.__name__, "Sub:", hash_sub)
+      print(hh.__name__, "Sum:", hash_sum)
+  ```
+  **自定义**
+  ```py
+  from skimage.transform import resize
+  from skimage.color import rgb2gray
+
+  def image_average_hash(iaa, hash_size=8):
+      iia = resize(rgb2gray(iaa / 255), (hash_size, hash_size))
+      return (iia - np.mean(iia)).flatten() > 0
+
+  hhs = [image_hash(imm) for imm in imms]
+  print([[(ii == jj).sum() for jj in hhs] for ii in hhs])
+
+  def image_average_hash_vvs(iaa, hash_size=8):
+      iia = resize(rgb2gray(iaa / 255), (hash_size, hash_size))
+      return (iia - np.mean(iia)).flatten()
+
+  hhs = [image_hash_vvs(imm) for imm in imms]
+  hhv = [[((ii - jj) ** 2).sum() for jj in hhs] for ii in hhs]
+
+  def image_average_hash_block(imm, hash_size=2):
+      ww, hh = imm.shape[:2]
+      ww_step, hh_step = ww // hash_size, hh // hash_size
+      gray_imm = rgb2gray(imm / 255)
+      for ii in range(hash_size):
+          for jj in range(hash_size):
+              print(ii * ww_step, (ii + 1) * ww_step, jj * hh_step, (jj + 1) * hh_step)
+              iaa = imm[ii * ww_step: (ii + 1) * ww_step, jj * hh_step: (jj + 1) * hh_step]
+              iia = resize(iia, (hash_size, hash_size))
+
+
+
+  ```
