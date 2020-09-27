@@ -305,7 +305,7 @@
           if len(frames) == 0:
               break
           if func != None:
-              frames = [func(ii) for ii in frames]
+              frames = func(frames)
           cv2.imshow(title, np.hstack(frames))
           key = cv2.waitKey(1) & 0xFF
           if key == ord("q"):
@@ -313,7 +313,7 @@
       [ii.release() for ii in caps]
       cv2.destroyAllWindows()
 
-  videos_test(func=lambda frame: cv2.Canny(frame, 50, 200))
+  videos_test(func=lambda frames: [cv2.Canny(ii, 50, 200) for ii in frames])
   ```
 ***
 
@@ -1081,60 +1081,6 @@
     # magnitudes is less than the threshold value
     return (mean, mean <= thresh)
   ```
-  ```py
-  # USAGE
-  # python blur_detector_video.py
-
-  # import the necessary packages
-  from imutils.video import VideoStream
-  from pyimagesearch.blur_detector import detect_blur_fft
-  import argparse
-  import imutils
-  import time
-  import cv2
-
-  # construct the argument parser and parse the arguments
-  ap = argparse.ArgumentParser()
-  ap.add_argument("-t", "--thresh", type=int, default=10,
-    help="threshold for our blur detector to fire")
-  args = vars(ap.parse_args())
-
-  # initialize the video stream and allow the camera sensor to warm up
-  print("[INFO] starting video stream...")
-  vs = VideoStream(src=0).start()
-  time.sleep(2.0)
-
-  # loop over the frames from the video stream
-  while True:
-    # grab the frame from the threaded video stream and resize it
-    # to have a maximum width of 400 pixels
-    frame = vs.read()
-    frame = imutils.resize(frame, width=500)
-
-    # convert the frame to grayscale and detect blur in it
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    (mean, blurry) = detect_blur_fft(gray, size=60,
-      thresh=args["thresh"], vis=False)
-
-    # draw on the frame, indicating whether or not it is blurry
-    color = (0, 0, 255) if blurry else (0, 255, 0)
-    text = "Blurry ({:.4f})" if blurry else "Not Blurry ({:.4f})"
-    text = text.format(mean)
-    cv2.putText(frame, text, (10, 25), cv2.FONT_HERSHEY_SIMPLEX,
-      0.7, color, 2)
-
-    # show the output frame
-    cv2.imshow("Frame", frame)
-    key = cv2.waitKey(1) & 0xFF
-
-    # if the `q` key was pressed, break from the loop
-    if key == ord("q"):
-      break
-
-  # do a bit of cleanup
-  cv2.destroyAllWindows()
-  vs.stop()
-  ```
 ***
 
 # skimage segmentation
@@ -1632,27 +1578,28 @@
               self.det.detect_faces = lambda frame: foo(self.det, frame)
           else:
               self.det = det
-          self.prev_rgb_frame, self.prev_rgb_bbox = None, None
 
-      def __call__(self, frame):
-          bbs, ccs, pps = self.det.detect_faces(frame)
+      def __call__(self, frames):
+          # Regard the first frame as RGB one
+          bbs, ccs, pps = self.det.detect_faces(frames[0])
           bbs = bbs.astype('int')
-          if self.prev_rgb_frame is None:
-              # It's a RGB frame
-              self.prev_rgb_frame, self.prev_rgb_bbox = frame, bbs
-              self.draw_polyboxes(frame, bbs, (0, 255, 0)) # Green
-          else:
-              # RGB detect info saved, it's an IR frame
-              self.draw_polyboxes(frame, bbs, (0, 0, 255)) # Red for IR
-              self.draw_polyboxes(frame, self.prev_rgb_bbox, (0, 255, 0)) # Green for RGB
+          self.draw_polyboxes(frames[0], bbs, (0, 255, 0)) # Green
 
+          if len(bbs) != 0:
+              # Found face in RGB frame
+              self.draw_polyboxes(frames[1], bbs, (0, 255, 0)) # Draw RGB face location on IR frame, green color
+
+              # Do detecting in IR frame
               for bb in bbs:
-                  ious = [self.compute_iou(bb, ii) for ii in self.prev_rgb_bbox]
-                  iou_max = max(ious) if len(ious) != 0 else 0
-                  if iou_max > 0.2:
-                      cv2.putText(frame, "IOU: {:.4f}".format(iou_max), (bb[0] - 10, bb[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
-              self.prev_rgb_frame, self.prev_rgb_bbox = None, None
-          return frame
+                  bbt, cct, ppt = self.det.detect_faces(frames[1][bb[1]:bb[3], bb[0]:bb[2]])
+                  if len(bbt) != 0:
+                      bbt = bbt.astype('int')[0]
+                      iou = ((bbt[2]-bbt[0]) * (bbt[3]-bbt[1])) / ((bb[2]-bb[0]) * (bb[3]-bb[1]))
+                      # if iou_max > 0.2:
+                      bbt = bbt + [bb[0], bb[1], bb[0], bb[1]]
+                      cv2.putText(frames[1], "IOU: {:.4f}".format(iou), (bbt[0] - 10, bbt[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
+                      self.draw_polyboxes(frames[1], [bbt], (0, 0, 255)) # Red for IR
+          return frames
 
       def draw_polyboxes(self, frame, bbs, color=(0, 0, 255)):
           for idx, bb in enumerate(bbs):
@@ -1892,6 +1839,44 @@
   tracker = TrackByImageHash()
   video_test(lambda frame: test_func(frame, tracker))
   ```
+# 人脸旋转角度与侧脸
+  ```py
+  from skimage.transform import SimilarityTransform
+  import insightface
+  dd = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+  dd.prepare(-1)
+
+  def rotation_detect(dd, image_path, image_show=True):
+      dst = np.array([[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366], [41.5493, 92.3655], [70.729904, 92.2041]])
+      aa = imread(image_path)
+      if image_show:
+          fig = plt.figure()
+          plt.imshow(aa)
+
+      bbox, points = dd.detect(aa)
+      rrs = []
+      for src in points:
+          src = src.astype(np.float32)
+          tform = SimilarityTransform()
+          tform.estimate(src, dst)
+
+          cc = tform.params[:2]
+          ne = np.dot(cc, np.vstack([src.T, np.ones(src.shape[0])])).T
+          # lean = nose - (left_eye + right_eye) / 2
+          lean = ne[2, 0] - (ne[0, 0] + ne[1, 0]) / 2
+          rrs.append({'rotation' : tform.rotation, 'lean': lean})
+
+          if image_show:
+              plt.scatter(src[:, 0], src[:, 1])
+              plt.scatter(ne[:, 0], ne[:, 1])
+              template = "Rotation: %(rotation).4f, Lean: %(lean).4f"
+              plt.text(src[:, 0].min(), src[:, 1].max() + 30, template %(rrs[-1]), color='r')
+      return points, rrs
+
+  points, ne = rotation_detect(dd, 'test_images/rotate.png')
+  points, ne = rotation_detect(dd, 'test_images/side.png')
+  points, ne = rotation_detect(dd, 'test_images/side_rotate.png')
+  ```
 ***
 
 # ImageHash
@@ -1959,26 +1944,14 @@
       iia = resize(rgb2gray(iaa / 255), (hash_size, hash_size))
       return (iia - np.mean(iia)).flatten() > 0
 
-  hhs = [image_hash(imm) for imm in imms]
+  hhs = [image_average_hash(imm) for imm in imms]
   print([[(ii == jj).sum() for jj in hhs] for ii in hhs])
 
   def image_average_hash_vvs(iaa, hash_size=8):
       iia = resize(rgb2gray(iaa / 255), (hash_size, hash_size))
       return (iia - np.mean(iia)).flatten()
 
-  hhs = [image_hash_vvs(imm) for imm in imms]
+  hhs = [image_average_hash_vvs(imm) for imm in imms]
   hhv = [[((ii - jj) ** 2).sum() for jj in hhs] for ii in hhs]
-
-  def image_average_hash_block(imm, hash_size=2):
-      ww, hh = imm.shape[:2]
-      ww_step, hh_step = ww // hash_size, hh // hash_size
-      gray_imm = rgb2gray(imm / 255)
-      for ii in range(hash_size):
-          for jj in range(hash_size):
-              print(ii * ww_step, (ii + 1) * ww_step, jj * hh_step, (jj + 1) * hh_step)
-              iaa = imm[ii * ww_step: (ii + 1) * ww_step, jj * hh_step: (jj + 1) * hh_step]
-              iia = resize(iia, (hash_size, hash_size))
-
-
-
   ```
+***

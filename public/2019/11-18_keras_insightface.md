@@ -6,7 +6,17 @@
 
   - [___2019 - 11 - 18 Keras Insightface___](#2019-11-18-keras-insightface)
   - [目录](#目录)
-  - [Fine tune](#fine-tune)
+  - [Insightface MXNet 模型使用](#insightface-mxnet-模型使用)
+  	- [Insightface](#insightface)
+  	- [模型加载与特征提取](#模型加载与特征提取)
+  	- [模型训练](#模型训练)
+  	- [代码分析](#代码分析)
+  	- [Fine tune](#fine-tune)
+  - [Highest Accuracy](#highest-accuracy)
+  	- [Deepinsight Accuracy](#deepinsight-accuracy)
+  	- [Mobilenet 256 Embeddings](#mobilenet-256-embeddings)
+  	- [Mobilenet 512 embeddings](#mobilenet-512-embeddings)
+  	- [Vargface](#vargface)
   - [人脸识别损失函数](#人脸识别损失函数)
   - [ImageDataGenerator](#imagedatagenerator)
   - [训练模型拟合 embeddings](#训练模型拟合-embeddings)
@@ -21,19 +31,318 @@
   	- [Softmax](#softmax)
   	- [Offline Triplet loss train SUB](#offline-triplet-loss-train-sub)
   	- [TF 通用函数](#tf-通用函数)
-  - [人脸旋转角度与侧脸](#人脸旋转角度与侧脸)
   - [nmslib dot svm dist calculation comparing](#nmslib-dot-svm-dist-calculation-comparing)
-  - [Centerface](#centerface)
+  - [Docker 封装](#docker-封装)
 
   <!-- /TOC -->
 ***
 
-# Fine tune
+# Insightface MXNet 模型使用
+## Insightface
+  - [deepinsight/insightface](https://github.com/deepinsight/insightface)
+  - **MXNet**
+    ```sh
+    # 安装 cuda-10-0 对应的 mxnet 版本
+    pip install mxnet-cu100
+    ```
+## 模型加载与特征提取
+  ```py
+  # cd ~/workspace/face_recognition_collection/insightface/deploy
+  import face_model
+  import argparse
+  import cv2
+  import os
+
+  home_path = os.environ.get("HOME")
+  args = argparse.ArgumentParser().parse_args([])
+  args.image_size = '112,112'
+  args.model = os.path.join(home_path, 'workspace/models/insightface_mxnet_model/model-r100-ii/model,0')
+  args.ga_model = os.path.join(home_path, "workspace/models/insightface_mxnet_model/gamodel-r50/model,0")
+  args.gpu = 0
+  args.det = 0
+  args.flip = 0
+  args.threshold = 1.05
+  model = face_model.FaceModel(args)
+
+  img = cv2.imread('./Tom_Hanks_54745.png')
+  bbox, points = model.detector.detect_face(img, det_type = model.args.det)
+
+  import matplotlib.pyplot as plt
+  aa = bbox[0, :4].astype(np.int)
+  bb = points[0].astype(np.int).reshape(2, 5).T
+
+  # landmarks
+  plt.imshow(img)
+  plt.scatter(ii[:, 0], ii[:, 1])
+
+  # cropped image
+  plt.imshow(img[aa[1]:aa[3], aa[0]:aa[2], :])
+
+  # By face_preprocess.preprocess
+  cd ../src/common
+  import face_preprocess
+  cc = face_preprocess.preprocess(img, aa, bb, image_size='112,112')
+  plt.imshow(cc)
+
+  # export image feature, OUT OF MEMORY
+  emb = model.get_feature(model.get_input(img))
+  ```
+## 模型训练
+  ```sh
+  # My 2-stage pipeline:
+  # Train softmax with lr=0.1 for 120K iterations.
+  # LRSTEPS='240000,360000,440000'
+  CUDA_VISIBLE_DEVICES='0,1,2,3' python -u train_softmax.py --data-dir $DATA_DIR --network "$NETWORK" --loss-type 0 --prefix "$PREFIX" --per-batch-size 128 --lr-steps "$LRSTEPS" --margin-s 32.0 --margin-m 0.1 --ckpt 2 --emb-size 128 --fc7-wd-mult 10.0 --wd 0.00004 --max-steps 140002
+
+  # Switch to ArcFace loss to do normal training with '100K,140K,160K' iterations.
+  # LRSTEPS='100000,140000,160000'
+  CUDA_VISIBLE_DEVICES='0,1,2,3' python -u train_softmax.py --data-dir $DATA_DIR --network "$NETWORK" --loss-type 4 --prefix "$PREFIX" --per-batch-size 128 --lr-steps "$LRSTEPS" --margin-s 64.0 --margin-m 0.5 --ckpt 1 --emb-size 128 --fc7-wd-mult 10.0 --wd 0.00004 --pretrained '../models2/model-y1-test/model,70'
+
+  # training dataset: ms1m
+  # LFW: 99.50, CFP_FP: 88.94, AgeDB30: 95.91
+  ```
+  ```sh
+  CUDA_VISIBLE_DEVICES='0' python -u train_softmax.py --data-dir /datasets/faces_casia --network "r50" --loss-type 0 --prefix "./model/mxnet_r50_casia" --per-batch-size 512 --lr-steps "20000,28000" --margin-s 32.0 --margin-m 0.1 --ckpt 2 --emb-size 512 --fc7-wd-mult 10.0 --wd 0.0005 --max-steps 12000
+
+  CUDA_VISIBLE_DEVICES='0' python -u train_softmax.py --data-dir /datasets/faces_casia --network "r50" --loss-type 4 --prefix "./model/mxnet_r50_casia" --per-batch-size 512 --lr-steps "20000,28000" --margin-s 64.0 --margin-m 0.5 --ckpt 1 --emb-size 512 --fc7-wd-mult 10.0 --wd 0.0005 --pretrained './model/mxnet_r50_casia'
+
+  # training dataset: ms1m
+  # LFW: 99.50, CFP_FP: 88.94, AgeDB30: 95.91
+  ```
+  **config.py 配置文件**
+  ```py
+  # config.py +78
+  network.m1.emb_size = 512
+
+  # config.py +117
+  dataset.emore.dataset_path = '/datasets/faces_emore'
+  dataset.emore.num_classes = 85742
+  ...
+  dataset.glint.dataset_path = '/datasets/faces_glint'
+  dataset.glint.num_classes = 180855
+
+  # config.py +147
+  loss.arcface = edict()
+  loss.arcface.loss_name = 'margin_softmax'
+  loss.arcface.loss_s = 64.0
+  loss.arcface.loss_m1 = 1.0
+  loss.arcface.loss_m2 = 0.5
+  loss.arcface.loss_m3 = 0.0
+
+  # default settings
+  default.lr = 0.1
+  default.wd = 0.0005
+  default.mom = 0.9
+  ```
+  **mobilenet 模型训练**
+  ```sh
+  export MXNET_ENABLE_GPU_P2P=0
+
+  # arcface train
+  CUDA_VISIBLE_DEVICES='0,1' python -u train_parall.py --network m1 --loss arcface --dataset emore --per-batch-size 96
+
+  # triplet fine-tune
+  CUDA_VISIBLE_DEVICES='0,1' python -u train.py --network m1 --loss arcface --dataset emore --per-batch-size 96 --pretrained ./models/m1-arcface-emore/model --lr 0.0001
+  CUDA_VISIBLE_DEVICES='1' python -u train.py --network m1 --loss triplet --dataset emore --per-batch-size 150 --pretrained ./models/m1-triplet-emore_97083/model --lr 0.0001 --lr-steps '1000,100000,160000,220000,280000,340000'
+  CUDA_VISIBLE_DEVICES='0' python -u train.py --network m1 --loss triplet --dataset glint --per-batch-size 150 --pretrained ./models/m1-triplet-emore_290445/model --pretrained-epoch 602 --lr 0.0001 --lr-steps '1000,100000,160000,220000,280000,340000'
+  ```
+  **Vargfacenet 模型训练**
+  ```sh
+  # Vargfacenet
+  CUDA_VISIBLE_DEVICES='0,1' python3 -u train_parall.py --network vargfacenet --loss softmax --dataset emore --per-batch-size 96
+  CUDA_VISIBLE_DEVICES='1' python3 -u train.py --network vargfacenet --loss arcface --dataset glint --per-batch-size 150 --pretrained ./models/vargfacenet-softmax-emore/model --pretrained-epoch 166 --lr 0.0001 --lr-steps '100000,160000,220000,280000,340000'
+  ```
+## 代码分析
+  - **config**
+    ```py
+    # config.py
+    config.bn_mom = 0.9
+    config.net_output = 'E'
+    config.ce_loss = True
+    config.fc7_lr_mult = 1.0
+    config.fc7_wd_mult = 1.0
+    config.fc7_no_bias = False
+
+    network.m1.net_name = 'fmobilenet'
+    network.m1.emb_size = 256
+    network.m1.net_output = 'GDC'
+    network.m1.net_multiplier = 1.0
+
+    network.vargfacenet.net_name = 'vargfacenet'
+    network.vargfacenet.net_multiplier = 1.25
+    network.vargfacenet.emb_size = 512
+    network.vargfacenet.net_output='J'
+
+    loss.arcface.loss_name = 'margin_softmax'
+    loss.arcface.loss_s = 64.0
+    loss.arcface.loss_m1 = 1.0
+    loss.arcface.loss_m2 = 0.5
+    loss.arcface.loss_m3 = 0.0
+
+    loss.triplet.loss_name = 'triplet'
+    loss.triplet.images_per_identity = 5
+    loss.triplet.triplet_alpha = 0.3
+    loss.triplet.triplet_bag_size = 7200
+    loss.triplet.triplet_max_ap = 0.0
+    loss.triplet.per_batch_size = 60
+    loss.triplet.lr = 0.05
+    ```
+  - **symbol**
+    ```py
+    # symbol_utils.py
+    def Linear(data, num_filter=1, kernel=(1, 1), stride=(1, 1), pad=(0, 0), num_group=1, name=None, suffix=''):
+        conv = mx.sym.Convolution(data=data, num_filter=num_filter, kernel=kernel, num_group=num_group, stride=stride, pad=pad, no_bias=True, name='%s%s_conv2d' %(name, suffix))
+        bn = mx.sym.BatchNorm(data=conv, name='%s%s_batchnorm' %(name, suffix), fix_gamma=False,momentum=bn_mom)    
+        return bn
+
+    def get_fc1(last_conv, num_classes, fc_type, input_channel=512):
+      elif fc_type=='E':
+        body = mx.sym.BatchNorm(data=body, fix_gamma=False, eps=2e-5, momentum=bn_mom, name='bn1')
+        body = mx.symbol.Dropout(data=body, p=0.4)
+        fc1 = mx.sym.FullyConnected(data=body, num_hidden=num_classes, name='pre_fc1')
+        fc1 = mx.sym.BatchNorm(data=fc1, fix_gamma=True, eps=2e-5, momentum=bn_mom, name='fc1')
+      elif fc_type=='FC':
+        body = mx.sym.BatchNorm(data=body, fix_gamma=False, eps=2e-5, momentum=bn_mom, name='bn1')
+        fc1 = mx.sym.FullyConnected(data=body, num_hidden=num_classes, name='pre_fc1')
+        fc1 = mx.sym.BatchNorm(data=fc1, fix_gamma=True, eps=2e-5, momentum=bn_mom, name='fc1')
+      elif fc_type=="GDC": #mobilefacenet_v1
+        conv_6_dw = Linear(last_conv, num_filter=input_channel, num_group=input_channel, kernel=(7,7), pad=(0, 0), stride=(1, 1), name="conv_6dw7_7")  
+        conv_6_f = mx.sym.FullyConnected(data=conv_6_dw, num_hidden=num_classes, name='pre_fc1')
+        fc1 = mx.sym.BatchNorm(data=conv_6_f, fix_gamma=True, eps=2e-5, momentum=bn_mom, name='fc1')
+      elif fc_type=='J':
+        fc1 = mx.sym.FullyConnected(data=body, num_hidden=num_classes, name='pre_fc1')
+        fc1 = mx.sym.BatchNorm(data=fc1, fix_gamma=True, eps=2e-5, momentum=bn_mom, name='fc1')
+    ```
+  - **fmobilenet**
+    ```py
+    # fmobilenet.py
+    def get_symbol():
+      conv_14 = Conv(conv_14_dw, num_filter=bf*32, kernel=(1, 1), pad=(0, 0), stride=(1, 1), name="conv_14") # 7/7
+      body = conv_14
+      fc1 = symbol_utils.get_fc1(body, num_classes, fc_type)
+      return fc1
+    ```
+  - **train_parall**
+    ```py
+    # train_parall.py
+    def get_symbol_embedding():
+      embedding = eval(config.net_name).get_symbol()
+      all_label = mx.symbol.Variable('softmax_label')
+      #embedding = mx.symbol.BlockGrad(embedding)
+      all_label = mx.symbol.BlockGrad(all_label)
+      out_list = [embedding, all_label]
+      out = mx.symbol.Group(out_list)
+      return out
+
+    def get_symbol_arcface(args):
+      embedding = mx.symbol.Variable('data')
+      all_label = mx.symbol.Variable('softmax_label')
+      gt_label = all_label
+      is_softmax = True
+      #print('call get_sym_arcface with', args, config)
+      _weight = mx.symbol.Variable("fc7_%d_weight"%args._ctxid, shape=(args.ctx_num_classes, config.emb_size),
+          lr_mult=config.fc7_lr_mult, wd_mult=config.fc7_wd_mult)
+      if config.loss_name=='softmax': #softmax
+        fc7 = mx.sym.FullyConnected(data=embedding, weight = _weight, no_bias = True, num_hidden=args.ctx_num_classes, name='fc7_%d'%args._ctxid)
+      elif config.loss_name=='margin_softmax':
+        _weight = mx.symbol.L2Normalization(_weight, mode='instance')
+        nembedding = mx.symbol.L2Normalization(embedding, mode='instance', name='fc1n_%d'%args._ctxid)
+        fc7 = mx.sym.FullyConnected(data=nembedding, weight = _weight, no_bias = True, num_hidden=args.ctx_num_classes, name='fc7_%d'%args._ctxid)
+        if config.loss_m1!=1.0 or config.loss_m2!=0.0 or config.loss_m3!=0.0:
+          gt_one_hot = mx.sym.one_hot(gt_label, depth = args.ctx_num_classes, on_value = 1.0, off_value = 0.0)
+          if config.loss_m1==1.0 and config.loss_m2==0.0:
+            _one_hot = gt_one_hot*args.margin_b
+            fc7 = fc7-_one_hot
+          else:
+            fc7_onehot = fc7 * gt_one_hot
+            cos_t = fc7_onehot
+            t = mx.sym.arccos(cos_t)
+            if config.loss_m1!=1.0:
+              t = t*config.loss_m1
+            if config.loss_m2!=0.0:
+              t = t+config.loss_m2
+            margin_cos = mx.sym.cos(t)
+            if config.loss_m3!=0.0:
+              margin_cos = margin_cos - config.loss_m3
+            margin_fc7 = margin_cos
+            margin_fc7_onehot = margin_fc7 * gt_one_hot
+            diff = margin_fc7_onehot - fc7_onehot
+            fc7 = fc7+diff
+        fc7 = fc7*config.loss_s
+
+      out_list = []
+      out_list.append(fc7)
+      if config.loss_name=='softmax': #softmax
+        out_list.append(gt_label)
+      out = mx.symbol.Group(out_list)
+      return out
+
+    def train_net(args):
+      esym = get_symbol_embedding()
+      asym = get_symbol_arcface
+
+      opt = optimizer.SGD(learning_rate=base_lr, momentum=base_mom, wd=base_wd, rescale_grad=_rescale)
+    ```
+## Fine tune
   - **fine-tuning** 在实践中，由于数据集不够大，很少会从头开始训练网络，常见的做法是使用预训练的网络来重新 **微调 fine-tuning**，或当做特征提取器
     - 卷积网络当做 **特征提取器**，使用在 ImageNet 上预训练的网络，去掉最后的全连接层，剩余部分当做特征提取器，得到特征后可以使用线性分类器 Liner SVM / Softmax 等来分类图像
     - **Fine-tuning 卷积网络** 替换掉网络的输入层，使用新的数据继续训练，可以选择 fine-tune 全部层或部分层，通常前面的层提取的是图像的 **通用特征 generic features**，如边缘 / 色彩特征，后面的层提取的是与特定类别有关的特征，因此常常只需要 fine-tuning 后面的层
     - 一般如果新数据集比较小且和原数据集相似，可以使用预训练网络当做特征提取器，用提取的特征训练线性分类器，如果新数据集足够大，可以 fine-tune 整个网络
     - 与重新训练相比，fine-tune 要使用 **更小的学习率**，因为训练好的网络模型权重已经平滑，不希望太快扭曲 distort 它们
+***
+
+# Highest Accuracy
+## Deepinsight Accuracy
+
+  | Method        | LFW(%) | CFP-FP(%) | AgeDB-30(%) | MegaFace(%)          |
+  | ------------- | ------ | --------- | ----------- | -------------------- |
+  | LResNet100E   | 99.77  | 98.27     | 98.28       | 98.47                |
+  | LResNet50E    | 99.80  | 92.74     | 97.76       | 97.64                |
+  | LResNet34E    | 99.65  | 92.12     | 97.70       | 96.70                |
+  | MobileFaceNet | 99.50  | 88.94     | 95.91       | -----                |
+  | VarGfaceNet   | 99.783 | 98.400    | 98.067      | 88.334 **DeepGlint** |
+## Mobilenet 256 Embeddings
+
+  | Step      | fc7_acc  | lfw     | cfp_fp  | agedb_30 | SUM     |
+  | --------- | -------- | ------- | ------- | -------- | ------- |
+  | **Loss**  | arcface  | **DS**  | glint   |          |         |
+  | 1660K     | 0.25     | 0.99567 | 0.89529 | 0.96683  | 2.85779 |
+  | **Loss**  | triplet  | **DS**  | emore   |          |         |
+  | 840       | 0.062472 | 0.99633 | 0.93429 | 0.97083  | 2.90145 |
+  | **Loss**  | triplet  | **DS**  | glint   |          |         |
+  | 960[40]   | 0.064614 | 0.99617 | 0.93686 | 0.97017  | 2.90319 |
+  | 2575[107] | 0.064761 | 0.99667 | 0.93829 | 0.96950  | 2.90445 |
+## Mobilenet 512 embeddings
+  | Step      | fc7_acc  | lfw     | cfp_fp  | agedb_30 | SUM     |
+  | --------- | -------- | ------- | ------- | -------- | ------- |
+  | **Loss**  | arcface  | **DS**  | emore   |          |         |
+  | 1204K     | 0.015625 | 0.99533 | 0.93671 | 0.96367  | 2.89571 |
+  | **Loss**  | triplet  | **DS**  | glint   |          |         |
+  | 25[1]     | 0.146767 | 0.99567 | 0.93971 | 0.96500  | 2.90038 |
+  | 532[20]   | 0.149680 | 0.99650 | 0.94614 | 0.96600  | 2.90864 |
+  | 613[23]   | 0.146067 | 0.99683 | 0.94957 | 0.96300  | 2.90940 |
+  | 668[25]   | 0.147614 | 0.99633 | 0.94757 | 0.96617  | 2.91007 |
+  | 914[34]   | 0.148697 | 0.99650 | 0.94886 | 0.96517  | 2.91052 |
+  | 996[37]   | 0.138909 | 0.99667 | 0.95014 | 0.96467  | 2.91148 |
+  | 2809[102] | 0.146283 | 0.99600 | 0.95071 | 0.96783  | 2.91455 |
+  | **Loss**  | triplet  | **DS**  | emore   |          |         |
+  | 1697[65]  | 0.155924 | 0.99667 | 0.95129 | 0.96817  | 2.91612 |
+## Vargface
+
+  | Step     | fc7_acc    | lfw     | cfp_fp  | agedb_30 | SUM     |
+  | -------- | ---------- | ------- | ------- | -------- | ------- |
+  | **Loss** | softmax    | **DS**  | emore   |          |         |
+  | 9.68K    | 0.265625   | 0.98383 | 0.82914 | 0.85117  |         |
+  | 25.66K   | 0.28645834 | 0.98333 | 0.83729 | 0.85717  |         |
+  | 62K      | 0.25520834 | 0.98067 | 0.83429 | 0.86517  |         |
+  | 72K      | 0.3125     | 0.97683 | 0.81329 | 0.87217  |         |
+  | 270K     | 0.7395833  | 0.99517 | 0.95086 | 0.93267  |         |
+  | 332K     | 0.703125   | 0.99583 | 0.94857 | 0.93350  |         |
+  | **Loss** | triplet    | **DS**  | glint   |          |         |
+  | 175[10]  | 0.070560   | 0.99567 | 0.94314 | 0.95033  | 2.88914 |
+  | 361[20]  | 0.056305   | 0.99683 | 0.94414 | 0.94867  | 2.88964 |
+  | 648[35]  | 0.064737   | 0.99567 | 0.94700 | 0.95250  | 2.89517 |
+  | **Loss** | triplet    | **DS**  | emore   |          |         |
 ***
 
 # 人脸识别损失函数
@@ -761,46 +1070,6 @@
     ```
 ***
 
-# 人脸旋转角度与侧脸
-  ```py
-  from skimage.transform import SimilarityTransform
-  import insightface
-  dd = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
-  dd.prepare(-1)
-
-  def rotation_detect(dd, image_path, image_show=True):
-      dst = np.array([[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366], [41.5493, 92.3655], [70.729904, 92.2041]])
-      aa = imread(image_path)
-      if image_show:
-          fig = plt.figure()
-          plt.imshow(aa)
-
-      bbox, points = dd.detect(aa)
-      rrs = []
-      for src in points:
-          src = src.astype(np.float32)
-          tform = SimilarityTransform()
-          tform.estimate(src, dst)
-
-          cc = tform.params[:2]
-          ne = np.dot(cc, np.vstack([src.T, np.ones(src.shape[0])])).T
-          # lean = nose - (left_eye + right_eye) / 2
-          lean = ne[2, 0] - (ne[0, 0] + ne[1, 0]) / 2
-          rrs.append({'rotation' : tform.rotation, 'lean': lean})
-
-          if image_show:
-              plt.scatter(src[:, 0], src[:, 1])
-              plt.scatter(ne[:, 0], ne[:, 1])
-              template = "Rotation: %(rotation).4f, Lean: %(lean).4f"
-              plt.text(src[:, 0].min(), src[:, 1].max() + 30, template %(rrs[-1]), color='r')
-      return points, rrs
-
-  points, ne = rotation_detect(dd, 'test_images/rotate.png')
-  points, ne = rotation_detect(dd, 'test_images/side.png')
-  points, ne = rotation_detect(dd, 'test_images/side_rotate.png')
-  ```
-***
-
 # nmslib dot svm dist calculation comparing
   ```py
   !pip install nmslib
@@ -855,85 +1124,22 @@
   ```
 ***
 
-# Centerface
-  - [Github CenterFace](https://github.com/Star-Clouds/CenterFace.git)
-  ```py
-  import cv2
-  import scipy.io as sio
-  import os
-  from centerface import CenterFace
-  cf = CenterFace(landmarks=True)
-  imm = cv2.imread('../../test_img/Anthony_Hopkins_0002.jpg')
-  h, w, _ = imm.shape
-  # h, w = 480, 640
-  cf(imm, h, w, threshold=0.9)
+# Docker 封装
+  ```sh
+  sudo apt-get install -y nvidia-docker2
+  docker run --runtime=nvidia -v /home/tdtest/workspace/:/home/tdtest/workspace -it tensorflow/tensorflow:latest-gpu-py3 bash
 
-  os.chdir("../../../samba/tdFace-flask/mtcnn_tf/")
-  import mtcnn
-  mtcnn_det = mtcnn.MTCNN('./mtcnn.pb')
-  mtcnn_det.detect_faces(imm)
+  pip install --upgrade pip
+  pip install -i https://pypi.tuna.tsinghua.edu.cn/simple sklearn scikit-image waitress python-crontab opencv-python mtcnn requests
 
-  import insightface
-  retina = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
-  retina.prepare(-1)
-  retina.detect(imm)
+  apt update && apt install python3-opencv
 
-  ''' Single face '''
-  %timeit cf(imm, h, w, threshold=0.9)
-  # 13.3 ms ± 795 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-  %timeit mtcnn_det.detect_faces(imm)
-  # 4.25 ms ± 103 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-  %timeit retina.detect(imm)
-  # 16.3 ms ± 256 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+  nohup ./server_flask.py -l 0 > app.log 2>&1 &
 
-  iaa = cv2.imread('../test_images/1.jpg')
-  h, w, _ = iaa.shape
-  ibb = imread('../test_images/1.jpg')
-  cf(iaa, h, w, threshold=0.9)
-  mtcnn_det.detect_faces(ibb)
-  retina.detect(iaa)
+  docker ps -a | grep tensorflow | cut -d ' ' -f 1
+  docker exec  -p 8082:9082 -it `docker ps -a | grep tensorflow | cut -d ' ' -f 1` bash
 
-  ''' Multi face '''
-  %timeit -n 100 cf(iaa, h, w, threshold=0.9)
-  # 315 ms ± 35.1 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
-  %timeit -n 100 mtcnn_det.detect_faces(ibb)
-  # 60.8 ms ± 1.04 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
-  %timeit -n 100 retina.detect(iaa)
-  # 456 ms ± 12.5 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
-  ```
-  ```py
-  In [37]: cf(iaa, h, w, threshold=0.9)                                                                                                                                                                      
-  Out[37]:
-  (array([[1.2027432e+03, 6.3846680e+02, 1.2974719e+03, 7.1919543e+02,
-           9.6600962e-01],
-          [3.6708798e+02, 3.1482706e+02, 5.2461823e+02, 4.4480045e+02,
-           9.5752537e-01],
-          [8.0555890e+02, 3.6767062e+02, 8.7024487e+02, 4.1478021e+02,
-           9.3526572e-01],
-          [9.1664618e+02, 3.9390857e+02, 9.4433923e+02, 4.2681378e+02,
-           9.1680831e-01]], dtype=float32),
-   array([[1219.671  ,  688.14215, 1210.0287 ,  677.7351 , 1203.3889 ,
-            696.7554 , 1239.1373 ,  704.9357 , 1229.6863 ,  695.70685],
-          [ 474.19067,  401.61896,  507.10788,  376.0719 ,  552.7421 ,
-            422.85565,  518.40485,  437.2738 ,  542.47516,  417.5965 ],
-          [ 840.6775 ,  403.3571 ,  848.16486,  395.8568 ,  855.9793 ,
-            407.278  ,  841.77545,  408.02695,  848.8935 ,  401.77716],
-          [ 942.64685,  415.50668,  937.8298 ,  410.7285 ,  949.89575,
-            416.11053,  943.01404,  418.20386,  940.0262 ,  414.42154]],
-         dtype=float32))
-
-  In [38]: mtcnn_det.detect_faces(ibb)
-  Out[38]:
-  (array([[ 305.56012,  383.83823,  460.1761 ,  514.2741 ],
-         [ 357.47598,  813.1547 ,  419.11575,  870.75256],
-         [ 628.12366, 1228.7682 ,  728.3427 , 1316.0033 ]], dtype=float32),
-  array([0.9999721 , 0.99896455, 0.94571006], dtype=float32),
-  array([[ 370.8418 ,  379.21454,  408.57153,  423.7774 ,  430.34595,
-           440.22064,  495.93152,  468.10645,  428.8279 ,  476.17242],
-         [ 386.78534,  388.89816,  400.56534,  406.9472 ,  409.095  ,
-           833.8898 ,  853.8183 ,  843.5045 ,  831.1647 ,  850.6185 ],
-         [ 661.7363 ,  661.23285,  678.1033 ,  705.1453 ,  705.9677 ,
-          1266.657  , 1293.0474 , 1281.595  , 1267.5706 , 1284.7332 ]],
-        dtype=float32))
+  docker commit `docker ps -a | grep tensorflow | cut -d ' ' -f 1` insightface
+  docker run -e CUDA_VISIBLE_DEVICES='1' -v /home/tdtest/workspace/:/workspace -it -p 9082:8082 -w /workspace/insightface-master insightface:latest ./server_flask.py
   ```
 ***

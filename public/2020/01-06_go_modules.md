@@ -145,6 +145,46 @@
   ```
 ***
 
+# Flag
+  ```go
+  package main
+
+  import (
+      "fmt"
+      "flag"
+  )
+
+  func main() {
+      ss := flag.String("string", "hello", "String value")
+      ii := flag.Int("int", 1234, "Int value")
+      bb := flag.Bool("bool", false, "Bool value")
+      ee := flag.String("ee", "", "Essential string value")
+      flag.Parse()
+      if *ee == "" {
+          flag.Usage()
+          return
+      }   
+
+      fmt.Println(*ss, *ii, *bb, *ee)
+  }
+  ```
+  ```sh
+  $ go run test_flag.go
+  # Usage of /tmp/go-build853351541/b001/exe/test_flag:
+  #   -bool
+  #     	Bool value
+  #   -ee string
+  #     	Essential string value
+  #   -int int
+  #     	Int value (default 1234)
+  #   -string string
+  #     	String value (default "hello")
+
+  $ go run test_flag.go -ee aa -bool -int 42 -string world
+  # world 42 true aa
+  ```
+***
+
 # Binary 二进制文件读写
 ## Test structs
   ```go
@@ -840,44 +880,6 @@
     user	0m14.385s
     sys	0m6.471s
     ```
-## flag
-  ```go
-  package main
-
-  import (
-      "fmt"
-      "flag"
-  )
-
-  func main() {
-      ss := flag.String("string", "hello", "String value")
-      ii := flag.Int("int", 1234, "Int value")
-      bb := flag.Bool("bool", false, "Bool value")
-      ee := flag.String("ee", "", "Essential string value")
-      flag.Parse()
-      if *ee == "" {
-          flag.Usage()
-          return
-      }   
-
-      fmt.Println(*ss, *ii, *bb, *ee)
-  }
-  ```
-  ```sh
-  $ go run test_flag.go
-  # Usage of /tmp/go-build853351541/b001/exe/test_flag:
-  #   -bool
-  #     	Bool value
-  #   -ee string
-  #     	Essential string value
-  #   -int int
-  #     	Int value (default 1234)
-  #   -string string
-  #     	String value (default "hello")
-
-  $ go run test_flag.go -ee aa -bool -int 42 -string world
-  # world 42 true aa
-  ```
 ## dataframe
   - [Github go-gota/gota](https://github.com/go-gota/gota)
     ```sh
@@ -1670,4 +1672,12 @@
 
   CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC="/usr/bin/aarch64-linux-gnu-gcc -Wl,-rpath-link,$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/29" go build github.com/mattn/go-tflite
   ```
+## XNNpack
+  - Bazel build tflite library with `--define tflite_with_xnnpack=true`
+  - Change in `$HOME/go/src/github.com/mattn/go-tflite`
+    ```sh
+    git diff delegates/xnnpack/xnnpack.go
+    # -#cgo LDFLAGS: -ltensorflowlite-delegate_xnnpack -lXNNPACK
+    # +#cgo LDFLAGS: -ltensorflowlite_c
+    ```
 ***

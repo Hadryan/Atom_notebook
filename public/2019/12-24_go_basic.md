@@ -422,7 +422,6 @@
         Middle = 1.0
         Big   = Middle << 100
         Small = Middle >> 99
-
     )
     fmt.Printf("Middle: %T, Small: %T\n", Middle, Small)
     // Middle: float64, Small: int
