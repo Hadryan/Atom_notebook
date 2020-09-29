@@ -1,3 +1,10 @@
+
+- [Github ResNeSt](https://github.com/zhanghang1989/ResNeSt)
+- [Github bleakie/MaskInsightface](https://github.com/bleakie/MaskInsightface)
+- [Group Convolution分组卷积，以及Depthwise Convolution和Global Depthwise Convolution](https://cloud.tencent.com/developer/article/1394912)
+- [深度学习中的卷积方式](https://zhuanlan.zhihu.com/p/75972500)
+***
+
 # Auto Tuner
 ## Keras Tuner
   - [Keras Tuner 简介](https://www.tensorflow.org/tutorials/keras/keras_tuner)
@@ -1110,62 +1117,6 @@
   ```
 ***
 
-## 曲线拟合
-  ```py
-  import json
-  with open("./checkpoints/keras_resnet101_emore_hist.json", 'r') as ff:
-      jj = json.load(ff)
-  ss = jj['loss'][29:-5]
-  ['%.4f' % ii for ii in jj['loss'][-10:]]
-  # ['8.6066', '8.2645', '7.9587', '7.6866', '7.4418', '7.2208']
-
-  zz = np.polyfit(np.arange(1, len(ss)), ss[1:], 3)
-  yy = np.poly1d(zz)
-  ["%.4f" % ii for ii in yy(np.arange(len(ss) - 5, len(ss) + 10))]
-  # ['8.6065', '8.2710', '7.9557', '7.6401', '7.3035', '6.9252', '6.4847', '5.9613']
-
-  ee = 0.105
-  pp = ss[:len(ss) - 3].copy()
-  for ii in range(len(ss) - 5, len(ss) + 10):
-      pp.append(pp[ii - 1] - (pp[ii - 2] - pp[ii - 1]) * (1 - ee))
-      print("%.4f" % pp[-1], end=', ')
-  # 8.5960, 8.2454, 7.9316, 7.6508, 7.3994, 7.1744, 6.9731, 6.7929
-  # ==> (f(x-1) - f(x)) / (f(x-2) - f(x-1)) = (1 - ee)
-  #     && f(x) = aa * np.exp(-bb * x) + cc
-  # ==> (np.exp(bb) - 1) / (np.exp(2 * bb) - np.exp(bb)) = (1 - ee)
-  # ==> (1 - ee) * np.exp(2 * bb) - (2 - ee) * np.exp(bb) + 1 = 0
-
-  from sympy import solve, symbols, Eq
-  bb = symbols('bb')
-  brr = solve(Eq(np.e ** (2 * bb) * (1 - ee) - (2 - ee) * np.e ** bb + 1, 0), bb)
-  print(brr) # [0.0, 0.110931560707281]
-  ff = lambda xx: np.e ** (-xx * brr[1])
-  ['%.4f' % ((ff(ii - 1) - ff(ii)) / (ff(ii - 2) - ff(ii - 1))) for ii in range(10, 15)]
-  # ['0.8950', '0.8950', '0.8950', '0.8950', '0.8950']
-
-  aa, cc = symbols('aa'), symbols('cc')
-  rr = solve([Eq(aa * ff(len(ss) - 3) + cc, ss[-3]), Eq(aa * ff(len(ss) - 1) + cc, ss[-1])], [aa, cc])
-  func_solve = lambda xx: rr[aa] * ff(xx) + rr[cc]
-  ["%.4f" % ii for ii in func_solve(np.arange(len(ss) - 5, len(ss) + 10))]
-  # ['8.6061', '8.2645', '7.9587', '7.6850', '7.4401', '7.2209', '7.0247', '6.8491']
-
-  from scipy.optimize import curve_fit
-
-  def func_curv(x, a, b, c):
-      return a * np.exp(-b * x) + c
-  xx = np.arange(1, 1 + len(ss[1:]))
-  popt, pcov = curve_fit(func_curv, xx, ss[1:])
-  print(popt) # [6.13053796 0.1813183  6.47103657]
-  ["%.4f" % ii for ii in func_curv(np.arange(len(ss) - 5, len(ss) + 10), *popt)]
-  # ['8.5936', '8.2590', '7.9701', '7.7208', '7.5057', '7.3200', '7.1598', '7.0215']
-
-  plt.plot(np.arange(len(ss) - 3, len(ss)), ss[-3:], label="Original Curve")
-  xx = np.arange(len(ss) - 3, len(ss) + 3)
-  plt.plot(xx, pp[-len(xx):], label="Manuel fit")
-  plt.plot(xx, func_solve(xx), label="func_solve fit")
-  plt.plot(xx, func_curv(xx, *popt), label="func_curv fit")
-  plt.legend()
-  ```
 ## Multi GPU
   ```py
   tf.debugging.set_log_device_placement(True)
@@ -1572,55 +1523,4 @@
   ss -lntpd | grep -i freeswitch
   ss -lntpd | grep -i php
   ss -lntpd | grep -i redis
-## Plot styles
-  ```py
-  big, baxes = plt.subplots(5, 5)
-  baxes = baxes.flatten()
-  styles = plt.style.available
-  if 'dark_background' in styles: styles.remove('dark_background')
-  for bax, style in zip(baxes, styles):
-      fn = style + '.png'
-      if not os.path.exists(fn):
-          plt.style.use(style)
-          fig, axes = plt.subplots(2, 2)
-          axes[0][0].plot(np.random.randint(1, 10, 10), label='aa')
-          axes[0][0].plot(np.random.randint(1, 10, 10), label='bb')
-          axes[0][0].legend()
-          axes[0][1].scatter(np.random.randint(1, 10, 10), np.random.randint(1, 10, 10))
-          axes[1][0].hist(np.random.randint(1, 10, 10))
-          rect = plt.Rectangle((0.2, 0.75), 0.4, 0.15, color='k', alpha=0.3)
-          axes[1][1].add_patch(rect)
-          fig.suptitle(style)
-          fig.savefig(fn)
-          plt.close()
-      bax.imshow(plt.imread(fn))
-      bax.axis('off')
-  big.tight_layout()
-  ```
-## Plot color palettes
-  ```py
-  import matplotlib.cm as cm
-  from cycler import cycler
-  import seaborn as sns
-
-  def get_colors(max_color, palette='husl'):
-      if palette == 'rainbow':
-          colors = cm.rainbow(np.linspace(0, 1, max_color))
-      else:
-          colors = sns.color_palette(palette, n_colors=max_color)
-      return colors
-
-  ccs = ['deep', 'muted', 'bright', 'pastel', 'dark', 'colorblind', 'rainbow', 'husl', 'hls']
-  max_color = 10
-  fig, axes = plt.subplots(3, 3, figsize=(15, 12))
-  axes = axes.flatten()
-  for cc, ax in zip (ccs, axes):
-      colors = get_colors(max_color, cc)
-      ax.set_prop_cycle(cycler('color', colors))
-      for ii in range(max_color):
-          ax.plot(np.random.randint(1, 10, 10), label=ii)
-      ax.legend(loc="upper right")
-      ax.set_title(cc)
-  fig.tight_layout()
-  ```
 ***

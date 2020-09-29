@@ -245,7 +245,9 @@
   - **ONNX Inference**
     ```py
     import onnxruntime
+    import onnx
 
+    onnx_model = onnx.load('mm.onnx')
     content = onnx_model.SerializeToString()
     sess = onnxruntime.InferenceSession(content)
     feed = dict([(input.name, np.ones([1, 224, 224, 3], dtype='float32')) for n, input in enumerate(sess.get_inputs())])
@@ -1709,7 +1711,7 @@
   ```
 ***
 
-# TF15 to TF13
+# TF2 to TF1
   - [Error in loading a keras model saved by tf 1.15 from tf 1.14](https://github.com/tensorflow/tensorflow/issues/33479)
   - Load in TF > 1.15 and convert to `weights` + `json model`
     ```py

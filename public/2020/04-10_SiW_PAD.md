@@ -1,12 +1,6 @@
 # ___2020 - 04 - 10 SiW PAD___
 ***
 
-- [Github ResNeSt](https://github.com/zhanghang1989/ResNeSt)
-- [Github bleakie/MaskInsightface](https://github.com/bleakie/MaskInsightface)
-- [Group Convolution分组卷积，以及Depthwise Convolution和Global Depthwise Convolution](https://cloud.tencent.com/developer/article/1394912)
-- [深度学习中的卷积方式](https://zhuanlan.zhihu.com/p/75972500)
-***
-
 # 数据整理
 ## 预处理
   ```sh

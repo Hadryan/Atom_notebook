@@ -325,14 +325,17 @@
                 builder.max_workspace_size = GiB(max_workspace_size)
             with open(model_file, 'rb') as model:
                 parser.parse(model.read())
-            assert parser.num_errors == 0
+            if parser.num_errors != 0:
+                print("Error:", parser.get_error(0))
+                return
             input_shape = network.get_input(0).shape
             network.get_input(0).shape = [1] + list(input_shape[1:])  # Change dynamic batch_size to 1
             engine = builder.build_cuda_engine(network)
 
         # Serialize the engine and write to a file
-        with open(engine_backup, "wb") as f:
-            f.write(engine.serialize())
+        if engine is not None:
+            with open(engine_backup, "wb") as f:
+                f.write(engine.serialize())
         return engine
 
     engine = build_onnx_engine(model_file="./aaa.onnx")
@@ -342,9 +345,15 @@
     class EngineInference:
         def __init__(self, engine):
             self.h_input = cuda.pagelocked_empty(trt.volume(engine.get_binding_shape(0)), dtype=np.float32)
-            self.h_output = cuda.pagelocked_empty(trt.volume(engine.get_binding_shape(1)), dtype=np.float32)
             self.d_input = cuda.mem_alloc(self.h_input.nbytes)
-            self.d_output = cuda.mem_alloc(self.h_output.nbytes)
+
+            self.h_outputs, self.d_outputs, self.output_shapes = [], [], []
+            for ii in range(1, engine.num_bindings):
+                h_output = cuda.pagelocked_empty(trt.volume(engine.get_binding_shape(ii)), dtype=np.float32)
+                self.h_outputs.append(h_output)
+                self.d_outputs.append(cuda.mem_alloc(h_output.nbytes))
+                self.output_shapes.append(engine.get_binding_shape(ii))
+            self.output_num = len(self.h_outputs)
             self.stream = cuda.Stream()
             self.context = engine.create_execution_context()
 
@@ -352,13 +361,16 @@
             np.copyto(self.h_input, img.ravel())
             cuda.memcpy_htod_async(self.d_input, self.h_input, self.stream)
             # Run inference.
-            # self.context.execute_async(bindings=[int(self.d_input), int(self.d_output)], stream_handle=self.stream.handle)
-            self.context.execute_async_v2(bindings=[int(self.d_input), int(self.d_output)], stream_handle=self.stream.handle)
+            self.context.execute_async_v2(bindings=[self.d_input, *self.d_outputs], stream_handle=self.stream.handle)
             # Transfer predictions back from the GPU.
-            cuda.memcpy_dtoh_async(self.h_output, self.d_output, self.stream)
+            # cuda.memcpy_dtoh_async(self.h_output, self.d_output, self.stream)
+            rets = []
+            for ii in range(self.output_num):
+                cuda.memcpy_dtoh_async(self.h_outputs[ii], self.d_outputs[ii], self.stream)
+                rets.append(self.h_outputs[ii].reshape(self.output_shapes[ii]))
             # Synchronize the stream
             self.stream.synchronize()
-            return self.h_output
+            return rets
 
     import tensorflow as tf
     (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
@@ -418,14 +430,16 @@
                 return runtime.deserialize_cuda_engine(f.read())
 
         EXPLICIT_BATCH = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH) # Explicit batch size only
-        builder = trt.Builder(TRT_LOGGER)
-        if max_workspace_size != -1:
-            builder.max_workspace_size = GiB(max_workspace_size)
-        with builder.create_network(EXPLICIT_BATCH) as network, builder.create_builder_config() as config, trt.OnnxParser(network, TRT_LOGGER) as parser:
+        # builder = trt.Builder(TRT_LOGGER)
+        with trt.Builder(TRT_LOGGER) as builder, builder.create_network(EXPLICIT_BATCH) as network, builder.create_builder_config() as config, trt.OnnxParser(network, TRT_LOGGER) as parser:
+            if max_workspace_size != -1:
+                builder.max_workspace_size = GiB(max_workspace_size)
             builder.max_batch_size = max_batch_size
             with open(model_file, 'rb') as model:
                 parser.parse(model.read())
-            assert parser.num_errors == 0
+            if parser.num_errors != 0:
+                print("Error:", parser.get_error(0))
+                return
             if int8_mode:
                 config.set_flag(trt.BuilderFlag.INT8)
                 config.int8_calibrator = calib
@@ -441,8 +455,9 @@
 
             engine = builder.build_engine(network, config)
         # Serialize the engine and write to a file
-        with open(engine_backup, "wb") as f:
-            f.write(engine.serialize())
+        if engine is not None:
+            with open(engine_backup, "wb") as f:
+                f.write(engine.serialize())
         return engine
     ```
   - **Inference**
