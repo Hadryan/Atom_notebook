@@ -511,7 +511,8 @@
   - **将目标服务器的共享目录挂载到/media/samba目录下**
     ```shell
     # uid / gid 为本地用户的 uid / gid
-    $ sudo mount -t cifs -o uid=1000,gid=1000,file_mode=0777,dir_mode=0777,username=leondgarse,password=123456 //192.168.7.11/leondgarse /media/samba/
+    # mfsymlinks 指定客户端可以使用 ln 创建软链接
+    $ sudo mount -t cifs -o uid=1000,gid=1000,file_mode=0777,dir_mode=0777,mfsymlinks,username=leondgarse,password=123456 //192.168.7.11/leondgarse /media/samba/
     ```
   - **开机自动启动samba服务**
     ```shell
@@ -1343,7 +1344,7 @@
     # curl 测试
     proxychains curl www.google.com
     ```
-  - **privoxy** 将 http 请求转发到 socks5 端口，配置全局代理
+  - **privoxy** 将 http 请求转发到 socks5 端口，配置全局代理，不使用 http 代理可不配置
     ```sh
     sudo apt install privoxy
 
@@ -1368,10 +1369,11 @@
     ```
   - **PAC 代理** [Github MatcherAny/whitelist.pac](https://github.com/MatcherAny/whitelist.pac.git)
     ```sh
-    # 通过 Apache2 配置 SwitchyOmega 使用本地文件，PAC URL: http://127.0.0.1/auto.pac
+    # 通过 Apache2 配置 SwitchyOmega 使用本地文件，PAC URL: http://127.0.0.1/whitelist.pac
     sudo apt install apache2
-    sudo ln -s /var/www/html/auto.pac $HOME/local_bin/OmegaProfile_PAC.pac
+    sudo ln -s $HOME/workspace/SSS_PAC/whitelist.pac /var/www/html/whitelist.pac
     ```
+    ![](images/pac_proxy.png)
 ## 每次开机时弹出 System problem report detected
   - Ubuntu 有一个内建的实用程序叫做 **Apport**, 当一个程序崩溃时，可以进行通知
   - **crash 文件** 生成的错误报告，删除后避免每次重启都弹出提示
@@ -1381,6 +1383,7 @@
     ```
   - **Approt 配置文件** `/etc/default/apport`，将 `enabled=1` 修改为 `0` 可以禁止 `approt` 服务
 ## Nvidia
+  - 配置文件 `/etc/X11/xorg.conf`
   - Fan speed
     ```sh
     sudo nvidia-xconfig --enable-all-gpus
@@ -1447,12 +1450,20 @@
     ```sh
     alias Tmux="tmux attach || if [[ -e $HOME/.tmux/resurrect/last ]]; then tmux new-session -d; tmux run-shell $HOME/.tmux/plugins/tmux-resurrect/scripts/restore.sh; tmux attach; else tmux; fi"
     ```
-## 制表符
-  ```sh
-  ┌─┬─┐ ┏━┳━┓ ─ | ━ ┃
-  ├─┼─┤ ┣━╋━┫
-  └─┴─┘ ┗━┻━┛
-  ```
+## 特殊符号
+  - [Unicode Character Table](https://unicode-table.com)
+  - **制表符**
+    ```sh
+    ┌─┬─┐ ┏━┳━┓ ─ | ━ ┃
+    ├─┼─┤ ┣━╋━┫
+    └─┴─┘ ┗━┻━┛
+    ```
+  - **上横线** `lattin capital letter a with Macron - Ā`
+    - 使用 `字母` + [组合用上横线 Combining Overline](https://unicode-table.com/cn/0305/)，如 `M̅`
+    ```sh
+    A̅ M̅ C̅ D̅ E̅ F̅ G̅ H̅ I̅ J̅ K̅ L̅ M̅ N̅ O̅ P̅ Q̅ R̅ S̅ T̅ U̅ V̅ W̅ X̅ Y̅ Z̅
+    a̅ b̅ c̅ d̅ e̅ f̅ g̅ h̅ i̅ j̅ k̅ l̅ m̅ n̅ o̅ p̅ q̅ r̅ s̅ t̅ u̅ v̅ w̅ x̅ y̅ z̅
+    ```
 ## adb
   - **Q: no permissions (user in plugdev group; are your udev rules wrong?)**
     ```sh
@@ -1490,7 +1501,6 @@
   beep -f 300 -l 500
   beep -f 350 -l 700
   beep -f 250 -l 600
-
   ```
 ***
 
@@ -1516,7 +1526,7 @@
   - 安装软件：
     ```c
     gocr、tesseract-ocr、libtiff-tools
-    安装tesseract中文语言包tesseract-ocr-chi-sim
+    安装 tesseract 中文语言包 tesseract-ocr-chi-sim
     ```
   - tif文件转文字tif-->text，直接使用tesseract命令即可，如：
     ```c
@@ -1726,9 +1736,11 @@
     New Keyring Name: [Unprotected] -> Set password as empty
     Right click on the new keyring -> Set as default    
     ```
+  - **Q: Chrome 不能保存密码**
     ```sh
-    C:\Users\leondgarse\AppData\Roaming\Macromedia\Flash Player\#SharedObjects\ZF79TSCS\localhost
-    ~/.config/google-chrome/Default/Pepper Data/Shockwave Flash/WritableRoot/#SharedObjects/NPRLVPUK/assets.kongregate.com/gamez/0016/7318/live
+    A: 删除 `Login Data`
+    $ cd ~/.config/google-chrome/Default  # Profile
+    $ rm Login\ Data*
     ```
 ## Numix FlatRemix 主题
   - Set Themes / Cursor / Icons / Shell theme using **gnome-tweak-tool**
@@ -1791,6 +1803,13 @@
     - 配置 `Keyboard shortcuts` 指定快捷键
     - 配置 `Intellihide` 指定何时隐藏顶栏
   - [proxy-switcher](https://extensions.gnome.org/extension/771/proxy-switcher/)
+  - **隐藏侧边栏的磁盘图标**
+    - 安装 [dash-to-dock](https://extensions.gnome.org/extension/307/dash-to-dock/)
+    - 打开 `gnome-tweak-tool` -> `Extensions` -> `Dash to dock` 配置
+    - Lanchers -> 关闭 `Show mounted volumes and devices`
+    - 打开 `Intelligent autohide`
+    - 打开 `Panel mode: extend to the screen edge`
+    - 关闭系统 dock: `sudo mv /usr/share/gnome-shell/extensions/ubuntu-dock@ubuntu.com{,.bak}`
 ## 多线程下载 mwget axel aria2
   - **mwget**
     ```sh
@@ -2152,6 +2171,8 @@
     iptux ibus-pinyin intltool java-common libssl-dev locate minicom mp3info mysql-client mysql-common mysql-server net-tools nfs-common nfs-kernel-server \
     p7zip-full pidgin privoxy proxychains rename rsync samba seahorse shutter supervisor synaptic teamviewer telnet testdisk tftp tftpd tmux tree \
     unrar unzip virtualbox virtualbox-ext-pack virtualbox-guest-additions-iso vlc wget wireshark zip
+
+    # snap install shutter
 
     sudo apt-get install \
     evolution gksu openjdk-9-jdk r-base r-recommended python-gtk2 python-vte python-glade2 numix-gtk-theme numix-icon-theme numix-blue-gtk-theme numix-icon-theme-circle

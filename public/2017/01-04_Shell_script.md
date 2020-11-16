@@ -98,7 +98,7 @@
     ```
     将每次执行""中的命令，更新为不同的值
     ```shell
-    alias UPDATEWORKSPACE=“export __WORKSPACE=`hg root 2>/dev/null`”
+    alias UPDATEWORKSPACE="export __WORKSPACE=`hg root 2>/dev/null`"
     ```
     只会在创建alias时执行一次，命令执行的结果作为固定的字符串
   - () 创建字符数组

@@ -200,6 +200,62 @@
 
     ani.save('sample.mp4', writer='ffmpeg')
     ```
+  - **ion**
+    ```py
+    import matplotlib.pyplot as plt
+    fig, axes = plt.subplots(1, 1, figsize=(6, 6))
+    plt.ion()
+
+    for ii in range(10):
+        axes.plot(list(range(ii)), [jj ** 2 for jj in list(range(ii))], c='r')
+        plt.show()
+        plt.pause(1)
+        # axes.clear()
+    input('Enter something --> ')
+    ```
+## tkinter
+  ```py
+  import numpy as np
+  import tkinter as tk
+  from matplotlib import pyplot as plt
+  from matplotlib import animation
+  from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+
+  fig, axes = plt.subplots(2, 1, figsize=(12, 6))
+  lines = []
+  datas = []
+  for ax in axes:
+      ax.set_xlim(0, 100)
+      ax.set_ylim(0, 100)
+      ax.grid()
+      lines.append(ax.plot([], [])[0])
+      datas.append([])
+
+  axes[0].plot([0, 100], [80, 80], "r:")
+  axes[1].plot([0, 100], [80, 80], "r:")
+  fig.tight_layout()
+  axes[0].set_title('hello')
+  axes[1].set_title('world')
+
+  def animate(ii):
+      for id, line in enumerate(lines):
+          xlim = int(line.axes.get_xlim()[1])
+          datas[id].append(np.random.randint(100))
+          datas[id] = datas[id][-xlim:]
+          line.set_data(list(range(0, len(datas[id]))), datas[id])
+      return lines
+
+  root = tk.Tk()
+  canvas = FigureCanvasTkAgg(fig, root)
+  canvas.get_tk_widget().grid(column=0, row=1)
+
+  # toolbar = NavigationToolbar2Tk(canvas, root)
+  # toolbar.update()
+  # canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
+  anim = animation.FuncAnimation(fig, animate, interval=60, blit=False)
+  root.mainloop()
+  ```
 ***
 
 # pyecharts

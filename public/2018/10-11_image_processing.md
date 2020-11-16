@@ -1638,7 +1638,7 @@
     images_show([bad_connection, ioo], ['Original', 'Square=3'])
     ```
     ![](images/skimage_morphology_opening.jpg)
-  - **closing / binary_closing** 形态学闭运算，先膨胀再腐蚀，可以消除黑色噪点，并链接小的两色区块，可用来填充孔洞
+  - **closing / binary_closing** 形态学闭运算，先膨胀再腐蚀，可以消除黑色噪点，并连接小的亮色区块，可用来填充孔洞
     ```py
     closing(image, selem=None, out=None)
     ```
@@ -1746,7 +1746,7 @@
   - **imageio** 可以使用 `ffmpeg` 读取视频文件，需要加载整个视频文件到内存
     ```py
     !pip install imageio-ffmpeg
-    
+
     import imageio
 
     vid = imageio.get_reader(vv,  'ffmpeg')

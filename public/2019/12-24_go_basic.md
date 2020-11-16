@@ -1,5 +1,6 @@
 # ___2019 - 12 - 24 Go Basic___
 ***
+
 # 目录
   <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
 
@@ -11,6 +12,7 @@
   	- [Install lgo](#install-lgo)
   	- [gofmt 格式化代码](#gofmt-格式化代码)
   	- [go doc 帮助文档](#go-doc-帮助文档)
+  	- [go 运行时 runtime](#go-运行时-runtime)
   - [基础语法](#基础语法)
   	- [约定规则](#约定规则)
   	- [Go 程序的一般结构](#go-程序的一般结构)
@@ -23,11 +25,13 @@
   	- [defer 延迟调用](#defer-延迟调用)
   	- [init 函数](#init-函数)
   	- [fmt 打印输出](#fmt-打印输出)
+  	- [os 与 runtime 获取运行环境](#os-与-runtime-获取运行环境)
   - [数据结构](#数据结构)
   	- [指针](#指针)
   	- [struct 结构体](#struct-结构体)
   	- [数组](#数组)
   	- [slice 切片](#slice-切片)
+  	- [string](#string)
   	- [range 迭代遍历](#range-迭代遍历)
   	- [map 字典](#map-字典)
   	- [make 与 new](#make-与-new)
@@ -50,7 +54,6 @@
   	- [并行](#并行)
   	- [Leaky Buffer 示例](#leaky-buffer-示例)
   - [Panic 与 Recover](#panic-与-recover)
-  	- [foo](#foo)
 
   <!-- /TOC -->
 ***
@@ -419,7 +422,6 @@
         Middle = 1.0
         Big   = Middle << 100
         Small = Middle >> 99
-
     )
     fmt.Printf("Middle: %T, Small: %T\n", Middle, Small)
     // Middle: float64, Small: int

@@ -109,16 +109,17 @@
     .build_release/lib/libcaffe.so: undefined reference to google::protobuf::RepeatedPtrField
     ```
   - Download the matched protobuf release `protobuf-cpp-xxx.tar.gz` from [protobuf releases](https://github.com/protocolbuffers/protobuf/releases)
-- Extract and compile:
-  ```sh
-  ./autogen.sh
-  ./configure
-  make
-  make check
-  sudo make install
-  sudo ldconfig
-  pkg-config --cflags --libs protobuf
-  ```
+  - Extract and compile:
+    ```sh
+    cd protobuf-3.11.4
+    ./autogen.sh
+    ./configure
+    make
+    make check
+    sudo make install
+    sudo ldconfig
+    pkg-config --cflags --libs protobuf
+    ```
 ## apt install
   ```sh
   sudo apt install \

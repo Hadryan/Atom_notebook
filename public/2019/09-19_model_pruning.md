@@ -38,6 +38,7 @@
 
 # 模型量化 Post-training quantization
 ## 量化 Optimization techniques
+  - [Model optimization](https://www.tensorflow.org/lite/performance/model_optimization)
   - 模型优化常用方法
     - **剪枝 pruning** 减少模型参数数量，简化模型
     - **量化 quantization** 降低表示精度
@@ -48,199 +49,314 @@
     - 一般可以再 GPU 运算时使用 16-bit float，CPU 计算时使用 8-bit int
   - **稀疏与剪枝 Sparsity and pruning** 将某些张量置零，即将层间的连接剪枝，使模型更稀疏化
 ## 模型量化方法
-  - **模型量化示例** 前向过程的大部分计算使用 int 替换 float
+  - **TFLite 量化方法**
+
+    | 方式                | 数据要求         | 模型大小减少 | 准确度           | 支持的硬件                                  |
+    | ------------------- | ---------------- | ------------ | ---------------- | ------------------------------------------- |
+    | 训练后 float16 量化 | 无               | 最大 50%     | 无损失           | CPU / GPU                                   |
+    | 训练后动态范围量化  | 无               | 最大 75%     | 有准确度降低     | CPU / GPU (Android)                         |
+    | 训练后整型量化      | 无标签的表示数据 | 最大 75%     | 较小的准确度降低 | CPU / GPU (Android) / EdgeTPU / Hexagon DSP |
+    | 训练中量化          | 有标签的训练数据 | 最大 75%     | 最小的准确度降低 | CPU / GPU (Android) / EdgeTPU / Hexagon DSP |
+
+  - **动态范围量化 Dynamic range quantization** 将模型权重的 float 类型转化为 int，在前向调用中，首先将 int 值转化为 float，并使用浮点运算计算
     ```py
     import tensorflow as tf
     converter = tf.lite.TFLiteConverter.from_saved_model(saved_model_dir)
-    converter.optimizations = [tf.lite.Optimize.OPTIMIZE_FOR_SIZE]
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
     tflite_quant_model = converter.convert()
     ```
-  - **权重和激活的全整数量化 Full integer quantization of weights and activations** 需要提供一个小的表示数据集 representative data set，模型的输入输出依然可以是浮点值
+  - **整型量化** 需要提供一个小的表示数据集 representative data set，以确定激活 / 输入的动态范围
     ```py
+    ''' 使用浮点型的输入 / 输出 '''
     import tensorflow as tf
-
+    converter = tf.lite.TFLiteConverter.from_saved_model(saved_model_dir)
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
     def representative_dataset_gen():
       for _ in range(num_calibration_steps):
         # Get sample input data as a numpy array in a method of your choosing.
         yield [input]
-
-    converter = tf.lite.TFLiteConverter.from_saved_model(saved_model_dir)
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
     converter.representative_dataset = representative_dataset_gen
     tflite_quant_model = converter.convert()
     ```
-## MNIST 权重量化
-  - 训练 keras MNIST 模型[Keras MNIST](https://github.com/leondgarse/Atom_notebook/blob/master/public/2018/09-06_tensorflow_tutotials.md#keras-mnist)
-  - **模型保存**
+    使用浮点型的输入 / 输出可以使转化更加平滑，但不支持全整型的加速设备
     ```py
-    tf.saved_model.save(model, './models')
-    !tree models/
-    # models/
-    # ├── assets
-    # ├── saved_model.pb
-    # └── variables
-    #     ├── variables.data-00000-of-00002
-    #     ├── variables.data-00001-of-00002
-    #     └── variables.index
-
-    !du -hd0 models/
-    # 4.8M	models/
+    ''' 全整型量化 '''
+    import tensorflow as tf
+    converter = tf.lite.TFLiteConverter.from_saved_model(saved_model_dir)
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    def representative_dataset_gen():
+      for _ in range(num_calibration_steps):
+        # Get sample input data as a numpy array in a method of your choosing.
+        yield [input]
+    converter.representative_dataset = representative_dataset_gen
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+    converter.inference_input_type = tf.int8  # or tf.uint8
+    converter.inference_output_type = tf.int8  # or tf.uint8
+    tflite_quant_model = converter.convert()
     ```
-  - **模型转化**
+  - **Float16 量化** 可以减小模型体积，在 GPU 等设备上有加速效果
     ```py
     import tensorflow as tf
-    # Convert to a tflite file, not quantized
-    converter = tf.lite.TFLiteConverter.from_saved_model('./models/')
-    tflite_model = converter.convert()
-    open("converted_model.tflite", "wb").write(tflite_model)
-
-    # To quantize the model on export, set the optimizations flag to optimize for size
-    # converter.optimizations = [tf.lite.Optimize.DEFAULT]
-    converter.optimizations = [tf.lite.Optimize.OPTIMIZE_FOR_SIZE]
+    converter = tf.lite.TFLiteConverter.from_saved_model(saved_model_dir)
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    converter.target_spec.supported_types = [tf.float16]
     tflite_quant_model = converter.convert()
-    open("converted_model_quant.tflite", "wb").write(tflite_quant_model)
     ```
-    模型大小大约可以压缩为 1 / 4
+## MNIST 动态范围量化
+  - **训练 keras MNIST 模型**
     ```py
-    !ls -lh converted_model.tflite converted_model_quant.tflite
-    # -rw-r--r-- 1 leondgarse leondgarse 401K 十月 28 16:27 converted_model_quant.tflite
-    # -rw-r--r-- 1 leondgarse leondgarse 1.6M 十月 28 16:26 converted_model.tflite
+    # Load MNIST dataset
+    mnist = keras.datasets.mnist
+    (train_images, train_labels), (test_images, test_labels) = mnist.load_data()
+
+    # Normalize the input image so that each pixel value is between 0 to 1.
+    train_images = train_images / 255.0
+    test_images = test_images / 255.0
+
+    # Define the model architecture
+    model = keras.Sequential([
+        keras.layers.InputLayer(input_shape=(28, 28)),
+        keras.layers.Reshape(target_shape=(28, 28, 1)),
+        keras.layers.Conv2D(filters=12, kernel_size=(3, 3), activation=tf.nn.relu),
+        keras.layers.MaxPooling2D(pool_size=(2, 2)),
+        keras.layers.Flatten(),
+        keras.layers.Dense(10)
+    ])
+
+    # Train the digit classification model
+    model.compile(optimizer='adam',
+                  loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+                  metrics=['accuracy'])
+    model.fit(train_images, train_labels, epochs=1, validation_data=(test_images, test_labels))
+    ```
+  - **转化为 TFLite 模型** 参数保持 `float32` 类型
+    ```py
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    tflite_model = converter.convert()
+
+    # Write it out to a tflite file
+    open("mnist_model.tflite", "wb").write(tflite_model)
+    # 84452
+    ```
+  - **动态范围量化** 权重量化为 `int` 类型，其他参数如输入 / 输出保持 `float` 类型
+    ```py
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    tflite_quant_model = converter.convert()
+    open("mnist_model_quant.tflite", "wb").write(tflite_quant_model)
+    # 23840
     ```
   - **模型加载运行** 使用的数据 batch 必须是 1
     ```py
-    # Run the TFLite models
-    interpreter = tf.lite.Interpreter(model_path='./converted_model_quant.tflite')
-    interpreter.allocate_tensors()
-    input_index = interpreter.get_input_details()[0]["index"]
-    output_index = interpreter.get_output_details()[0]["index"]
-    interpreter.set_tensor(input_index, tf.convert_to_tensor(np.ones([1, 28, 28], dtype='float32')))
-    interpreter.invoke()
-    pp = interpreter.get_tensor(output_index)
+    ''' Load the model into an interpreter '''
+    interpreter_quant = tf.lite.Interpreter(model_content=tflite_quant_model)
+    # interpreter_quant = tf.lite.Interpreter(model_path="mnist_model_quant.tflite")
+    interpreter_quant.allocate_tensors()
+    input_index = interpreter_quant.get_input_details()[0]["index"]
+    output_index = interpreter_quant.get_output_details()[0]["index"]
 
-    # x_test
-    interpreter.set_tensor(input_index, tf.convert_to_tensor(x_test[:1], dtype='float32'))
-    interpreter.invoke()
-    pp = interpreter.get_tensor(output_index)
-    print(pp.argmax(1), y_test[:1])
-    # [7] [7]
+    ''' Test the model on one image '''
+    test_image = np.expand_dims(test_images[0], axis=0).astype(np.float32)
+    interpreter_quant.set_tensor(input_index, test_image)
+    interpreter_quant.invoke()
+    predictions = interpreter_quant.get_tensor(output_index)
+    print(np.argmax(predictions[0]), test_labels[0])
+    # 7 7
 
-    # Dataset
-    images, labels = tf.cast(x_test, tf.float32), y_test
-    mnist_ds = tf.data.Dataset.from_tensor_slices((images, labels)).batch(1).shuffle(1)
-    for img, label in mnist_ds.take(1):
-        break
+    ''' Evaluate the models '''
+    # A helper function to evaluate the TF Lite model using "test" dataset.
+    def evaluate_model(interpreter):
+        interpreter.allocate_tensors()
+        input_index = interpreter.get_input_details()[0]["index"]
+        output_index = interpreter.get_output_details()[0]["index"]
 
-    interpreter.set_tensor(input_index, img)
-    interpreter.invoke()
-    predictions = interpreter.get_tensor(output_index)
-    print(predictions.argmax(1), label.numpy())
-    # [7] [7]
-
-    plt.imshow(img[0])
-    template = "True:{true}, predicted:{predict}"
-    plt.title(template.format(true=str(label[0].numpy()), predict=str(predictions.argmax())))
-    ```
-  - **模型验证 Evaluate**
-    ```py
-    def eval_model(interpreter, mnist_ds):
-        total_seen = 0
-        num_correct = 0
-
-        for img, label in mnist_ds:
-            total_seen += 1
-            interpreter.set_tensor(input_index, img)
+        prediction_digits = []
+        for test_image in test_images:
+            test_image = np.expand_dims(test_image, axis=0).astype(np.float32)
+            interpreter.set_tensor(input_index, test_image)
             interpreter.invoke()
-            predictions = interpreter.get_tensor(output_index)
-            if predictions.argmax(1) == label.numpy():
-                num_correct += 1
+            output = interpreter.tensor(output_index)
+            prediction_digits.append(np.argmax(output()[0]))
 
-            if total_seen % 500 == 0:
-                print("Accuracy after %i images: %f" % (total_seen, float(num_correct) / float(total_seen)))
+        prediction_digits = np.array(prediction_digits)
+        return (prediction_digits == test_labels).sum() / test_labels.shape[0], prediction_digits
 
-        return float(num_correct) / float(total_seen)
-    print(eval_model(interpreter, mnist_ds))
-    # 0.9794
-    interpreter_no_quant = tf.lite.Interpreter(model_path='./converted_model.tflite')
-    interpreter_no_quant.allocate_tensors()
-    print(eval_model(interpreter_no_quant, mnist_ds))
-    # 0.9797
+    print(evaluate_model(interpreter_quant)[0])
+    # 0.963
+    print(evaluate_model(tf.lite.Interpreter(model_path="mnist_model.tflite"))[0])
+    # 0.9628
     ```
-## MNIST 权重与激活全量化
+## MNIST 全整型量化
   - **权重与激活全量化 quantizes all weights and activations** 可以将模型大小压缩 4 倍，CPU 上的前向传播速度提升 3-4倍，需要提供一个表示数据集 representative dataset
   - **定义表示数据集**
+    - 表示数据集需要足够大，覆盖模型输入的取值范围，用来估计在转化为整型时，输入数据的动态范围
+    - 表示数据集是一个 `generator`，每一个值是一个 `list`，其中的元素输入模型的数据
     ```py
     import tensorflow as tf
-
-    mnist_train, _ = tf.keras.datasets.mnist.load_data()
-    images = tf.cast(mnist_train[0], tf.float32)/255.0
-    mnist_ds = tf.data.Dataset.from_tensor_slices((images)).batch(1)
+    mnist = keras.datasets.mnist
+    (train_images, train_labels), (test_images, test_labels) = mnist.load_data()
+    train_images, test_images = train_images.astype(np.float32) / 255.0, test_images.astype(np.float32) / 255.0
     def representative_data_gen():
-        for input_value in mnist_ds.take(100):
+        for input_value in tf.data.Dataset.from_tensor_slices(train_images).batch(1).take(100):
+            # Model has only one input so each data point has one element.
             yield [input_value]
     ```
   - **模型转化**
     ```py
-    converter = tf.lite.TFLiteConverter.from_saved_model("./models")
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
     converter.representative_dataset = representative_data_gen
 
-    tflite_quant_all_model = converter.convert()
-    open("converted_model_quant_all.tflite", "wb").write(tflite_quant_all_model)
-
-    !ls -lh converted_model_quant_all.tflite
-    # -rw-r--r-- 1 leondgarse leondgarse 401K 十月 29 11:08 converted_model_quant_all.tflite
+    tflite_model_quant = converter.convert()
+    open("mnist_model_rp.tflite", "wb").write(tflite_model_quant)
+    # 24640
     ```
-  - **模型完全量化**
-    - 模型中如果包含 tflite 不能转化的操作，将会保持原来的 float 类型
-    - 而且转化后的模型依然可以使用 float 类型的输入输出
-    - 这样一些需要全整型的机器学习加速器可能不支持
-    - 通过指定在量化过程中，如果有不支持的操作类型则抛出错误，以及输入输出同样使用整型，将模型完全量化
+    模型的权重与其他参数全部转化为 `int`，但输入 / 输出保持 `float32`
     ```py
+    interpreter = tf.lite.Interpreter(model_content=tflite_model_quant)
+    input_type = interpreter.get_input_details()[0]['dtype']
+    print('input: ', input_type)
+    output_type = interpreter.get_output_details()[0]['dtype']
+    print('output: ', output_type)
+    # input:  <class 'numpy.float32'>
+    # output:  <class 'numpy.float32'>
+    ```
+  - **全整型量化** 将输入 / 输出转为为 `int` 类型
+    ```py
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    converter.representative_dataset = representative_data_gen
+    # Ensure that if any ops can't be quantized, the converter throws an error
     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+    # Set the input and output tensors to uint8 (APIs added in r2.3)
     converter.inference_input_type = tf.uint8
     converter.inference_output_type = tf.uint8
 
-    tflite_quant_io_model = converter.convert()
-    open("converted_model_quant_io.tflite", "wb").write(tflite_quant_io_model)
-    !ls -lh converted_model_quant_io.tflite
-    # -rw-r--r-- 1 leondgarse leondgarse 401K 十月 29 11:23 converted_model_quant_io.tflite
+    tflite_model_quant = converter.convert()
+
+    interpreter = tf.lite.Interpreter(model_content=tflite_model_quant)
+    input_type = interpreter.get_input_details()[0]['dtype']
+    print('input: ', input_type)
+    output_type = interpreter.get_output_details()[0]['dtype']
+    print('output: ', output_type)
+    # input:  <class 'numpy.uint8'>
+    # output:  <class 'numpy.uint8'>
+
+    open("mnist_model_quant_rp.tflite", "wb").write(tflite_model_quant)
+    # 24720
     ```
-    **模型测试** [ ??? ]
+    输入 / 输出量化为整型后，需要根据 `get_input_details` / `get_output_details` 中的 `quantization` 指定的方式转化
     ```py
-    _, mnist_test = tf.keras.datasets.mnist.load_data()
-    interpreter_quant = tf.lite.Interpreter(model_path='converted_model_quant_io.tflite')
-    interpreter_quant.allocate_tensors()
-    interpreter_quant.set_tensor(interpreter_quant.get_input_details()[0]['index'], tf.convert_to_tensor(mnist_test[0][:1], dtype='float32'))
-    interpreter_quant.invoke()
-    pp = interpreter_quant.get_tensor(interpreter_quant.get_output_details()[0]["index"])
-    print(pp.argmax(1), mnist_test[1][:1])
-    # [7] [7]
+    print(interpreter.get_input_details())
+    # [{..., 'dtype': numpy.uint8, 'quantization': (0.003921568859368563, 0),}]
+    print(interpreter.get_output_details())
+    # [{..., 'dtype': numpy.uint8, 'quantization': (0.12114132940769196, 176),}]
+
+    input_details = interpreter.get_input_details()[0]
+    if input_details['dtype'] == np.uint8:
+        input_scale, input_zero_point = input_details["quantization"]
+        test_image = test_image / input_scale + input_zero_point
+
+    output_details = interpreter.get_output_details()[0]
+    if output_details['dtype'] == np.uint8:
+        output_scale, output_zero_point = output_details["quantization"]
+        output = (output.astype(np.float32) - output_zero_point) * output_scale
     ```
-## 量化为 float16
-  - **量化为 16 位浮点型** 将模型大小压缩为原来的 1/2，在使用 **GPU** 计算时，可以加速前向过程
-  - **convert 定义**
+  - **输入 / 输出测试**
     ```py
-    converter = tf.lite.TFLiteConverter.from_saved_model("./models")
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
-    converter.target_spec.supported_types = [tf.lite.constants.FLOAT16]
-    ```
-  - **模型转化** 默认输入输出仍使用 float32
-    ```py
-    tflite_fp16_model = converter.convert()
-    open("converted_model_quant_f16.tflite", "wb").write(tflite_fp16_model)
-    !ls -lh converted_model_quant_f16.tflite
-    # -rw-r--r-- 1 leondgarse leondgarse 797K 十月 29 12:00 converted_model_quant_f16.tflite
+    ''' float 输入 / 输出 '''
+    interpreter_float = tf.lite.Interpreter(model_path="mnist_model_rp.tflite")
+    interpreter_float.allocate_tensors()
+    input_index = interpreter_float.get_input_details()[0]["index"]
+    output_index = interpreter_float.get_output_details()[0]["index"]
+    test_image = np.expand_dims(test_images[0], axis=0).astype(np.float32)
+    interpreter_float.set_tensor(input_index, test_image)
+    interpreter_float.invoke()
+    print(interpreter_float.get_tensor(output_index))
+    # [[-3.270816, -9.449024, -1.6959786, 1.8171196, -6.4204907, -5.45136, -12.356416, 8.358751, -4.361088, -1.6959786]]
+
+    ''' int 输入 / 输出 '''
+    interpreter_int = tf.lite.Interpreter(model_path="mnist_model_quant_rp.tflite")
+    interpreter_int.allocate_tensors()
+    input_details = interpreter_int.get_input_details()[0]
+    input_scale, input_zero_point = input_details["quantization"]
+    test_image = test_images[0] / input_scale + input_zero_point
+    test_image = np.expand_dims(test_image, axis=0).astype(input_details["dtype"])
+    interpreter_int.set_tensor(input_details["index"], test_image)
+
+    output_details = interpreter_int.get_output_details()[0]
+    output_scale, output_zero_point = output_details["quantization"]
+    interpreter_int.invoke()
+    pp = interpreter_int.get_tensor(output_details["index"])
+    print(pp)
+    # [[149, 99, 162, 191, 123, 132, 75, 245, 140, 162]]
+    print((pp.astype(np.float32) - output_zero_point) * output_scale)
+    # [[-3.2708158, -9.327883, -1.6959786, 1.81712, -6.4204903, -5.3302183, -12.235274, 8.358751, -4.361088, -1.6959786]]
     ```
   - **模型测试**
     ```py
-    _, mnist_test = tf.keras.datasets.mnist.load_data()
-    interpreter_quant = tf.lite.Interpreter(model_path='converted_model_quant_f16.tflite')
-    interpreter_quant.allocate_tensors()
-    interpreter_quant.set_tensor(interpreter_quant.get_input_details()[0]['index'], tf.convert_to_tensor(mnist_test[0][:1], dtype='float32'))
-    interpreter_quant.invoke()
-    pp = interpreter_quant.get_tensor(interpreter_quant.get_output_details()[0]["index"])
-    print(pp.argmax(1), mnist_test[1][:1])
-    # [7] [7]
+    # Helper function to run inference on a TFLite model
+    def run_tflite_model(tflite_file, test_images):
+        interpreter = tf.lite.Interpreter(model_path=tflite_file)
+        interpreter.allocate_tensors()
+        input_details = interpreter.get_input_details()[0]
+        output_details = interpreter.get_output_details()[0]
+
+        predictions = []
+        for test_image in test_images:
+            # Check if the input type is quantized, then rescale input data to uint8
+            if input_details['dtype'] == np.uint8:
+                input_scale, input_zero_point = input_details["quantization"]
+                test_image = test_image / input_scale + input_zero_point
+
+            test_image = np.expand_dims(test_image, axis=0).astype(input_details["dtype"])
+            interpreter.set_tensor(input_details["index"], test_image)
+            interpreter.invoke()
+            output = interpreter.get_tensor(output_details["index"])[0]
+
+            # Check if the output type is quantized, then rescale output data to float
+            if output_details['dtype'] == np.uint8:
+                output_scale, output_zero_point = output_details["quantization"]
+                output = (output.astype(np.float32) - output_zero_point) * output_scale
+            predictions.append(output.argmax())
+        return np.array(predictions)
+
+    run_tflite_model('mnist_model_quant_rp.tflite', test_images[:10])
+    # array([7, 2, 1, 0, 4, 1, 4, 9, 6, 9])
+    test_labels[:10]
+    # array([7, 2, 1, 0, 4, 1, 4, 9, 5, 9], dtype=uint8)
+
+    pps = run_tflite_model('mnist_model_quant_rp.tflite', test_images)
+    print('Accuracy:', (pps == test_labels).sum() / pps.shape[0])
+    # Accuracy: 0.9627
+    ```
+## MNIST float16 量化
+  - **量化为 16 位浮点型** 将模型大小压缩为原来的 1/2，在使用 **GPU** 计算时，可以加速前向过程
+  - **模型转化** 默认输入输出仍使用 float32
+    ```py
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    converter.target_spec.supported_types = [tf.float16]
+
+    tflite_fp16_model = converter.convert()
+    open("mnist_model_quant_f16.tflite", "wb").write(tflite_fp16_model)
+    # 44272
+    ```
+  - **模型测试**
+    ```py
+    (train_images, train_labels), (test_images, test_labels) = keras.datasets.mnist.load_data()
+    test_images = test_images / 255.0
+    test_image = np.expand_dims(test_images[0], axis=0).astype(np.float32)
+
+    interpreter_fp16 = tf.lite.Interpreter(model_path="mnist_model_quant_f16.tflite")
+    interpreter_fp16.allocate_tensors()
+    input_index = interpreter_fp16.get_input_details()[0]["index"]
+    output_index = interpreter_fp16.get_output_details()[0]["index"]
+
+    interpreter_fp16.set_tensor(input_index, test_image)
+    interpreter_fp16.invoke()
+    predictions = interpreter_fp16.get_tensor(output_index)
+    print(predictions.argmax(), test_labels[0])
+    # 7 7
     ```
 ## Frozen Resnet 量化
   - resnet-v2 是带有预激活层 pre-activation layers 的 resnet，可以将训练好的 frozen graph resnet-v2-101 量化为 tflite 的 flatbuffer 格式

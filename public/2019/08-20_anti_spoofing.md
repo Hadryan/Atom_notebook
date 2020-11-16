@@ -118,8 +118,10 @@
     - 预测时，使用 **可见光摄像头人脸图像** 处理后的特征进行分类
 ## NUAA 数据集加载
   ```py
-  os.chdir("/home/leondgarse/workspace/samba/insightface-master")
-  from face_model import FaceModel
+  import sys
+  # sys.path.append('/home/leondgarse/workspace/samba/tdFace-flask')
+  sys.path.append('/home/tdtest/workspace/tdFace-flask')
+  from face_model.face_model import FaceModel
   from mtcnn_tf.mtcnn import MTCNN
   fm = FaceModel(model_path=None, min_face_size=40, mtcnn_confidence=0.9)
 
@@ -132,7 +134,7 @@
   image_size = (112, 112)
   def extract_face_location(ff):
       img = skimage.io.imread(ff)
-      bb, pp = fm.get_face_location(img)
+      bb, cc, pp = fm.get_face_location(img)
       if bb.shape[0] == 0:
           print(">>>> No face in this picture! ff = %s, shape = %s<<<<" % (ff, bb.shape))
           copy(ff, "Detect_flaw/")
@@ -140,7 +142,7 @@
           print(">>>> NOT a single face in this picture! ff = %s, shape = %s<<<<" % (ff, bb.shape))
 
       nn = fm.face_align_landmarks(img, pp, image_size=image_size)
-      return nn[0] if nn.shape[0] != 0 else np.zeros([image_size[0], image_size[1], 3], dtype=uint8)
+      return nn[0] if nn.shape[0] != 0 else np.zeros([image_size[0], image_size[1], 3], dtype='uint8')
 
 
   def image_collection_by_file(file_name, file_path, limit=None, to_array=True, save_local=True, save_base_path="./Cropped", load_func=extract_face_location):
@@ -171,7 +173,7 @@
 
   def load_train_test_data(raw_path="./", limit=None, save_name="./train_test_dataset.npz"):
       cur_dir = os.getcwd()
-      os.chdir(raw_path.replace('~', os.environ['HOME']))
+      os.chdir(os.path.expanduser(raw_path))
       if not os.path.exists(save_name):
           imposter_train, imposter_train_f = image_collection_by_file("imposter_train_raw.txt", "ImposterRaw", limit=limit, save_base_path="./Cropped/imposter_train")
           client_train, client_train_f = image_collection_by_file("client_train_raw.txt", "ClientRaw", limit=limit, save_base_path="./Cropped/client_train")
@@ -191,7 +193,7 @@
       os.chdir(cur_dir)
       return train_x, train_y, test_x, test_y
 
-  train_x, train_y, test_x, test_y = load_train_test_data('~/workspace/datasets/NUAA')
+  train_x, train_y, test_x, test_y = load_train_test_data('./NUAA')
   print(train_x.shape, train_y.shape, test_x.shape, test_y.shape)
   # (3486, 112, 112, 3) (3486,) (9119, 112, 112, 3) (9119,)
   ```
@@ -199,7 +201,7 @@
   import os
   import numpy as np
 
-  tt = np.load(os.environ['HOME'] + '/workspace/datasets/NUAA/train_test_dataset.npz')
+  tt = np.load('./NUAA/train_test_dataset.npz')
   train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
   ```
 ## skimage 提取 LBP 特征
@@ -413,7 +415,7 @@
 
         return hist_norm
 
-    aa = image_2_block_LBP_hist(coffee())
+    aa = image_2_block_LBP_hist(np.ones([112, 112, 3]))
     print(aa.shape) # (1593,) --> 3 * 9 * 59
     ```
   - **SVM 分类器**
@@ -532,18 +534,19 @@
   )
   ```
   ```py
+  from tqdm import tqdm
   def mode_selection_test(color_mode="hsv", lbp_method="uniform", save_name="foo.npz"):
       ''' Load train test data '''
       if not os.path.exists(save_name):
-          train_x_hist = np.array([image_2_block_LBP_hist(ii, n_vert=5, n_hor=5, exclude_row=2, mode=color_mode, lbp_method=lbp_method) for ii in train_x])
-          train_x_hist_16 = np.array([image_2_block_LBP_hist(ii, n_vert=5, n_hor=5, exclude_row=2, neighbors=16, mode=color_mode, lbp_method=lbp_method) for ii in train_x])
-          train_x_hist_single_8 = np.array([image_2_block_LBP_hist(ii, n_vert=1, n_hor=1, exclude_row=None, mode=color_mode, lbp_method=lbp_method) for ii in train_x])
-          train_x_hist_single_16 = np.array([image_2_block_LBP_hist(ii, n_vert=1, n_hor=1, exclude_row=None, neighbors=16, mode=color_mode, lbp_method=lbp_method) for ii in train_x])
+          train_x_hist = np.array([image_2_block_LBP_hist(ii, n_vert=5, n_hor=5, exclude_row=[2], mode=color_mode, lbp_method=lbp_method) for ii in tqdm(train_x)])
+          train_x_hist_16 = np.array([image_2_block_LBP_hist(ii, n_vert=5, n_hor=5, exclude_row=[2], neighbors=16, mode=color_mode, lbp_method=lbp_method) for ii in tqdm(train_x)])
+          train_x_hist_single_8 = np.array([image_2_block_LBP_hist(ii, n_vert=1, n_hor=1, exclude_row=None, mode=color_mode, lbp_method=lbp_method) for ii in tqdm(train_x)])
+          train_x_hist_single_16 = np.array([image_2_block_LBP_hist(ii, n_vert=1, n_hor=1, exclude_row=None, neighbors=16, mode=color_mode, lbp_method=lbp_method) for ii in tqdm(train_x)])
 
-          test_x_hist = np.array([image_2_block_LBP_hist(ii, n_vert=5, n_hor=5, exclude_row=2, mode=color_mode, lbp_method=lbp_method) for ii in test_x])
-          test_x_hist_16 = np.array([image_2_block_LBP_hist(ii, n_vert=5, n_hor=5, exclude_row=2, neighbors=16, mode=color_mode, lbp_method=lbp_method) for ii in test_x])
-          test_x_hist_single_8 = np.array([image_2_block_LBP_hist(ii, n_vert=1, n_hor=1, exclude_row=None, mode=color_mode, lbp_method=lbp_method) for ii in test_x])
-          test_x_hist_single_16 = np.array([image_2_block_LBP_hist(ii, n_vert=1, n_hor=1, exclude_row=None, neighbors=16, mode=color_mode, lbp_method=lbp_method) for ii in test_x])
+          test_x_hist = np.array([image_2_block_LBP_hist(ii, n_vert=5, n_hor=5, exclude_row=[2], mode=color_mode, lbp_method=lbp_method) for ii in tqdm(test_x)])
+          test_x_hist_16 = np.array([image_2_block_LBP_hist(ii, n_vert=5, n_hor=5, exclude_row=[2], neighbors=16, mode=color_mode, lbp_method=lbp_method) for ii in tqdm(test_x)])
+          test_x_hist_single_8 = np.array([image_2_block_LBP_hist(ii, n_vert=1, n_hor=1, exclude_row=None, mode=color_mode, lbp_method=lbp_method) for ii in tqdm(test_x)])
+          test_x_hist_single_16 = np.array([image_2_block_LBP_hist(ii, n_vert=1, n_hor=1, exclude_row=None, neighbors=16, mode=color_mode, lbp_method=lbp_method) for ii in tqdm(test_x)])
 
           np.savez(save_name[:-4],
                     train_x_hist=train_x_hist,
@@ -1564,7 +1567,7 @@
     import skimage
     import skimage.feature
     import numpy as np
-    tt = np.load(os.environ['HOME'] + '/workspace/datasets/NUAA/train_test_dataset.npz')
+    tt = np.load('./train_test_dataset.npz')
     train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
 
     def split_image(image, n_hor=3, n_vert=3, exclude_row=None):
@@ -1594,7 +1597,7 @@
     def image_2_block_LBP_hist(data, n_vert=5, n_hor=5, exclude_row=2, mode="YCbCr", neighbors=8, lbp_method='nri_uniform'):
         if mode.lower() == "hsv":
             data = skimage.color.rgb2hsv(data)
-          elif mode.lower() == "ycbcr":
+        elif mode.lower() == "ycbcr":
             data = skimage.color.rgb2ycbcr(data)
 
         blocks = split_image(data, n_hor, n_vert, exclude_row=exclude_row)
@@ -1610,13 +1613,13 @@
     train_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in train_y])
     test_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in test_y])
 
-    np.savez("train_test_cnn_ycbcr_5_nri_uniform",
+    np.savez("train_test_ycbcr_nri_uniform_v5_h5_exclude_2",
               train_x_hist=train_x_hist,
               test_x_hist=test_x_hist,
               train_y_oh=train_y_oh,
               test_y_oh=test_y_oh,
     )
-    tt = np.load("train_test_cnn_ycbcr_5_nri_uniform.npz")
+    tt = np.load("train_test_ycbcr_nri_uniform_v5_h5_exclude_2.npz")
     train_x_hist, test_x_hist, train_y_oh, test_y_oh = tt["train_x_hist"], tt["test_x_hist"], tt["train_y_oh"], tt["test_y_oh"]
     ```
   - **Keras CNN 分类器**
@@ -1783,6 +1786,71 @@
   model.fit_generator(aug.flow(train_x, train_y, batch_size=8), validation_data=(test_x, test_y), epochs=50, callbacks=callbacks)
 
   model.fit(train_x, train_y, batch_size=4, epochs=50, callbacks=callbacks, validation_data=(test_x, test_y))
+  ```
+## 数据增强
+  ```py
+  from skimage.transform import resize
+  sys.path.append('/home/leondgarse/workspace/samba/Keras_insightface')
+  import train
+  import myCallbacks
+  from autoaugment import ImageNetPolicy
+  policy = ImageNetPolicy()
+  policy_func = lambda img: np.array(policy(tf.keras.preprocessing.image.array_to_img(img)), dtype=np.float32)
+
+  tt = np.load('./train_test_dataset.npz')
+  train_x, train_y, test_x, test_y = tt["train_x"], tt["train_y"], tt["test_x"], tt["test_y"]
+
+  train_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in train_y])
+  test_y_oh = np.array([[0, 1] if ii == 0 else [1, 0] for ii in test_y])
+
+  def random_crop(img, target):
+      hh, ww, _ = img.shape
+      hht, wwt = target[:2]
+      if hh < hht or ww < wwt:
+          return resize(img, target)
+      hhs = np.random.choice(hh - hht)
+      wws = np.random.choice(ww - wwt)
+      return img[hhs: hhs+hht, wws: wws+wwt]
+
+  def image_data_gen(xx, yy):
+      total = xx.shape[0]
+      while True:
+          tf.print("Shuffle image data...")
+          idxes = np.random.permutation(total)
+          for ii in idxes:
+              # img = policy_func(xx[ii]).astype('float32')
+              # img = random_crop(img, (48, 48)) / 255.0
+              # img = image_2_block_LBP_hist(img, n_vert=3, n_hor=3, exclude_row=None, mode="YCbCr", neighbors=8, lbp_method='nri_uniform')
+              img = xx[ii] / 255.0
+
+              yield (img, yy[ii])
+
+  AUTOTUNE = tf.data.experimental.AUTOTUNE
+  train_dataset = tf.data.Dataset.from_generator(lambda: image_data_gen(train_x, train_y_oh), output_types=(tf.float32, tf.int64), output_shapes=((48, 48, 3), (2,)))
+  train_dataset = train_dataset.batch(160)
+  train_dataset = train_dataset.prefetch(buffer_size=AUTOTUNE)
+  steps_per_epoch = int(np.ceil(train_x.shape[0]/160))
+
+  aa, bb = train_dataset.as_numpy_iterator().next()
+  plt.imshow(np.vstack([np.hstack(aa[ii * 20 : (ii + 1) * 20]) for ii in range(int(np.ceil(aa.shape[0] / 20)))]))
+
+  mm = train.buildin_models('mobilenetv2', 0.4, 256, (48, 48, 3))
+  model = keras.models.Model(mm.inputs[0], keras.layers.Dense(2, name='softmax', activation="softmax")(mm.outputs[0]))
+  model.compile(optimizer="adam", loss='categorical_crossentropy', metrics=["accuracy"])
+  callbacks = [
+      # keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5),
+      # keras.callbacks.EarlyStopping(monitor='val_loss', patience=10),
+      keras.callbacks.ModelCheckpoint("./keras.h5", monitor='val_loss', save_best_only=True),
+      # keras.callbacks.TensorBoard(log_dir='keras_logs'),
+      # myCallbacks.Gently_stop_callback(),
+  ]
+  model.fit(train_dataset, epochs=50, callbacks=callbacks, steps_per_epoch=steps_per_epoch)
+
+  [(ii, model.predict(np.expand_dims(train_x[ii][:48, :48] / 255.0, 0)), model.predict(np.expand_dims(train_x[ii][48:96, 48:96] / 255.0, 0)), train_y_oh[ii]) for ii in np.random.permutation(train_x.shape[0])[:10]]
+  [(ii, model.predict(np.expand_dims(test_x[ii][:48, :48] / 255.0, 0)), model.predict(np.expand_dims(test_x[ii][48:96, 48:96] / 255.0, 0)), test_y_oh[ii]) for ii in np.random.permutation(test_x.shape[0])[:10]]
+
+
+  gg = [image_data_gen() for ii in range(10)]
   ```
 ***
 

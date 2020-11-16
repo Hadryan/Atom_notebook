@@ -6,7 +6,17 @@
 
   - [___2019 - 11 - 18 Keras Insightface___](#2019-11-18-keras-insightface)
   - [目录](#目录)
-  - [Fine tune](#fine-tune)
+  - [Insightface MXNet 模型使用](#insightface-mxnet-模型使用)
+  	- [Insightface](#insightface)
+  	- [模型加载与特征提取](#模型加载与特征提取)
+  	- [模型训练](#模型训练)
+  	- [代码分析](#代码分析)
+  	- [Fine tune](#fine-tune)
+  - [Highest Accuracy](#highest-accuracy)
+  	- [Deepinsight Accuracy](#deepinsight-accuracy)
+  	- [Mobilenet 256 Embeddings](#mobilenet-256-embeddings)
+  	- [Mobilenet 512 embeddings](#mobilenet-512-embeddings)
+  	- [Vargface](#vargface)
   - [人脸识别损失函数](#人脸识别损失函数)
   - [ImageDataGenerator](#imagedatagenerator)
   - [训练模型拟合 embeddings](#训练模型拟合-embeddings)
@@ -21,19 +31,318 @@
   	- [Softmax](#softmax)
   	- [Offline Triplet loss train SUB](#offline-triplet-loss-train-sub)
   	- [TF 通用函数](#tf-通用函数)
-  - [人脸旋转角度与侧脸](#人脸旋转角度与侧脸)
   - [nmslib dot svm dist calculation comparing](#nmslib-dot-svm-dist-calculation-comparing)
-  - [Centerface](#centerface)
+  - [Docker 封装](#docker-封装)
 
   <!-- /TOC -->
 ***
 
-# Fine tune
+# Insightface MXNet 模型使用
+## Insightface
+  - [deepinsight/insightface](https://github.com/deepinsight/insightface)
+  - **MXNet**
+    ```sh
+    # 安装 cuda-10-0 对应的 mxnet 版本
+    pip install mxnet-cu100
+    ```
+## 模型加载与特征提取
+  ```py
+  # cd ~/workspace/face_recognition_collection/insightface/deploy
+  import face_model
+  import argparse
+  import cv2
+  import os
+
+  home_path = os.environ.get("HOME")
+  args = argparse.ArgumentParser().parse_args([])
+  args.image_size = '112,112'
+  args.model = os.path.join(home_path, 'workspace/models/insightface_mxnet_model/model-r100-ii/model,0')
+  args.ga_model = os.path.join(home_path, "workspace/models/insightface_mxnet_model/gamodel-r50/model,0")
+  args.gpu = 0
+  args.det = 0
+  args.flip = 0
+  args.threshold = 1.05
+  model = face_model.FaceModel(args)
+
+  img = cv2.imread('./Tom_Hanks_54745.png')
+  bbox, points = model.detector.detect_face(img, det_type = model.args.det)
+
+  import matplotlib.pyplot as plt
+  aa = bbox[0, :4].astype(np.int)
+  bb = points[0].astype(np.int).reshape(2, 5).T
+
+  # landmarks
+  plt.imshow(img)
+  plt.scatter(ii[:, 0], ii[:, 1])
+
+  # cropped image
+  plt.imshow(img[aa[1]:aa[3], aa[0]:aa[2], :])
+
+  # By face_preprocess.preprocess
+  cd ../src/common
+  import face_preprocess
+  cc = face_preprocess.preprocess(img, aa, bb, image_size='112,112')
+  plt.imshow(cc)
+
+  # export image feature, OUT OF MEMORY
+  emb = model.get_feature(model.get_input(img))
+  ```
+## 模型训练
+  ```sh
+  # My 2-stage pipeline:
+  # Train softmax with lr=0.1 for 120K iterations.
+  # LRSTEPS='240000,360000,440000'
+  CUDA_VISIBLE_DEVICES='0,1,2,3' python -u train_softmax.py --data-dir $DATA_DIR --network "$NETWORK" --loss-type 0 --prefix "$PREFIX" --per-batch-size 128 --lr-steps "$LRSTEPS" --margin-s 32.0 --margin-m 0.1 --ckpt 2 --emb-size 128 --fc7-wd-mult 10.0 --wd 0.00004 --max-steps 140002
+
+  # Switch to ArcFace loss to do normal training with '100K,140K,160K' iterations.
+  # LRSTEPS='100000,140000,160000'
+  CUDA_VISIBLE_DEVICES='0,1,2,3' python -u train_softmax.py --data-dir $DATA_DIR --network "$NETWORK" --loss-type 4 --prefix "$PREFIX" --per-batch-size 128 --lr-steps "$LRSTEPS" --margin-s 64.0 --margin-m 0.5 --ckpt 1 --emb-size 128 --fc7-wd-mult 10.0 --wd 0.00004 --pretrained '../models2/model-y1-test/model,70'
+
+  # training dataset: ms1m
+  # LFW: 99.50, CFP_FP: 88.94, AgeDB30: 95.91
+  ```
+  ```sh
+  CUDA_VISIBLE_DEVICES='0' python -u train_softmax.py --data-dir /datasets/faces_casia --network "r50" --loss-type 0 --prefix "./model/mxnet_r50_casia" --per-batch-size 512 --lr-steps "20000,28000" --margin-s 32.0 --margin-m 0.1 --ckpt 2 --emb-size 512 --fc7-wd-mult 10.0 --wd 0.0005 --max-steps 12000
+
+  CUDA_VISIBLE_DEVICES='0' python -u train_softmax.py --data-dir /datasets/faces_casia --network "r50" --loss-type 4 --prefix "./model/mxnet_r50_casia" --per-batch-size 512 --lr-steps "20000,28000" --margin-s 64.0 --margin-m 0.5 --ckpt 1 --emb-size 512 --fc7-wd-mult 10.0 --wd 0.0005 --pretrained './model/mxnet_r50_casia'
+
+  # training dataset: ms1m
+  # LFW: 99.50, CFP_FP: 88.94, AgeDB30: 95.91
+  ```
+  **config.py 配置文件**
+  ```py
+  # config.py +78
+  network.m1.emb_size = 512
+
+  # config.py +117
+  dataset.emore.dataset_path = '/datasets/faces_emore'
+  dataset.emore.num_classes = 85742
+  ...
+  dataset.glint.dataset_path = '/datasets/faces_glint'
+  dataset.glint.num_classes = 180855
+
+  # config.py +147
+  loss.arcface = edict()
+  loss.arcface.loss_name = 'margin_softmax'
+  loss.arcface.loss_s = 64.0
+  loss.arcface.loss_m1 = 1.0
+  loss.arcface.loss_m2 = 0.5
+  loss.arcface.loss_m3 = 0.0
+
+  # default settings
+  default.lr = 0.1
+  default.wd = 0.0005
+  default.mom = 0.9
+  ```
+  **mobilenet 模型训练**
+  ```sh
+  export MXNET_ENABLE_GPU_P2P=0
+
+  # arcface train
+  CUDA_VISIBLE_DEVICES='0,1' python -u train_parall.py --network m1 --loss arcface --dataset emore --per-batch-size 96
+
+  # triplet fine-tune
+  CUDA_VISIBLE_DEVICES='0,1' python -u train.py --network m1 --loss arcface --dataset emore --per-batch-size 96 --pretrained ./models/m1-arcface-emore/model --lr 0.0001
+  CUDA_VISIBLE_DEVICES='1' python -u train.py --network m1 --loss triplet --dataset emore --per-batch-size 150 --pretrained ./models/m1-triplet-emore_97083/model --lr 0.0001 --lr-steps '1000,100000,160000,220000,280000,340000'
+  CUDA_VISIBLE_DEVICES='0' python -u train.py --network m1 --loss triplet --dataset glint --per-batch-size 150 --pretrained ./models/m1-triplet-emore_290445/model --pretrained-epoch 602 --lr 0.0001 --lr-steps '1000,100000,160000,220000,280000,340000'
+  ```
+  **Vargfacenet 模型训练**
+  ```sh
+  # Vargfacenet
+  CUDA_VISIBLE_DEVICES='0,1' python3 -u train_parall.py --network vargfacenet --loss softmax --dataset emore --per-batch-size 96
+  CUDA_VISIBLE_DEVICES='1' python3 -u train.py --network vargfacenet --loss arcface --dataset glint --per-batch-size 150 --pretrained ./models/vargfacenet-softmax-emore/model --pretrained-epoch 166 --lr 0.0001 --lr-steps '100000,160000,220000,280000,340000'
+  ```
+## 代码分析
+  - **config**
+    ```py
+    # config.py
+    config.bn_mom = 0.9
+    config.net_output = 'E'
+    config.ce_loss = True
+    config.fc7_lr_mult = 1.0
+    config.fc7_wd_mult = 1.0
+    config.fc7_no_bias = False
+
+    network.m1.net_name = 'fmobilenet'
+    network.m1.emb_size = 256
+    network.m1.net_output = 'GDC'
+    network.m1.net_multiplier = 1.0
+
+    network.vargfacenet.net_name = 'vargfacenet'
+    network.vargfacenet.net_multiplier = 1.25
+    network.vargfacenet.emb_size = 512
+    network.vargfacenet.net_output='J'
+
+    loss.arcface.loss_name = 'margin_softmax'
+    loss.arcface.loss_s = 64.0
+    loss.arcface.loss_m1 = 1.0
+    loss.arcface.loss_m2 = 0.5
+    loss.arcface.loss_m3 = 0.0
+
+    loss.triplet.loss_name = 'triplet'
+    loss.triplet.images_per_identity = 5
+    loss.triplet.triplet_alpha = 0.3
+    loss.triplet.triplet_bag_size = 7200
+    loss.triplet.triplet_max_ap = 0.0
+    loss.triplet.per_batch_size = 60
+    loss.triplet.lr = 0.05
+    ```
+  - **symbol**
+    ```py
+    # symbol_utils.py
+    def Linear(data, num_filter=1, kernel=(1, 1), stride=(1, 1), pad=(0, 0), num_group=1, name=None, suffix=''):
+        conv = mx.sym.Convolution(data=data, num_filter=num_filter, kernel=kernel, num_group=num_group, stride=stride, pad=pad, no_bias=True, name='%s%s_conv2d' %(name, suffix))
+        bn = mx.sym.BatchNorm(data=conv, name='%s%s_batchnorm' %(name, suffix), fix_gamma=False,momentum=bn_mom)    
+        return bn
+
+    def get_fc1(last_conv, num_classes, fc_type, input_channel=512):
+      elif fc_type=='E':
+        body = mx.sym.BatchNorm(data=body, fix_gamma=False, eps=2e-5, momentum=bn_mom, name='bn1')
+        body = mx.symbol.Dropout(data=body, p=0.4)
+        fc1 = mx.sym.FullyConnected(data=body, num_hidden=num_classes, name='pre_fc1')
+        fc1 = mx.sym.BatchNorm(data=fc1, fix_gamma=True, eps=2e-5, momentum=bn_mom, name='fc1')
+      elif fc_type=='FC':
+        body = mx.sym.BatchNorm(data=body, fix_gamma=False, eps=2e-5, momentum=bn_mom, name='bn1')
+        fc1 = mx.sym.FullyConnected(data=body, num_hidden=num_classes, name='pre_fc1')
+        fc1 = mx.sym.BatchNorm(data=fc1, fix_gamma=True, eps=2e-5, momentum=bn_mom, name='fc1')
+      elif fc_type=="GDC": #mobilefacenet_v1
+        conv_6_dw = Linear(last_conv, num_filter=input_channel, num_group=input_channel, kernel=(7,7), pad=(0, 0), stride=(1, 1), name="conv_6dw7_7")  
+        conv_6_f = mx.sym.FullyConnected(data=conv_6_dw, num_hidden=num_classes, name='pre_fc1')
+        fc1 = mx.sym.BatchNorm(data=conv_6_f, fix_gamma=True, eps=2e-5, momentum=bn_mom, name='fc1')
+      elif fc_type=='J':
+        fc1 = mx.sym.FullyConnected(data=body, num_hidden=num_classes, name='pre_fc1')
+        fc1 = mx.sym.BatchNorm(data=fc1, fix_gamma=True, eps=2e-5, momentum=bn_mom, name='fc1')
+    ```
+  - **fmobilenet**
+    ```py
+    # fmobilenet.py
+    def get_symbol():
+      conv_14 = Conv(conv_14_dw, num_filter=bf*32, kernel=(1, 1), pad=(0, 0), stride=(1, 1), name="conv_14") # 7/7
+      body = conv_14
+      fc1 = symbol_utils.get_fc1(body, num_classes, fc_type)
+      return fc1
+    ```
+  - **train_parall**
+    ```py
+    # train_parall.py
+    def get_symbol_embedding():
+      embedding = eval(config.net_name).get_symbol()
+      all_label = mx.symbol.Variable('softmax_label')
+      #embedding = mx.symbol.BlockGrad(embedding)
+      all_label = mx.symbol.BlockGrad(all_label)
+      out_list = [embedding, all_label]
+      out = mx.symbol.Group(out_list)
+      return out
+
+    def get_symbol_arcface(args):
+      embedding = mx.symbol.Variable('data')
+      all_label = mx.symbol.Variable('softmax_label')
+      gt_label = all_label
+      is_softmax = True
+      #print('call get_sym_arcface with', args, config)
+      _weight = mx.symbol.Variable("fc7_%d_weight"%args._ctxid, shape=(args.ctx_num_classes, config.emb_size),
+          lr_mult=config.fc7_lr_mult, wd_mult=config.fc7_wd_mult)
+      if config.loss_name=='softmax': #softmax
+        fc7 = mx.sym.FullyConnected(data=embedding, weight = _weight, no_bias = True, num_hidden=args.ctx_num_classes, name='fc7_%d'%args._ctxid)
+      elif config.loss_name=='margin_softmax':
+        _weight = mx.symbol.L2Normalization(_weight, mode='instance')
+        nembedding = mx.symbol.L2Normalization(embedding, mode='instance', name='fc1n_%d'%args._ctxid)
+        fc7 = mx.sym.FullyConnected(data=nembedding, weight = _weight, no_bias = True, num_hidden=args.ctx_num_classes, name='fc7_%d'%args._ctxid)
+        if config.loss_m1!=1.0 or config.loss_m2!=0.0 or config.loss_m3!=0.0:
+          gt_one_hot = mx.sym.one_hot(gt_label, depth = args.ctx_num_classes, on_value = 1.0, off_value = 0.0)
+          if config.loss_m1==1.0 and config.loss_m2==0.0:
+            _one_hot = gt_one_hot*args.margin_b
+            fc7 = fc7-_one_hot
+          else:
+            fc7_onehot = fc7 * gt_one_hot
+            cos_t = fc7_onehot
+            t = mx.sym.arccos(cos_t)
+            if config.loss_m1!=1.0:
+              t = t*config.loss_m1
+            if config.loss_m2!=0.0:
+              t = t+config.loss_m2
+            margin_cos = mx.sym.cos(t)
+            if config.loss_m3!=0.0:
+              margin_cos = margin_cos - config.loss_m3
+            margin_fc7 = margin_cos
+            margin_fc7_onehot = margin_fc7 * gt_one_hot
+            diff = margin_fc7_onehot - fc7_onehot
+            fc7 = fc7+diff
+        fc7 = fc7*config.loss_s
+
+      out_list = []
+      out_list.append(fc7)
+      if config.loss_name=='softmax': #softmax
+        out_list.append(gt_label)
+      out = mx.symbol.Group(out_list)
+      return out
+
+    def train_net(args):
+      esym = get_symbol_embedding()
+      asym = get_symbol_arcface
+
+      opt = optimizer.SGD(learning_rate=base_lr, momentum=base_mom, wd=base_wd, rescale_grad=_rescale)
+    ```
+## Fine tune
   - **fine-tuning** 在实践中，由于数据集不够大，很少会从头开始训练网络，常见的做法是使用预训练的网络来重新 **微调 fine-tuning**，或当做特征提取器
     - 卷积网络当做 **特征提取器**，使用在 ImageNet 上预训练的网络，去掉最后的全连接层，剩余部分当做特征提取器，得到特征后可以使用线性分类器 Liner SVM / Softmax 等来分类图像
     - **Fine-tuning 卷积网络** 替换掉网络的输入层，使用新的数据继续训练，可以选择 fine-tune 全部层或部分层，通常前面的层提取的是图像的 **通用特征 generic features**，如边缘 / 色彩特征，后面的层提取的是与特定类别有关的特征，因此常常只需要 fine-tuning 后面的层
     - 一般如果新数据集比较小且和原数据集相似，可以使用预训练网络当做特征提取器，用提取的特征训练线性分类器，如果新数据集足够大，可以 fine-tune 整个网络
     - 与重新训练相比，fine-tune 要使用 **更小的学习率**，因为训练好的网络模型权重已经平滑，不希望太快扭曲 distort 它们
+***
+
+# Highest Accuracy
+## Deepinsight Accuracy
+
+  | Method        | LFW(%) | CFP-FP(%) | AgeDB-30(%) | MegaFace(%)          |
+  | ------------- | ------ | --------- | ----------- | -------------------- |
+  | LResNet100E   | 99.77  | 98.27     | 98.28       | 98.47                |
+  | LResNet50E    | 99.80  | 92.74     | 97.76       | 97.64                |
+  | LResNet34E    | 99.65  | 92.12     | 97.70       | 96.70                |
+  | MobileFaceNet | 99.50  | 88.94     | 95.91       | -----                |
+  | VarGfaceNet   | 99.783 | 98.400    | 98.067      | 88.334 **DeepGlint** |
+## Mobilenet 256 Embeddings
+
+  | Step      | fc7_acc  | lfw     | cfp_fp  | agedb_30 | SUM     |
+  | --------- | -------- | ------- | ------- | -------- | ------- |
+  | **Loss**  | arcface  | **DS**  | glint   |          |         |
+  | 1660K     | 0.25     | 0.99567 | 0.89529 | 0.96683  | 2.85779 |
+  | **Loss**  | triplet  | **DS**  | emore   |          |         |
+  | 840       | 0.062472 | 0.99633 | 0.93429 | 0.97083  | 2.90145 |
+  | **Loss**  | triplet  | **DS**  | glint   |          |         |
+  | 960[40]   | 0.064614 | 0.99617 | 0.93686 | 0.97017  | 2.90319 |
+  | 2575[107] | 0.064761 | 0.99667 | 0.93829 | 0.96950  | 2.90445 |
+## Mobilenet 512 embeddings
+  | Step      | fc7_acc  | lfw     | cfp_fp  | agedb_30 | SUM     |
+  | --------- | -------- | ------- | ------- | -------- | ------- |
+  | **Loss**  | arcface  | **DS**  | emore   |          |         |
+  | 1204K     | 0.015625 | 0.99533 | 0.93671 | 0.96367  | 2.89571 |
+  | **Loss**  | triplet  | **DS**  | glint   |          |         |
+  | 25[1]     | 0.146767 | 0.99567 | 0.93971 | 0.96500  | 2.90038 |
+  | 532[20]   | 0.149680 | 0.99650 | 0.94614 | 0.96600  | 2.90864 |
+  | 613[23]   | 0.146067 | 0.99683 | 0.94957 | 0.96300  | 2.90940 |
+  | 668[25]   | 0.147614 | 0.99633 | 0.94757 | 0.96617  | 2.91007 |
+  | 914[34]   | 0.148697 | 0.99650 | 0.94886 | 0.96517  | 2.91052 |
+  | 996[37]   | 0.138909 | 0.99667 | 0.95014 | 0.96467  | 2.91148 |
+  | 2809[102] | 0.146283 | 0.99600 | 0.95071 | 0.96783  | 2.91455 |
+  | **Loss**  | triplet  | **DS**  | emore   |          |         |
+  | 1697[65]  | 0.155924 | 0.99667 | 0.95129 | 0.96817  | 2.91612 |
+## Vargface
+
+  | Step     | fc7_acc    | lfw     | cfp_fp  | agedb_30 | SUM     |
+  | -------- | ---------- | ------- | ------- | -------- | ------- |
+  | **Loss** | softmax    | **DS**  | emore   |          |         |
+  | 9.68K    | 0.265625   | 0.98383 | 0.82914 | 0.85117  |         |
+  | 25.66K   | 0.28645834 | 0.98333 | 0.83729 | 0.85717  |         |
+  | 62K      | 0.25520834 | 0.98067 | 0.83429 | 0.86517  |         |
+  | 72K      | 0.3125     | 0.97683 | 0.81329 | 0.87217  |         |
+  | 270K     | 0.7395833  | 0.99517 | 0.95086 | 0.93267  |         |
+  | 332K     | 0.703125   | 0.99583 | 0.94857 | 0.93350  |         |
+  | **Loss** | triplet    | **DS**  | glint   |          |         |
+  | 175[10]  | 0.070560   | 0.99567 | 0.94314 | 0.95033  | 2.88914 |
+  | 361[20]  | 0.056305   | 0.99683 | 0.94414 | 0.94867  | 2.88964 |
+  | 648[35]  | 0.064737   | 0.99567 | 0.94700 | 0.95250  | 2.89517 |
+  | **Loss** | triplet    | **DS**  | emore   |          |         |
 ***
 
 # 人脸识别损失函数
@@ -761,46 +1070,6 @@
     ```
 ***
 
-# 人脸旋转角度与侧脸
-  ```py
-  from skimage.transform import SimilarityTransform
-  import insightface
-  dd = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
-  dd.prepare(-1)
-
-  def rotation_detect(dd, image_path, image_show=True):
-      dst = np.array([[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366], [41.5493, 92.3655], [70.729904, 92.2041]])
-      aa = imread(image_path)
-      if image_show:
-          fig = plt.figure()
-          plt.imshow(aa)
-
-      bbox, points = dd.detect(aa)
-      rrs = []
-      for src in points:
-          src = src.astype(np.float32)
-          tform = SimilarityTransform()
-          tform.estimate(src, dst)
-
-          cc = tform.params[:2]
-          ne = np.dot(cc, np.vstack([src.T, np.ones(src.shape[0])])).T
-          # lean = nose - (left_eye + right_eye) / 2
-          lean = ne[2, 0] - (ne[0, 0] + ne[1, 0]) / 2
-          rrs.append({'rotation' : tform.rotation, 'lean': lean})
-
-          if image_show:
-              plt.scatter(src[:, 0], src[:, 1])
-              plt.scatter(ne[:, 0], ne[:, 1])
-              template = "Rotation: %(rotation).4f, Lean: %(lean).4f"
-              plt.text(src[:, 0].min(), src[:, 1].max() + 30, template %(rrs[-1]), color='r')
-      return points, rrs
-
-  points, ne = rotation_detect(dd, 'test_images/rotate.png')
-  points, ne = rotation_detect(dd, 'test_images/side.png')
-  points, ne = rotation_detect(dd, 'test_images/side_rotate.png')
-  ```
-***
-
 # nmslib dot svm dist calculation comparing
   ```py
   !pip install nmslib
@@ -855,85 +1124,269 @@
   ```
 ***
 
-# Centerface
-  - [Github CenterFace](https://github.com/Star-Clouds/CenterFace.git)
+# Docker 封装
+  ```sh
+  sudo apt-get install -y nvidia-docker2
+  docker run --runtime=nvidia -v /home/tdtest/workspace/:/home/tdtest/workspace -it tensorflow/tensorflow:latest-gpu-py3 bash
+
+  pip install --upgrade pip
+  pip install -i https://pypi.tuna.tsinghua.edu.cn/simple sklearn scikit-image waitress python-crontab opencv-python mtcnn requests
+
+  apt update && apt install python3-opencv
+
+  nohup ./server_flask.py -l 0 > app.log 2>&1 &
+
+  docker ps -a | grep tensorflow | cut -d ' ' -f 1
+  docker exec  -p 8082:9082 -it `docker ps -a | grep tensorflow | cut -d ' ' -f 1` bash
+
+  docker commit `docker ps -a | grep tensorflow | cut -d ' ' -f 1` insightface
+  docker run -e CUDA_VISIBLE_DEVICES='1' -v /home/tdtest/workspace/:/workspace -it -p 9082:8082 -w /workspace/insightface-master insightface:latest ./server_flask.py
+  ```
+***
+
+# Face recognition test
   ```py
-  import cv2
-  import scipy.io as sio
-  import os
-  from centerface import CenterFace
-  cf = CenterFace(landmarks=True)
-  imm = cv2.imread('../../test_img/Anthony_Hopkins_0002.jpg')
-  h, w, _ = imm.shape
-  # h, w = 480, 640
-  cf(imm, h, w, threshold=0.9)
-
-  os.chdir("../../../samba/tdFace-flask/mtcnn_tf/")
-  import mtcnn
-  mtcnn_det = mtcnn.MTCNN('./mtcnn.pb')
-  mtcnn_det.detect_faces(imm)
-
+  import glob2
   import insightface
-  retina = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
-  retina.prepare(-1)
-  retina.detect(imm)
+  from sklearn.preprocessing import normalize
+  from skimage import transform
+  
+  def face_align_landmarks_sk(img, landmarks, image_size=(112, 112), method='similar'):
+      tform = transform.AffineTransform() if method == 'affine' else transform.SimilarityTransform()
+      src = np.array([[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366], [41.5493, 92.3655], [70.729904, 92.2041]], dtype=np.float32)
+      ret = []
+      for landmark in landmarks:
+          # landmark = np.array(landmark).reshape(2, 5)[::-1].T
+          tform.estimate(landmark, src)
+          ret.append(transform.warp(img, tform.inverse, output_shape=image_size))
+      return (np.array(ret) * 255).astype(np.uint8)
 
-  ''' Single face '''
-  %timeit cf(imm, h, w, threshold=0.9)
-  # 13.3 ms ± 795 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-  %timeit mtcnn_det.detect_faces(imm)
-  # 4.25 ms ± 103 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-  %timeit retina.detect(imm)
-  # 16.3 ms ± 256 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+  imms = glob2.glob('./*.jpg')
+  imgs = [imread(ii)[:, :, :3] for ii in imms]
+  det = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+  det.prepare(-1)
+  idds = {nn: ii for nn, ii in zip(imms, imgs)}
+  dds = {nn: det.detect(ii[:, :, ::-1]) for nn, ii in zip(imms, imgs)}
 
-  iaa = cv2.imread('../test_images/1.jpg')
-  h, w, _ = iaa.shape
-  ibb = imread('../test_images/1.jpg')
-  cf(iaa, h, w, threshold=0.9)
-  mtcnn_det.detect_faces(ibb)
-  retina.detect(iaa)
+  nimgs = np.array([face_align_landmarks_sk(idds[kk], vv[1])[0] for kk, vv in dds.items() if len(vv[1]) != 0])
+  plt.imshow(np.hstack(nimgs))
+  plt.tight_layout()
+  nimgs_norm = (nimgs[:, :, :, :3] - 127.5) / 127
 
-  ''' Multi face '''
-  %timeit -n 100 cf(iaa, h, w, threshold=0.9)
-  # 315 ms ± 35.1 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
-  %timeit -n 100 mtcnn_det.detect_faces(ibb)
-  # 60.8 ms ± 1.04 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
-  %timeit -n 100 retina.detect(iaa)
-  # 456 ms ± 12.5 ms per loop (mean ± std. dev. of 7 runs, 100 loops each)
+  ees = normalize(mm(nimgs_norm))
+  np.dot(ees, ees.T)
+  [kk for kk, vv in dds.items() if len(vv[1]) != 0]
+
+  mm = face_model.FaceModel()
+  ees = normalize(mm.interp(nimgs_norm))
   ```
   ```py
-  In [37]: cf(iaa, h, w, threshold=0.9)                                                                                                                                                                      
-  Out[37]:
-  (array([[1.2027432e+03, 6.3846680e+02, 1.2974719e+03, 7.1919543e+02,
-           9.6600962e-01],
-          [3.6708798e+02, 3.1482706e+02, 5.2461823e+02, 4.4480045e+02,
-           9.5752537e-01],
-          [8.0555890e+02, 3.6767062e+02, 8.7024487e+02, 4.1478021e+02,
-           9.3526572e-01],
-          [9.1664618e+02, 3.9390857e+02, 9.4433923e+02, 4.2681378e+02,
-           9.1680831e-01]], dtype=float32),
-   array([[1219.671  ,  688.14215, 1210.0287 ,  677.7351 , 1203.3889 ,
-            696.7554 , 1239.1373 ,  704.9357 , 1229.6863 ,  695.70685],
-          [ 474.19067,  401.61896,  507.10788,  376.0719 ,  552.7421 ,
-            422.85565,  518.40485,  437.2738 ,  542.47516,  417.5965 ],
-          [ 840.6775 ,  403.3571 ,  848.16486,  395.8568 ,  855.9793 ,
-            407.278  ,  841.77545,  408.02695,  848.8935 ,  401.77716],
-          [ 942.64685,  415.50668,  937.8298 ,  410.7285 ,  949.89575,
-            416.11053,  943.01404,  418.20386,  940.0262 ,  414.42154]],
-         dtype=float32))
+  mm = keras.models.load_model("../Keras_insightface/checkpoints/mobilenet_adamw_BS256_E80_arc_trip128_basic_agedb_30_epoch_89_batch_15000_0.953333.h5")
+  mm = keras.models.load_model("../Keras_insightface/checkpoints/mobilenet_adamw_BS256_E80_arc_trip_basic_agedb_30_epoch_114_batch_5000_0.954500.h5")
+  mm = keras.models.load_model("../Keras_insightface/checkpoints/mobilenet_adamw_BS256_E80_arc_c64_basic_agedb_30_epoch_103_batch_5000_0.953667.h5")
+  ```
+  ```py
+  mmns = [
+      "T_mobilenetv3L_adamw_5e5_arc_trip64_BS1024_basic_agedb_30_epoch_125_batch_2000_0.953833.h5",
+      "T_mobilenet_adamw_5e5_arc_trip64_BS1024_basic_agedb_30_epoch_114_batch_4000_0.952000.h5",
+      "mobilenet_adamw_BS256_E80_arc_tripD_basic_agedb_30_epoch_123_0.955333.h5",
+      "keras_se_mobile_facenet_emore_triplet_basic_agedb_30_epoch_100_0.958333.h5",
+      "keras_se_mobile_facenet_emore_IV_basic_agedb_30_epoch_48_0.957833.h5",
+  ]
+  for mmn in mmns:
+      mm = keras.models.load_model("../Keras_insightface/checkpoints/" + mmn)
+      ees = normalize(mm(nimgs_norm))
+      np.dot(ees, ees.T)
+      print(">>>>", mmn)
+      print(np.dot(ees, ees.T))
+  ```
+  ```py
+  # Resnest101
+  array([[1.        , 0.1558015 , 0.15456064, 0.13313395, 0.16850811, 0.71167467],
+         [0.1558015 , 1.        , 0.19925219, 0.20134368, 0.37451308, 0.15747676],
+         [0.15456064, 0.19925219, 1.        , 0.33097531, 0.60421063, 0.18203224],
+         [0.13313395, 0.20134368, 0.33097531, 1.        , 0.26904165, 0.19666012],
+         [0.16850811, 0.37451308, 0.60421063, 0.26904165, 1.        , 0.28212154],
+         [0.71167467, 0.15747676, 0.18203224, 0.19666012, 0.28212154, 1.        ]])
 
-  In [38]: mtcnn_det.detect_faces(ibb)                                                                                                                                                                               
-  Out[38]:
-  (array([[ 305.56012,  383.83823,  460.1761 ,  514.2741 ],
-         [ 357.47598,  813.1547 ,  419.11575,  870.75256],
-         [ 628.12366, 1228.7682 ,  728.3427 , 1316.0033 ]], dtype=float32),
-  array([0.9999721 , 0.99896455, 0.94571006], dtype=float32),
-  array([[ 370.8418 ,  379.21454,  408.57153,  423.7774 ,  430.34595,
-           440.22064,  495.93152,  468.10645,  428.8279 ,  476.17242],
-         [ 386.78534,  388.89816,  400.56534,  406.9472 ,  409.095  ,
-           833.8898 ,  853.8183 ,  843.5045 ,  831.1647 ,  850.6185 ],
-         [ 661.7363 ,  661.23285,  678.1033 ,  705.1453 ,  705.9677 ,
-          1266.657  , 1293.0474 , 1281.595  , 1267.5706 , 1284.7332 ]],
-        dtype=float32))
+  # Mobilenet
+  array([[1.        , 0.29774572, 0.09815505, 0.15720329, 0.17226598, 0.72166827],
+         [0.29774572, 1.        , 0.34869616, 0.1973212 , 0.45947366, 0.25320448],
+         [0.09815505, 0.34869616, 1.        , 0.26055445, 0.5881257 , 0.18348087],
+         [0.15720329, 0.1973212 , 0.26055445, 1.        , 0.30415184, 0.24423493],
+         [0.17226598, 0.45947366, 0.5881257 , 0.30415184, 1.        , 0.14440171],
+         [0.72166827, 0.25320448, 0.18348087, 0.24423493, 0.14440171, 1.        ]])
+
+  # MXNet resnet101
+  array([[0.9999998 , 0.24837211, 0.1303953 , 0.21556515, 0.23038697, 0.7216288 ],
+         [0.24837211, 1.        , 0.34982952, 0.17353785, 0.3337898 , 0.28773898],
+         [0.1303953 , 0.34982952, 1.        , 0.21442819, 0.71804786, 0.13172513],
+         [0.21556515, 0.17353785, 0.21442819, 1.        , 0.21935105, 0.24629946],
+         [0.23038697, 0.3337898 , 0.71804786, 0.21935105, 1.0000001 , 0.20667821],
+         [0.7216288 , 0.28773898, 0.13172513, 0.24629946, 0.20667821, 1.0000001 ]])
+  ```
+  ```py
+  # MXNet resnet101
+  array([[0.9999999 , 0.12421323, 0.36465803, 0.47377837, 0.21408823, 0.35779008, 0.23447886, 0.30594954, 0.54214454],
+         [0.12421323, 0.9999999 , 0.2692185 , 0.07800525, 0.12620914, 0.24759631, 0.32376158, 0.30534476, 0.07428315],
+         [0.36465803, 0.2692185 , 0.99999994, 0.30244786, 0.2776268 , 0.7250889 , 0.12520632, 0.19832084, 0.4338043 ],
+         [0.47377837, 0.07800525, 0.30244786, 1.0000001 , 0.17683765, 0.31931424, 0.20238054, 0.20936331, 0.5031358 ],
+         [0.21408823, 0.12620914, 0.2776268 , 0.17683765, 1.0000002 , 0.2316848 , 0.25115657, 0.22379392, 0.20974487],
+         [0.35779008, 0.24759631, 0.7250889 , 0.31931424, 0.2316848 , 0.9999999 , 0.12169009, 0.22123177, 0.4395604 ],
+         [0.23447886, 0.32376158, 0.12520632, 0.20238054, 0.25115657, 0.12169009, 1.0000001 , 0.7024463 , 0.17882678],
+         [0.30594954, 0.30534476, 0.19832084, 0.20936331, 0.22379392, 0.22123177, 0.7024463 , 0.99999994, 0.19508064],
+         [0.54214454, 0.07428315, 0.4338043 , 0.5031358 , 0.20974487, 0.4395604 , 0.17882678, 0.19508064, 1.        ]])
+
+  # Resnest101
+  array([[1.        , 0.09653112, 0.34567068, 0.35957315, 0.09873741, 0.3647217 , 0.32881509, 0.32723336, 0.51869996],
+         [0.09653112, 1.        , 0.14862806, 0.20942087, 0.1459171 , 0.11868739, 0.15710884, 0.29315572, 0.06172519],
+         [0.34567068, 0.14862806, 1.        , 0.23773459, 0.20453881, 0.64531339, 0.15824395, 0.25539223, 0.35883342],
+         [0.35957315, 0.20942087, 0.23773459, 1.        , 0.34161757, 0.27761874, 0.06426631, 0.11394879, 0.29227217],
+         [0.09873741, 0.1459171 , 0.20453881, 0.34161757, 1.        , 0.10085443, 0.33029246, 0.26362839, 0.20034649],
+         [0.3647217 , 0.11868739, 0.64531339, 0.27761874, 0.10085443, 1.        , 0.12520004, 0.12369476, 0.2990151 ],
+         [0.32881509, 0.15710884, 0.15824395, 0.06426631, 0.33029246, 0.12520004, 1.        , 0.60281276, 0.16362239],
+         [0.32723336, 0.29315572, 0.25539223, 0.11394879, 0.26362839, 0.12369476, 0.60281276, 1.        , 0.17242818],
+         [0.51869996, 0.06172519, 0.35883342, 0.29227217, 0.20034649, 0.2990151 , 0.16362239, 0.17242818, 1.        ]])
+
+  # Mobilenet triplet 128
+  array([[1.        , 0.41836702, 0.41450289, 0.5285159 , 0.39815743, 0.59143796, 0.39294739, 0.39449755, 0.58467363],
+         [0.41836702, 1.        , 0.41646123, 0.3481795 , 0.34727307, 0.36440841, 0.47861499, 0.62125792, 0.25343142],
+         [0.41450289, 0.41646123, 1.        , 0.30024778, 0.39975276, 0.78776638, 0.24419089, 0.27779964, 0.32785577],
+         [0.5285159 , 0.3481795 , 0.30024778, 1.        , 0.28179755, 0.39157149, 0.22987079, 0.32495614, 0.52379275],
+         [0.39815743, 0.34727307, 0.39975276, 0.28179755, 1.        , 0.44091393, 0.35736952, 0.41333531, 0.40843123],
+         [0.59143796, 0.36440841, 0.78776638, 0.39157149, 0.44091393, 1.        , 0.33504632, 0.34104602, 0.52528929],
+         [0.39294739, 0.47861499, 0.24419089, 0.22987079, 0.35736952, 0.33504632, 1.        , 0.68957433, 0.40338012],
+         [0.39449755, 0.62125792, 0.27779964, 0.32495614, 0.41333531, 0.34104602, 0.68957433, 1.        , 0.43240437],
+         [0.58467363, 0.25343142, 0.32785577, 0.52379275, 0.40843123, 0.52528929, 0.40338012, 0.43240437, 1.        ]])
+
+  # Mobilenet triplet 64
+  array([[1.        , 0.31283942, 0.36502096, 0.40771537, 0.29296445, 0.52262759, 0.19741207, 0.1872439 , 0.43291409],
+         [0.31283942, 1.        , 0.24724888, 0.2878407 , 0.24942819, 0.3370249 , 0.44580004, 0.45603498, 0.21947548],
+         [0.36502096, 0.24724888, 1.        , 0.32684813, 0.2597726 , 0.6709674 , 0.1321767 , 0.2345897 , 0.2343204 ],
+         [0.40771537, 0.2878407 , 0.32684813, 1.        , 0.22050977, 0.31049397, 0.21690768, 0.25340733, 0.39517784],
+         [0.29296445, 0.24942819, 0.2597726 , 0.22050977, 1.        , 0.18286361, 0.29566625, 0.36705299, 0.25452527],
+         [0.52262759, 0.3370249 , 0.6709674 , 0.31049397, 0.18286361, 1.        , 0.12788039, 0.2380372 , 0.29876387],
+         [0.19741207, 0.44580004, 0.1321767 , 0.21690768, 0.29566625, 0.12788039, 1.        , 0.64417225, 0.27175968],
+         [0.1872439 , 0.45603498, 0.2345897 , 0.25340733, 0.36705299, 0.2380372 , 0.64417225, 1.        , 0.29206764],
+         [0.43291409, 0.21947548, 0.2343204 , 0.39517784, 0.25452527, 0.29876387, 0.27175968, 0.29206764, 1.        ]])
+
+  # Mobilenet arc only
+  array([[1.        , 0.27447427, 0.33093477, 0.44366778, 0.12657129, 0.42529421, 0.23941177, 0.14257544, 0.45117096],
+         [0.27447427, 1.        , 0.20500087, 0.23143572, 0.19713553, 0.30256486, 0.37154384, 0.41321225, 0.1484183 ],
+         [0.33093477, 0.20500087, 1.        , 0.31254969, 0.25402285, 0.70438819, 0.14027923, 0.13860752, 0.20007214],
+         [0.44366778, 0.23143572, 0.31254969, 1.        , 0.13716888, 0.27382582, 0.22073898, 0.18395958, 0.36093491],
+         [0.12657129, 0.19713553, 0.25402285, 0.13716888, 1.        , 0.14737819, 0.22610791, 0.31317051, 0.17809208],
+         [0.42529421, 0.30256486, 0.70438819, 0.27382582, 0.14737819, 1.        , 0.09306854, 0.15856636, 0.20832577],
+         [0.23941177, 0.37154384, 0.14027923, 0.22073898, 0.22610791, 0.09306854, 1.        , 0.56017446, 0.26547573],
+         [0.14257544, 0.41321225, 0.13860752, 0.18395958, 0.31317051, 0.15856636, 0.56017446, 1.        , 0.16801733],
+         [0.45117096, 0.1484183 , 0.20007214, 0.36093491, 0.17809208, 0.20832577, 0.26547573, 0.16801733, 1.        ]])
+
+  # res2-6-10-2-dim256
+  array([[ 0.99999976,  0.02275476,  0.19566718,  0.39551505,  0.11382857, 0.2418991 ,  0.1621489 ,  0.20770606,  0.54685557],
+         [ 0.02275476,  1.0000001 ,  0.18565616,  0.12622942,  0.07543389, 0.15768072,  0.18987912,  0.24687825,  0.00755703],
+         [ 0.19566718,  0.18565616,  1.        ,  0.1135577 ,  0.17233118, 0.64797974,  0.13736339,  0.15125085,  0.28536692],
+         [ 0.39551505,  0.12622942,  0.1135577 ,  0.9999999 ,  0.1203843 , 0.1491866 ,  0.13995048,  0.10306323,  0.40521592],
+         [ 0.11382857,  0.07543389,  0.17233118,  0.1203843 ,  0.9999999 , 0.19507906,  0.21430498,  0.28658438,  0.23534644],
+         [ 0.2418991 ,  0.15768072,  0.64797974,  0.1491866 ,  0.19507906, 1.0000001 , -0.01007168,  0.14095978,  0.29420048],
+         [ 0.1621489 ,  0.18987912,  0.13736339,  0.13995048,  0.21430498, -0.01007168,  1.0000002 ,  0.58440447,  0.11922266],
+         [ 0.20770606,  0.24687825,  0.15125085,  0.10306323,  0.28658438, 0.14095978,  0.58440447,  0.99999994,  0.11037809],
+         [ 0.54685557,  0.00755703,  0.28536692,  0.40521592,  0.23534644, 0.29420048,  0.11922266,  0.11037809,  1.        ]])
+
+  # res4-8-46-4-dim256
+  array([[ 0.9999999 ,  0.02085986,  0.21933755,  0.3805598 ,  0.14618638, 0.26807183,  0.18817256,  0.2006281 ,  0.5925854 ],
+         [ 0.02085986,  0.99999976,  0.10873765,  0.05561617,  0.0148335 , 0.10101061,  0.19646968,  0.25535637, -0.0167736 ],
+         [ 0.21933755,  0.10873765,  1.        ,  0.20362249,  0.3145762 , 0.54968023,  0.11722751,  0.14334169,  0.3327023 ],
+         [ 0.3805598 ,  0.05561617,  0.20362249,  0.99999994,  0.10594524, 0.14630523,  0.14106289,  0.18696074,  0.33167878],
+         [ 0.14618638,  0.0148335 ,  0.3145762 ,  0.10594524,  0.9999999 , 0.10847133,  0.17860007,  0.21755098,  0.24645992],
+         [ 0.26807183,  0.10101061,  0.54968023,  0.14630523,  0.10847133, 1.        , -0.05039748,  0.04296025,  0.30741566],
+         [ 0.18817256,  0.19646968,  0.11722751,  0.14106289,  0.17860007, -0.05039748,  0.99999994,  0.67188215,  0.1417823 ],
+         [ 0.2006281 ,  0.25535637,  0.14334169,  0.18696074,  0.21755098, 0.04296025,  0.67188215,  1.0000001 ,  0.20449154],
+         [ 0.5925854 , -0.0167736 ,  0.3327023 ,  0.33167878,  0.24645992, 0.30741566,  0.1417823 ,  0.20449154,  1.        ]])
+  ```
+  ```py
+  >>>> T_mobilenetv3L_adamw_5e5_arc_trip64_BS1024_basic_agedb_30_epoch_125_batch_2000_0.953833.h5
+  [[ 1.00000000e+00  4.29695178e-01  7.41433247e-01 -7.58692589e-02 2.86694661e-01  3.34029962e-01  6.29330699e-01  1.17840146e-01 3.66203455e-02  2.99279494e-01  6.30978385e-02  6.59875585e-02 5.94344468e-02  3.53909248e-01  6.03454735e-01]
+   [ 4.29695178e-01  1.00000000e+00  3.88810500e-01  9.24215575e-02 4.15714712e-01  4.63776141e-01  2.79021334e-01  1.93106090e-01 6.14039079e-02  4.36266536e-01  3.05092272e-01  2.72503414e-01 2.36863946e-02  6.27761959e-01  3.04508917e-01]
+   [ 7.41433247e-01  3.88810500e-01  1.00000000e+00 -8.04484453e-02 3.43371120e-01  3.93705692e-01  6.68397522e-01  1.49977210e-01 5.28993824e-03  2.39942221e-01  9.20759722e-02  1.52024917e-01 -2.34210041e-02  3.01573152e-01  4.68741484e-01]
+   [-7.58692589e-02  9.24215575e-02 -8.04484453e-02  1.00000000e+00 2.52538475e-01  1.14712040e-01 -2.36838923e-02  2.59420105e-01 7.84408310e-02  2.51792454e-01  2.80058815e-01  4.23255287e-01 1.51056557e-01  1.32943884e-01  2.65491689e-02]
+   [ 2.86694661e-01  4.15714712e-01  3.43371120e-01  2.52538475e-01 1.00000000e+00  2.90129739e-01  2.17371170e-01  2.82333790e-01 -5.69787095e-02  7.85161600e-01  1.66002096e-01  2.51595070e-01 2.42157661e-02  3.74642881e-01  2.56471164e-01]
+   [ 3.34029962e-01  4.63776141e-01  3.93705692e-01  1.14712040e-01 2.90129739e-01  1.00000000e+00  2.86759557e-01  2.77230969e-01 2.14522410e-01  2.02422667e-01  1.55801281e-01  1.49006801e-01 1.26711035e-01  4.63698546e-01  2.58617719e-01]
+   [ 6.29330699e-01  2.79021334e-01  6.68397522e-01 -2.36838923e-02 2.17371170e-01  2.86759557e-01  1.00000000e+00  8.41929262e-02 1.78889130e-01  1.38994904e-01  6.16348781e-02  1.53765124e-01 1.03469038e-01  1.58587708e-01  5.00574712e-01]
+   [ 1.17840146e-01  1.93106090e-01  1.49977210e-01  2.59420105e-01 2.82333790e-01  2.77230969e-01  8.41929262e-02  1.00000000e+00 4.31928564e-02  2.13714179e-01  2.72829371e-01  2.02678373e-01 2.12908894e-01  1.79022369e-01  1.73207374e-01]
+   [ 3.66203455e-02  6.14039079e-02  5.28993824e-03  7.84408310e-02 -5.69787095e-02  2.14522410e-01  1.78889130e-01  4.31928564e-02 1.00000000e+00 -5.68161294e-02  6.44153122e-04 -2.58861422e-02 5.50812631e-01  6.06255037e-02  9.14468134e-02]
+   [ 2.99279494e-01  4.36266536e-01  2.39942221e-01  2.51792454e-01 7.85161600e-01  2.02422667e-01  1.38994904e-01  2.13714179e-01 -5.68161294e-02  1.00000000e+00  1.30310857e-01  2.53251215e-01 -4.04040813e-02  4.23246367e-01  3.45164837e-01]
+   [ 6.30978385e-02  3.05092272e-01  9.20759722e-02  2.80058815e-01 1.66002096e-01  1.55801281e-01  6.16348781e-02  2.72829371e-01 6.44153122e-04  1.30310857e-01  1.00000000e+00  6.27957001e-01 9.73341356e-02  3.44253814e-01  9.72629729e-02]
+   [ 6.59875585e-02  2.72503414e-01  1.52024917e-01  4.23255287e-01 2.51595070e-01  1.49006801e-01  1.53765124e-01  2.02678373e-01 -2.58861422e-02  2.53251215e-01  6.27957001e-01  1.00000000e+00 5.20221954e-02  2.71369178e-01  1.03349736e-01]
+   [ 5.94344468e-02  2.36863946e-02 -2.34210041e-02  1.51056557e-01 2.42157661e-02  1.26711035e-01  1.03469038e-01  2.12908894e-01 5.50812631e-01 -4.04040813e-02  9.73341356e-02  5.20221954e-02 1.00000000e+00 -5.65003059e-02  5.94529807e-02]
+   [ 3.53909248e-01  6.27761959e-01  3.01573152e-01  1.32943884e-01 3.74642881e-01  4.63698546e-01  1.58587708e-01  1.79022369e-01 6.06255037e-02  4.23246367e-01  3.44253814e-01  2.71369178e-01 -5.65003059e-02  1.00000000e+00  2.86708117e-01]
+   [ 6.03454735e-01  3.04508917e-01  4.68741484e-01  2.65491689e-02 2.56471164e-01  2.58617719e-01  5.00574712e-01  1.73207374e-01 9.14468134e-02  3.45164837e-01  9.72629729e-02  1.03349736e-01 5.94529807e-02  2.86708117e-01  1.00000000e+00]]
+
+  >>>> T_mobilenet_adamw_5e5_arc_trip64_BS1024_basic_agedb_30_epoch_114_batch_4000_0.952000.h5
+  [[ 1.00000000e+00  3.40127229e-01  7.42367761e-01  9.77221874e-02 2.27505597e-01  3.38114298e-01  6.62165021e-01  2.86542628e-01 6.27376177e-02  2.64824894e-01  8.98881711e-02  1.96263220e-01 1.38312027e-01  2.59788144e-01  5.67146784e-01]
+   [ 3.40127229e-01  1.00000000e+00  4.63760455e-01  1.78377113e-01 4.41031952e-01  5.63879258e-01  3.30656585e-01  2.71374052e-01 2.83991623e-02  4.92803750e-01  2.83944627e-01  3.10024507e-01 -2.52927263e-03  4.23298203e-01  2.14691822e-01]
+   [ 7.42367761e-01  4.63760455e-01  1.00000000e+00  1.19289468e-01 2.12030153e-01  3.79822104e-01  7.05061793e-01  1.98442319e-01 2.69456223e-02  2.59063466e-01  8.65879339e-02  1.54904172e-01 -3.60709414e-03  1.97223187e-01  4.65837005e-01]
+   [ 9.77221874e-02  1.78377113e-01  1.19289468e-01  1.00000000e+00 1.94240239e-01  2.80580214e-01  1.82881875e-01  1.33683145e-01 2.35610243e-01  3.02979263e-01  3.36326864e-01  4.61680298e-01 1.55318379e-01  1.54522633e-01  1.95128360e-01]
+   [ 2.27505597e-01  4.41031952e-01  2.12030153e-01  1.94240239e-01 1.00000000e+00  3.65266644e-01  1.52581522e-01  3.64339901e-01 2.33655351e-02  7.48629914e-01  2.40550686e-01  2.99422519e-01 1.00063718e-02  3.46281858e-01  1.19450206e-01]
+   [ 3.38114298e-01  5.63879258e-01  3.79822104e-01  2.80580214e-01 3.65266644e-01  1.00000000e+00  4.16392402e-01  3.88906795e-01 2.51990080e-01  4.97731379e-01  2.86117684e-01  3.66880718e-01 7.92414701e-02  4.10441979e-01  3.53212579e-01]
+   [ 6.62165021e-01  3.30656585e-01  7.05061793e-01  1.82881875e-01 1.52581522e-01  4.16392402e-01  1.00000000e+00  1.44187902e-01 2.07984983e-01  1.73525770e-01  2.82954211e-02  1.17332713e-01 1.20478080e-01  1.42130694e-01  5.43879167e-01]
+   [ 2.86542628e-01  2.71374052e-01  1.98442319e-01  1.33683145e-01 3.64339901e-01  3.88906795e-01  1.44187902e-01  1.00000000e+00 -6.04172017e-02  4.03472338e-01  3.23831760e-01  3.09279216e-01 3.66082570e-02  3.64953442e-01  1.27283955e-01]
+   [ 6.27376177e-02  2.83991623e-02  2.69456223e-02  2.35610243e-01 2.33655351e-02  2.51990080e-01  2.07984983e-01 -6.04172017e-02 1.00000000e+00  5.83566348e-02  6.13434470e-02  5.84754874e-02 6.74269715e-01  5.26982486e-02  2.11072771e-01]
+   [ 2.64824894e-01  4.92803750e-01  2.59063466e-01  3.02979263e-01 7.48629914e-01  4.97731379e-01  1.73525770e-01  4.03472338e-01 5.83566348e-02  1.00000000e+00  2.76139975e-01  4.28514901e-01 -6.98304466e-04  4.47151176e-01  1.57057293e-01]
+   [ 8.98881711e-02  2.83944627e-01  8.65879339e-02  3.36326864e-01 2.40550686e-01  2.86117684e-01  2.82954211e-02  3.23831760e-01 6.13434470e-02  2.76139975e-01  1.00000000e+00  6.30786455e-01 -5.77923624e-02  2.58146191e-01  7.82584319e-02]
+   [ 1.96263220e-01  3.10024507e-01  1.54904172e-01  4.61680298e-01 2.99422519e-01  3.66880718e-01  1.17332713e-01  3.09279216e-01 5.84754874e-02  4.28514901e-01  6.30786455e-01  1.00000000e+00 4.80950608e-03  2.77168455e-01  1.49742426e-01]
+   [ 1.38312027e-01 -2.52927263e-03 -3.60709414e-03  1.55318379e-01 1.00063718e-02  7.92414701e-02  1.20478080e-01  3.66082570e-02 6.74269715e-01 -6.98304466e-04 -5.77923624e-02  4.80950608e-03 1.00000000e+00 -5.17101664e-02  4.35576539e-02]
+   [ 2.59788144e-01  4.23298203e-01  1.97223187e-01  1.54522633e-01 3.46281858e-01  4.10441979e-01  1.42130694e-01  3.64953442e-01 5.26982486e-02  4.47151176e-01  2.58146191e-01  2.77168455e-01 -5.17101664e-02  1.00000000e+00  1.68841703e-01]
+   [ 5.67146784e-01  2.14691822e-01  4.65837005e-01  1.95128360e-01 1.19450206e-01  3.53212579e-01  5.43879167e-01  1.27283955e-01 2.11072771e-01  1.57057293e-01  7.82584319e-02  1.49742426e-01 4.35576539e-02  1.68841703e-01  1.00000000e+00]]
+
+  >>>> mobilenet_adamw_BS256_E80_arc_tripD_basic_agedb_30_epoch_123_0.955333.h5
+  [[ 1.          0.41995046  0.72045217  0.14276859  0.17353927  0.25630641 0.72570569  0.31259563  0.14555155  0.31257568  0.22750018  0.22630342 0.13320194  0.45702378  0.57295065]
+   [ 0.41995046  1.          0.4343083   0.25114369  0.3457262   0.41600223 0.3831861   0.20682873  0.09373844  0.52028971  0.17897687  0.21537132 0.08827312  0.54672629  0.26120827]
+   [ 0.72045217  0.4343083   1.          0.05976454  0.1291929   0.28230939 0.73592407  0.14744738  0.15618992  0.28359686  0.13008813  0.10878404 0.07561229  0.36095247  0.43146426]
+   [ 0.14276859  0.25114369  0.05976454  1.          0.28050121  0.18802487 0.12192914  0.19248151  0.1614934   0.28875296  0.35986638  0.45585616 0.22853697  0.16217371  0.24177532]
+   [ 0.17353927  0.3457262   0.1291929   0.28050121  1.          0.25971277 0.15233854  0.26623758  0.08054116  0.727568    0.11586712  0.18685093 0.07124111  0.27318993  0.26957086]
+   [ 0.25630641  0.41600223  0.28230939  0.18802487  0.25971277  1.  0.28283108  0.15134039  0.23407477  0.25908109  0.13018991  0.19951519 0.06343216  0.40855905  0.41172223]
+   [ 0.72570569  0.3831861   0.73592407  0.12192914  0.15233854  0.28283108 1.          0.2351004   0.28629809  0.19598139  0.17258618  0.20843697 0.22102642  0.35971177  0.56085978]
+   [ 0.31259563  0.20682873  0.14744738  0.19248151  0.26623758  0.15134039 0.2351004   1.          0.11567138  0.23213774  0.28010928  0.32430955 0.16913989  0.23879342  0.19629286]
+   [ 0.14555155  0.09373844  0.15618992  0.1614934   0.08054116  0.23407477 0.28629809  0.11567138  1.          0.06126115 -0.01562102  0.02848535 0.56563011  0.20275155  0.24363542]
+   [ 0.31257568  0.52028971  0.28359686  0.28875296  0.727568    0.25908109 0.19598139  0.23213774  0.06126115  1.          0.1488665   0.21466271 -0.01354127  0.3675338   0.30999004]
+   [ 0.22750018  0.17897687  0.13008813  0.35986638  0.11586712  0.13018991 0.17258618  0.28010928 -0.01562102  0.1488665   1.          0.65452039 0.03520288  0.22426077  0.19856089]
+   [ 0.22630342  0.21537132  0.10878404  0.45585616  0.18685093  0.19951519 0.20843697  0.32430955  0.02848535  0.21466271  0.65452039  1.  0.08200381  0.28916965  0.22271837]
+   [ 0.13320194  0.08827312  0.07561229  0.22853697  0.07124111  0.06343216 0.22102642  0.16913989  0.56563011 -0.01354127  0.03520288  0.08200381 1.          0.08978504  0.11078503]
+   [ 0.45702378  0.54672629  0.36095247  0.16217371  0.27318993  0.40855905 0.35971177  0.23879342  0.20275155  0.3675338   0.22426077  0.28916965 0.08978504  1.          0.4145425 ]
+   [ 0.57295065  0.26120827  0.43146426  0.24177532  0.26957086  0.41172223 0.56085978  0.19629286  0.24363542  0.30999004  0.19856089  0.22271837 0.11078503  0.4145425   1.        ]]
+
+  >>>> keras_se_mobile_facenet_emore_triplet_basic_agedb_30_epoch_100_0.958333.h5
+  [[1.         0.61478385 0.8973454  0.15718107 0.5926555  0.58813182 0.92300232 0.45091071 0.3164522  0.5968713  0.37408453 0.30994958 0.40522699 0.65396296 0.83518201]
+   [0.61478385 1.         0.66360599 0.36545365 0.67394194 0.5910911 0.66880568 0.51033195 0.3596981  0.69880752 0.56744638 0.45521595 0.41459763 0.72988871 0.55831343]
+   [0.8973454  0.66360599 1.         0.17525107 0.5584644  0.68718486 0.86782025 0.50264027 0.33017282 0.53835818 0.39080338 0.32353151 0.36372143 0.67215952 0.80071578]
+   [0.15718107 0.36545365 0.17525107 1.         0.31412549 0.40733733 0.25785307 0.43937926 0.38964902 0.31744369 0.58116134 0.61701738 0.39894503 0.39162109 0.32306835]
+   [0.5926555  0.67394194 0.5584644  0.31412549 1.         0.50954788 0.62572916 0.60725355 0.1909226  0.89496291 0.54618607 0.45310902 0.35389693 0.74746891 0.51459188]
+   [0.58813182 0.5910911  0.68718486 0.40733733 0.50954788 1.  0.65470876 0.51524153 0.51829348 0.47027365 0.37630522 0.40607065 0.42410082 0.68561522 0.65426112]
+   [0.92300232 0.66880568 0.86782025 0.25785307 0.62572916 0.65470876 1.         0.50959772 0.43159469 0.61265041 0.43510244 0.35097861 0.46370049 0.66316858 0.81414746]
+   [0.45091071 0.51033195 0.50264027 0.43937926 0.60725355 0.51524153 0.50959772 1.         0.24266423 0.55925443 0.51402934 0.40525766 0.42429972 0.58113889 0.48454077]
+   [0.3164522  0.3596981  0.33017282 0.38964902 0.1909226  0.51829348 0.43159469 0.24266423 1.         0.15768315 0.26993046 0.28630734 0.75963755 0.20986197 0.36556155]
+   [0.5968713  0.69880752 0.53835818 0.31744369 0.89496291 0.47027365 0.61265041 0.55925443 0.15768315 1.         0.53241526 0.45763469 0.34710827 0.72942182 0.55309736]
+   [0.37408453 0.56744638 0.39080338 0.58116134 0.54618607 0.37630522 0.43510244 0.51402934 0.26993046 0.53241526 1.         0.749129 0.31426637 0.56523865 0.40658124]
+   [0.30994958 0.45521595 0.32353151 0.61701738 0.45310902 0.40607065 0.35097861 0.40525766 0.28630734 0.45763469 0.749129   1.  0.26827176 0.46411074 0.41938556]
+   [0.40522699 0.41459763 0.36372143 0.39894503 0.35389693 0.42410082 0.46370049 0.42429972 0.75963755 0.34710827 0.31426637 0.26827176 1.         0.27497352 0.40184703]
+   [0.65396296 0.72988871 0.67215952 0.39162109 0.74746891 0.68561522 0.66316858 0.58113889 0.20986197 0.72942182 0.56523865 0.46411074 0.27497352 1.         0.64524276]
+   [0.83518201 0.55831343 0.80071578 0.32306835 0.51459188 0.65426112 0.81414746 0.48454077 0.36556155 0.55309736 0.40658124 0.41938556 0.40184703 0.64524276 1.        ]]
+
+  >>>> keras_se_mobile_facenet_emore_IV_basic_agedb_30_epoch_48_0.957833.h5
+  [[1.         0.52452019 0.79764335 0.01922559 0.34479842 0.41821113 0.83882856 0.17354656 0.18959271 0.36957028 0.14057233 0.10494926 0.27162717 0.49565217 0.65373726]
+   [0.52452019 1.         0.57140449 0.18228006 0.47906092 0.44123847 0.5275844  0.20980341 0.20691296 0.46903743 0.34897468 0.2765814 0.194298   0.61766128 0.39762093]
+   [0.79764335 0.57140449 1.         0.07529915 0.30094927 0.53102282 0.75710164 0.24882642 0.14580214 0.28065893 0.16415297 0.1474415 0.17211926 0.49134935 0.60505851]
+   [0.01922559 0.18228006 0.07529915 1.         0.20317396 0.28491703 0.10819204 0.20830958 0.25527885 0.21926467 0.37335406 0.42986572 0.30167764 0.23739102 0.20924116]
+   [0.34479842 0.47906092 0.30094927 0.20317396 1.         0.29358603 0.39203468 0.44237078 0.09325511 0.81655135 0.26954425 0.26361311 0.25743398 0.5550894  0.3253638 ]
+   [0.41821113 0.44123847 0.53102282 0.28491703 0.29358603 1.  0.4785178  0.27395942 0.36109232 0.23813071 0.16109122 0.2450794 0.2005094  0.57975659 0.49980962]
+   [0.83882856 0.5275844  0.75710164 0.10819204 0.39203468 0.4785178 1.         0.25265195 0.29839689 0.37215297 0.1977397  0.17022776 0.34383761 0.487475   0.65087879]
+   [0.17354656 0.20980341 0.24882642 0.20830958 0.44237078 0.27395942 0.25265195 1.         0.01756419 0.35887119 0.35585282 0.28417292 0.20165476 0.31740708 0.22444148]
+   [0.18959271 0.20691296 0.14580214 0.25527885 0.09325511 0.36109232 0.29839689 0.01756419 1.         0.04743121 0.13746886 0.15323205 0.71083048 0.12089917 0.23476041]
+   [0.36957028 0.46903743 0.28065893 0.21926467 0.81655135 0.23813071 0.37215297 0.35887119 0.04743121 1.         0.23741816 0.25527783 0.20521458 0.54611248 0.35884441]
+   [0.14057233 0.34897468 0.16415297 0.37335406 0.26954425 0.16109122 0.1977397  0.35585282 0.13746886 0.23741816 1.         0.69237788 0.18012348 0.29819382 0.17399155]
+   [0.10494926 0.2765814  0.1474415  0.42986572 0.26361311 0.2450794 0.17022776 0.28417292 0.15323205 0.25527783 0.69237788 1.  0.15727922 0.2623953  0.2742645 ]
+   [0.27162717 0.194298   0.17211926 0.30167764 0.25743398 0.2005094 0.34383761 0.20165476 0.71083048 0.20521458 0.18012348 0.15727922 1.         0.13275842 0.26789568]
+   [0.49565217 0.61766128 0.49134935 0.23739102 0.5550894  0.57975659 0.487475   0.31740708 0.12089917 0.54611248 0.29819382 0.2623953 0.13275842 1.         0.47580607]
+   [0.65373726 0.39762093 0.60505851 0.20924116 0.3253638  0.49980962 0.65087879 0.22444148 0.23476041 0.35884441 0.17399155 0.2742645 0.26789568 0.47580607 1.        ]]
   ```
 ***

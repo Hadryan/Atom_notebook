@@ -1036,6 +1036,10 @@
 # expect
 ## 命令
   - 实现自动和交互式任务进行通信
+  - **ssh alias**
+    ```sh
+    alias sshtest="expect -c 'spawn ssh root@192.168.1.1; expect \"assword:\" { send \"root\n\" }; interact'"
+    ```
   - expect需要Tcl编程语言的支持，要在系统上运行Expect必须首先安装Tcl
   - 第一行使用 `#!/usr/bin/expect`
   - set, 设置变量
@@ -1256,6 +1260,10 @@
   - mp3info 查找音频文件，并删除比特率大于 320 的
     ```shell
     mp3info -x -p "%r#%f\n" *.mp3 | grep 320 | cut -d '#' -f 2- | sed 's/ /\\ /g' | xargs rm {} \;
+    ```
+  - 更新当前文件夹下所有 `git` 库
+    ```sh
+    ls -1 | xargs -I {} sh -c "cd {}; echo '>>>> $PWD/{}'; git remote -v; git pull; cd -; echo ''"
     ```
 ***
 

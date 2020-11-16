@@ -145,8 +145,48 @@
   ```
 ***
 
+# Flag
+  ```go
+  package main
+
+  import (
+      "fmt"
+      "flag"
+  )
+
+  func main() {
+      ss := flag.String("string", "hello", "String value")
+      ii := flag.Int("int", 1234, "Int value")
+      bb := flag.Bool("bool", false, "Bool value")
+      ee := flag.String("ee", "", "Essential string value")
+      flag.Parse()
+      if *ee == "" {
+          flag.Usage()
+          return
+      }   
+
+      fmt.Println(*ss, *ii, *bb, *ee)
+  }
+  ```
+  ```sh
+  $ go run test_flag.go
+  # Usage of /tmp/go-build853351541/b001/exe/test_flag:
+  #   -bool
+  #     	Bool value
+  #   -ee string
+  #     	Essential string value
+  #   -int int
+  #     	Int value (default 1234)
+  #   -string string
+  #     	String value (default "hello")
+
+  $ go run test_flag.go -ee aa -bool -int 42 -string world
+  # world 42 true aa
+  ```
+***
+
 # Binary 二进制文件读写
-## EE
+## Test structs
   ```go
   import (
       "math/rand"
@@ -156,71 +196,232 @@
       "bytes"
   )
 
+  fmt.Println("Source basic struct:")
   type elem struct {
-      aa float32
-      bb float64
-      cc uint32
+      AA float32
+      BB float64
+      CC uint32
   }
 
   nums := 3
-  ss := make([]elem, nums)
-  rr := rand.New(rand.NewSource(0))
+  rr := rand.New(rand.NewSource(rand.Int63()))
 
-  fmt.Println("Write elements:")
+  ss := make([]elem, nums)
+
   for ii := 0; ii < nums; ii++ {
       ss[ii] = elem{rr.Float32(), rr.Float64(), rr.Uint32()}
       fmt.Println(ss[ii])
   }
 
-  var binBuf bytes.Buffer
-  binary.Write(&binBuf, binary.BigEndian, ss)
-  file, err := os.Create("test.bin")
-  // defer file.Close()
-  file.Write(binBuf.Bytes())
-  file.Close()
-
-  ee := elem{}
-  fmt.Println("Element size: ", binary.Size(ee))
-
-  fmt.Println("Read elements:")
-  file, err := os.Open("test.bin")
-  // defer file.Close()
-  binBuf2 := make([]byte, binary.Size(ee))
-  for ii := 0; ii < nums; ii++ {
-      file.Read(binBuf2)
-      binary.Read(bytes.NewBuffer(binBuf2), binary.BigEndian, &ee)
-      fmt.Println(ee)
+  fmt.Println("Source slice struct:")
+  type selem struct {
+      AA float32
+      BB float64
+      CC []uint32
   }
+  elemSliceNum := 4
 
-  fmt.Println("Read elements batch:")
-  file, err := os.Open("test.bin")
-  // defer file.Close()
-  binBuf3 := make([]byte, binary.Size(ee) * nums)
-  file.Read(binBuf3)
+  sss := make([]selem, nums)
+  for ii := 0; ii < nums; ii++ {
+      sss[ii].CC = make([]uint32, elemSliceNum)
+      sss[ii].AA = rr.Float32()
+      sss[ii].BB = rr.Float64()
+      for jj := 0; jj < elemSliceNum; jj++ {
+          sss[ii].CC[jj] = rr.Uint32()
+      }
 
-  dd := make([]elem, nums)
-  binary.Read(bytes.NewBuffer(binBuf3), binary.BigEndian, &dd)
-  fmt.Println(dd)
+      fmt.Println(sss[ii])
+  }
   ```
-  **运行**
   ```go
-  Write elements:
-  {0.94519615 0.24496508529377975 2817310706}
-  {0.05434384 0.36758720663245853 1243308993}
-  {0.1924386 0.6553321508148324 3853314576}
-  Element size:  16
-  Read elements:
-  {0.94519615 0.24496508529377975 2817310706}
-  {0.05434384 0.36758720663245853 1243308993}
-  {0.1924386 0.6553321508148324 3853314576}
-  Read elements batch:
-  [{0.94519615 0.24496508529377975 2817310706} {0.05434384 0.36758720663245853 1243308993} {0.1924386 0.6553321508148324 3853314576}]
+  Source basic struct:
+  {0.9406326 0.3607466532834925 4263448410}
+  {0.39402485 0.6147623204876898 1909146124}
+  {0.73707014 0.8170595655807201 140346952}
+  Source slice struct:
+  {0.9325033 0.5209825014348924 [1712744152 174326113 2946345882 2566003851]}
+  {0.2906545 0.7224597815694159 [2997456150 970260067 1548335504 3556833531]}
+  {0.24183238 0.8934221956199041 [2299076535 905588253 1245822197 746649276]}
+  ```
+## Bytes buffer
+  - **Write**
+    ```go
+    fmt.Println("Write basic struct to bytes buffer")
+    var binBuf bytes.Buffer
+    binary.Write(&binBuf, binary.BigEndian, ss)
+
+    file, err := os.Create("test_basic.bin")
+    // defer file.Close()
+    file.Write(binBuf.Bytes())
+    file.Close()
+
+    fmt.Println("Write slice struct to bytes buffer")
+    sbinBuf := bytes.Buffer()
+    for ii := 0; ii < nums; ii++ {
+        binary.Write(&sbinBuf, binary.BigEndian, sss[ii].AA)
+        binary.Write(&sbinBuf, binary.BigEndian, sss[ii].BB)
+        for jj := 0; jj < elemSliceNum; jj++ {
+            binary.Write(&sbinBuf, binary.BigEndian, sss[ii].CC[jj])
+        }
+    }
+
+    file2, err := os.Create("test_slice.bin")
+    // defer file2.Close()
+    file2.Write(sbinBuf.Bytes())
+    file2.Close()
+    ```
+    ```go
+    $ls -lh test_basic.bin test_slice.bin
+    -rw-rw-r-- 1 leondgarse leondgarse 48 5月  18 15:48 test_basic.bin
+    -rw-r--r-- 1 leondgarse leondgarse 84 5月  18 15:48 test_slice.bin
+    ```
+  - **Read**
+    ```go
+    fmt.Println("Read basic struct:")
+    elemSize := binary.Size(elem{})
+    binsT := make([]byte, elemSize * nums)
+
+    tfile, err := os.Open("test_basic.bin")
+    // defer tfile.Close()
+    tfile.Read(binsT)
+    tfile.Close()
+
+    tt := make([]elem, nums)
+    binary.Read(bytes.NewBuffer(binsT), binary.BigEndian, &tt)
+    fmt.Println(tt)
+
+    fmt.Println("Read slice struct:")
+    ee := selem{}
+    ee.CC = make([]uint32, elemSliceNum)
+    selemSize := binary.Size(ee.AA) + binary.Size(ee.BB) + binary.Size(ee.CC)
+    sbinsT := make([]byte, selemSize * nums)
+
+    tfile2, err := os.Open("test_slice.bin")
+    // defer tfile2.Close()
+    tfile2.Read(sbinsT)
+    tfile2.Close()
+
+    stt := make([]selem, nums)
+    sbinBufT := bytes.NewBuffer(sbinsT)
+    for ii := 0; ii < nums; ii++ {
+        stt[ii].CC = make([]uint32, elemSliceNum)
+        binary.Read(sbinBufT, binary.BigEndian, &stt[ii].AA)
+        binary.Read(sbinBufT, binary.BigEndian, &stt[ii].BB)
+        for jj := 0; jj < elemSliceNum; jj++ {
+            binary.Read(sbinBufT, binary.BigEndian, &stt[ii].CC[jj])
+        }
+        fmt.Println(stt[ii])
+    }
+    ```
+    ```go
+    Read basic struct:
+    [{0.9406326 0.3607466532834925 4263448410} {0.39402485 0.6147623204876898 1909146124} {0.73707014 0.8170595655807201 140346952}]
+    Read slice struct:
+    {0.9325033 0.5209825014348924 [1712744152 174326113 2946345882 2566003851]}
+    {0.2906545 0.7224597815694159 [2997456150 970260067 1548335504 3556833531]}
+    {0.24183238 0.8934221956199041 [2299076535 905588253 1245822197 746649276]}
+    ```
+## ioutil
+  ```go
+  import "io/ioutil"
+  fmt.Println("ioutil write + read basic struct:")
+
+  // Write bytes slice to file
+  err := ioutil.WriteFile("test_slice.bin", binBuf.Bytes(), 0644)
+
+  // Read bytes slice from file
+  binsT2, err := ioutil.ReadFile("test_slice.bin")
+
+  // Decode
+  tt := make([]elem, nums)
+  binary.Read(bytes.NewBuffer(binsT2), binary.BigEndian, &tt)
+  fmt.Println(tt)
+  ```
+  ```go
+  ioutil write + read basic struct:
+  [{0.9406326 0.3607466532834925 4263448410} {0.39402485 0.6147623204876898 1909146124} {0.73707014 0.8170595655807201 140346952}]
+  ```
+## gob
+  - struct elements output **MUST** be **public**
+  - **encoding/gob**
+    ```go
+    import "encoding/gob"
+
+    fmt.Println("gob encode + decode basic struct:")
+    gfile, err := os.Create("./test_basic.gob")
+    encoder := gob.NewEncoder(gfile)
+    encoder.Encode(ss)
+    gfile.Close()
+
+    gfile2, err := os.Open("./test_basic.gob")
+    decoder := gob.NewDecoder(gfile2)
+    tt := make([]elem, nums)
+    decoder.Decode(&tt)
+    gfile2.Close()
+    fmt.Println(tt)
+
+    fmt.Println("gob encode + decode slice struct:")
+    gfile, err := os.Create("./test_slice.gob")
+    encoder := gob.NewEncoder(gfile)
+    encoder.Encode(sss)
+    gfile.Close()
+
+    gfile2, err := os.Open("./test_slice.gob")
+    decoder := gob.NewDecoder(gfile2)
+    stt := make([]selem, nums)
+    decoder.Decode(&stt)
+    gfile2.Close()
+    fmt.Println(stt)
+    ```
+    ```go
+    gob encode + decode basic struct:
+    [{0.9406326 0.3607466532834925 4263448410} {0.39402485 0.6147623204876898 1909146124} {0.73707014 0.8170595655807201 140346952}]
+    gob encode + decode slice struct:
+    [{0.9325033 0.5209825014348924 [1712744152 174326113 2946345882 2566003851]} {0.2906545 0.7224597815694159 [2997456150 970260067 1548335504 3556833531]} {0.24183238 0.8934221956199041 [2299076535 905588253 1245822197 746649276]}]
+    ```
+## Encode and Decode by bytes array
+  ```go
+  $ls -l test_slice.gob
+  // -rw-rw-r-- 1 leondgarse leondgarse 196 5月  18 16:07 test_slice.gob
+
+  import (
+    "encoding/gob"
+    "os"
+    "fmt"
+    "bytes"
+  )
+
+  type selem struct {
+    AA float32
+    BB float64
+    CC []uint32
+  }
+  nums := 3
+
+  tfile2, err := os.Open("test_slice.gob")
+  gbin := make([]byte, 196)
+  tfile2.Read(gbin)
+  tfile2.Close()
+
+  // Decode
+  dec := gob.NewDecoder(bytes.NewReader(gbin))
+  stt2 := make([]selem, nums)
+  dec.Decode(&stt2)
+
+  // Encode
+  bbb := bytes.NewBuffer(nil)
+  encoder := gob.NewEncoder(bbb)
+  bbb.Bytes()
+  encoder.Encode(stt2)
   ```
 ***
 
 # Tensorflow
 ## Install TensorFlow for C
   - [Install TensorFlow for C](https://www.tensorflow.org/install/lang_c)
+    ```sh
+    sudo tar -C /usr/local -xzf libtensorflow-*.tar.gz
+    ```
   - **hello world**
     ```c
     #include <stdio.h>
@@ -384,7 +585,7 @@
     list(map(hex, tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True), allow_soft_placement=True, intra_op_parallelism_threads=0, inter_op_parallelism_threads=0).SerializeToString()))
     # Out[29]: [0x32, 0x2, 0x20, 0x1, 0x38, 0x1]
 
-    list(map(hex, tf.ConfigProto(device_count={'GPU': 0}, allow_soft_placement=True, intra_op_parallelism_threads=0, inter_op_parallelism_threads=0).SerializeToString()))                                    
+    list(map(hex, tf.ConfigProto(device_count={'GPU': 0}, allow_soft_placement=True, intra_op_parallelism_threads=0, inter_op_parallelism_threads=0).SerializeToString()))
     # Out[39]: ['0xa', '0x7', '0xa', '0x3', '0x47', '0x50', '0x55', '0x10', '0x0', '0x38', '0x1']
     ```
   - Go 生成 `tf.SessionOptions`
@@ -679,44 +880,6 @@
     user	0m14.385s
     sys	0m6.471s
     ```
-## flag
-  ```go
-  package main
-
-  import (
-      "fmt"
-      "flag"
-  )
-
-  func main() {
-      ss := flag.String("string", "hello", "String value")
-      ii := flag.Int("int", 1234, "Int value")
-      bb := flag.Bool("bool", false, "Bool value")
-      ee := flag.String("ee", "", "Essential string value")
-      flag.Parse()
-      if *ee == "" {
-          flag.Usage()
-          return
-      }   
-
-      fmt.Println(*ss, *ii, *bb, *ee)
-  }
-  ```
-  ```sh
-  $ go run test_flag.go
-  # Usage of /tmp/go-build853351541/b001/exe/test_flag:
-  #   -bool
-  #     	Bool value
-  #   -ee string
-  #     	Essential string value
-  #   -int int
-  #     	Int value (default 1234)
-  #   -string string
-  #     	String value (default "hello")
-
-  $ go run test_flag.go -ee aa -bool -int 42 -string world
-  # world 42 true aa
-  ```
 ## dataframe
   - [Github go-gota/gota](https://github.com/go-gota/gota)
     ```sh
@@ -1133,9 +1296,9 @@
   **Run**
   ```go
   src_list := []float64{440.2207, 370.8417, 495.93146, 379.2145, 468.10645, 408.5712,
-      428.82767, 423.77728, 476.17242, 430.34576})
+      428.82767, 423.77728, 476.17242, 430.34576}
   dst_list := []float64{38.2946, 51.6963, 73.5318, 51.5014, 56.0252, 71.7366,
-      41.5493, 92.3655, 70.729904, 92.2041})
+      41.5493, 92.3655, 70.729904, 92.2041}
 
   import "time"
   aa := time.Now()
@@ -1154,6 +1317,73 @@
   fmt.Println(math.Pow(T.At(0, 0), 2) + math.Pow(T.At(0, 1), 2))
   // 1.000000000000001
   ```
+## Resize
+  - [Github nfnt/resize](https://github.com/nfnt/resize)
+    ```sh
+    go get /github.com/nfnt/resize
+    go build /github.com/nfnt/resize
+    go install /github.com/nfnt/resize
+    ```
+  - **Test**
+    ```go
+    // test_resize.go
+    package main
+
+    import (
+    	"github.com/nfnt/resize"
+    	"image/jpeg"
+    	"os"
+    	"fmt"
+        "time"
+    )
+
+    func main() {
+    	file, _ := os.Open("go_resize_test_2.jpeg")
+    	img, _ := jpeg.Decode(file)
+    	file.Close()
+
+    	methods := []resize.InterpolationFunction{resize.NearestNeighbor, resize.Bilinear, resize.Bicubic, resize.MitchellNetravali, resize.Lanczos2, resize.Lanczos3}
+    	saveNames := []string{"NearestNeighbor", "Bilinear", "Bicubic", "MitchellNetravali", "Lanczos2", "Lanczos3"}
+
+    	iter := 20
+    	for id, mm := range methods {
+    		ss := time.Now()
+    		for i := 0; i < iter; i++ {
+    			resize.Resize(2000, 0, img, mm)
+    		}
+    		dd := time.Since(ss)
+    		fmt.Println(saveNames[id], ": Iter:", iter, "Total:", dd, "Mean:", dd.Seconds() * 1000 / float64(iter), "ms")
+
+    		iss := resize.Resize(2000, 0, img, mm)
+    		out, _ := os.Create("test_resized_" + saveNames[id] + ".jpg")
+    		defer out.Close()
+    		jpeg.Encode(out, iss, nil)
+    	}
+    }
+    ```
+    **Run**
+    ```go
+    go run test_resize.go
+    // NearestNeighbor : Iter: 20 Total: 287.269807ms Mean: 14.363490350000001 ms
+    // Bilinear : Iter: 20 Total: 330.768269ms Mean: 16.53841345 ms
+    // Bicubic : Iter: 20 Total: 404.085138ms Mean: 20.2042569 ms
+    // MitchellNetravali : Iter: 20 Total: 400.273979ms Mean: 20.01369895 ms
+    // Lanczos2 : Iter: 20 Total: 405.309636ms Mean: 20.265481799999996 ms
+    // Lanczos3 : Iter: 20 Total: 478.777911ms Mean: 23.93889555 ms
+    ```
+    ```py
+    import glob2
+    imms = [imread(ii) for ii in glob2.glob('test_resized_*.jpg')]
+    fig, axes = plt.subplots(ncols=3, nrows=2)
+    axes = axes.flatten()
+    titles = "NearestNeighbor", "Bilinear", "Bicubic", "MitchellNetravali", "Lanczos2", "Lanczos3"
+    for ax, imm, title in zip(axes, imms, titles):
+        ax.imshow(imm)
+        ax.set_title(title)
+        ax.set_axis_off()
+    fig.tight_layout()
+    ```
+    ![](images/go_resize.png)
 ***
 
 # Tensorflow images
@@ -1263,6 +1493,7 @@
     open('./test.onnx', 'wb').write(content)
 
     sess = onnxruntime.InferenceSession('./test.onnx')
+    sess.run(None, {sess.get_inputs()[0].name: np.ones([1, 3, 112, 112], dtype='float32')})
     ```
   - [Github owulveryck/onnx-go](https://github.com/owulveryck/onnx-go)
     ```go
@@ -1324,8 +1555,8 @@
     cd ~/workspace
     git clone https://github.com/tensorflow/tensorflow.git && cd tensorflow
     ./configure
-    bazel build --config opt --config monolithic //tensorflow/lite:libtensorflowlite.so
-    bazel build --config opt --config monolithic //tensorflow/lite/c:libtensorflowlite_c.so
+    bazel build --config opt --config monolithic --define tflite_with_xnnpack=false //tensorflow/lite:libtensorflowlite.so
+    bazel build --config opt --config monolithic --define tflite_with_xnnpack=false //tensorflow/lite/c:libtensorflowlite_c.so
 
     file bazel-bin/tensorflow/lite/c/libtensorflowlite_c.so
     ```
@@ -1369,11 +1600,14 @@
 ## Android ARM
   - [Build TensorFlow Lite for ARM boards](https://www.tensorflow.org/lite/guide/build_arm64)
     ```sh
-    bazel build --config android_arm --config monolithic //tensorflow/lite:libtensorflowlite.so --verbose_failures
-    bazel build --config android_arm --config monolithic //tensorflow/lite/c:libtensorflowlite_c.so --verbose_failures
+    ./configure
+    # Please specify the (min) Android NDK API level to use: 18
+    bazel build --config android_arm --config monolithic --define tflite_with_xnnpack=false //tensorflow/lite:libtensorflowlite.so --verbose_failures
+    bazel build --config android_arm --config monolithic --define tflite_with_xnnpack=false //tensorflow/lite/c:libtensorflowlite_c.so --verbose_failures
 
-    bazel build --config android_arm64 --config monolithic //tensorflow/lite:libtensorflowlite.so --verbose_failures
-    bazel build --config android_arm64 --config monolithic //tensorflow/lite/c:libtensorflowlite_c.so --verbose_failures
+    ./configure
+    bazel build --config android_arm64 --config monolithic --define tflite_with_xnnpack=false //tensorflow/lite:libtensorflowlite.so --verbose_failures
+    bazel build --config android_arm64 --config monolithic --define tflite_with_xnnpack=false //tensorflow/lite/c:libtensorflowlite_c.so --verbose_failures
     ```
     Or build a `.a` lib using tensorflow tools
     ```sh
@@ -1384,9 +1618,9 @@
     ```
   - `gomobile bind`
     ```sh
-    export CGO_LDFLAGS=-L$HOME/workspace/tensorflow.arm/bazel-bin/tensorflow/lite/c
-    export CGO_CFLAGS=-I$HOME/workspace/tensorflow.arm/
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/workspace/tensorflow.arm/bazel-bin/tensorflow/lite/c
+    export CGO_LDFLAGS=-L$HOME/workspace/tensorflow.arm64/bazel-bin/tensorflow/lite/c
+    export CGO_CFLAGS=-I$HOME/workspace/tensorflow.arm64/
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/workspace/tensorflow.arm64/bazel-bin/tensorflow/lite/c
 
     gomobile bind -v -o hello.aar -target=android/arm github.com/mattn/go-tflite
     gomobile bind -v -o hello.aar -target=android/arm64 github.com/mattn/go-tflite
@@ -1438,4 +1672,12 @@
 
   CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC="/usr/bin/aarch64-linux-gnu-gcc -Wl,-rpath-link,$HOME/Android/Sdk/ndk/20.0.5594570/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/29" go build github.com/mattn/go-tflite
   ```
+## XNNpack
+  - Bazel build tflite library with `--define tflite_with_xnnpack=true`
+  - Change in `$HOME/go/src/github.com/mattn/go-tflite`
+    ```sh
+    git diff delegates/xnnpack/xnnpack.go
+    # -#cgo LDFLAGS: -ltensorflowlite-delegate_xnnpack -lXNNPACK
+    # +#cgo LDFLAGS: -ltensorflowlite_c
+    ```
 ***
