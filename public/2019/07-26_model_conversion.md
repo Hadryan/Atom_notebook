@@ -1776,4 +1776,27 @@
     new_model.load_weights('model/weights_only.h5')
     new_model.save('tf13/EB4.h5')
     ```
+  - Error in save `mobilenetv3` `h5` model in `TF1.15` [ValueError: Unable to create group (Name already exists)](https://www.gitmemory.com/issue/keras-team/keras/12195/523749332)
+    ```py
+    ''' Q:
+      new_model.save('aa.h5')
+      # ValueError: Unable to create group (name already exists)
+    '''
+    ''' A: It's caused by a layer named `foo` is in a network after a layer named `foo/bar`
+      !vi /opt/anaconda3/envs/tf14/lib/python3.7/site-packages/tensorflow_core/python/keras/saving/hdf5_format.py +618
+      # 618 for layer in layers:
+      # 619   try:
+      # 620     g = group.create_group(layer.name)
+      # 621   except ValueError:
+      # 622     raise ValueError('An error occurred creating weights group for {0}.'.format(layer.name))
+
+      # Re-run to detect where is the error layer.
+      new_model.save('aa.h5')
+      # ValueError: An error occurred creating weights group for expanded_conv/depthwise
+
+      # Change layer name
+      - 524  name=prefix + 'depthwise')
+      + 524  name=prefix + 'depthwise/DConv')
+    '''
+    ```
 ***

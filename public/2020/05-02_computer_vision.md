@@ -2054,7 +2054,6 @@
       x = np.stack(channel_images, axis=0)
       x = np.rollaxis(x, 0, channel_axis + 1)
   return x
-
   ```
 ## 几何变换 geometric transformations
 ## Face align landmarks
@@ -2486,3 +2485,173 @@
       ax.set_title(cc)
   fig.tight_layout()
   ```
+***
+
+# 图像质量
+  ```py
+  from scipy import signal
+  Laplace_conv = lambda imm: signal.convolve2d(imm, [[0, 1, 0], [1, -4, 1], [0, 1, 0]], mode='valid')
+
+  def laplacian_blur(img, laplace, LAPLACE_THRESHOLD=50):
+      lap_img = laplace(rgb2gray(img) * 255)
+      score_sum = (lap_img > LAPLACE_THRESHOLD).sum()
+      score_var = lap_img.var()
+      return score_sum, score_var
+  ```
+  ```py
+  # 把图片转换为单通道的灰度图
+  gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+  # 获取形状以及长宽
+  img_shape = gray_img.shape
+  height, width = img_shape[0], img_shape[1]
+  size = gray_img.size
+  # 灰度图的直方图
+  hist = cv2.calcHist([gray_img], [0], None, [256], [0, 256])
+
+  # 计算灰度图像素点偏离均值(128)程序
+  a = 0
+  ma = 0
+  reduce_matrix = np.full((height, width), 128)
+  shift_value = gray_img - reduce_matrix
+  shift_sum = sum(map(sum, shift_value))
+
+  da = shift_sum / size
+
+  # 计算偏离128的平均偏差
+  for i in range(256):
+      ma += (abs(i-128-da) * hist[i])
+  m = abs(ma / size)
+  # 亮度系数
+  k = abs(da) / m
+  # print(k)
+  if k[0] > 1:
+      # 过亮
+      if da > 0:
+          print("过亮")
+      else:
+          print("过暗")
+  else:
+      print("亮度正常")
+  ```
+## 亮度检测
+  - 亮度检测与色偏检测相似，计算图片在灰度图上的均值和方差，当存在亮度异常时，均值会偏离均值点（可以假设为128），方差也会偏小；通过计算灰度图的均值和方差，就可评估图像是否存在过曝光或曝光不足。函数如下
+  ```cpp
+  /*********************************************************************************************************************************************************
+  *函数描述：	brightnessException 	计算并返回一幅图像的色偏度以及，色偏方向   
+  *函数参数：	InputImg 	需要计算的图片，BGR存放格式，彩色（3通道），灰度图无效
+  *			cast    	计算出的偏差值，小于1表示比较正常，大于1表示存在亮度异常；当cast异常时，da大于0表示过亮，da小于0表示过暗
+  *函数返回值：	返回值通过cast、da两个引用返回，无显式返回值
+  **********************************************************************************************************************************************************/
+  void brightnessException (Mat InputImg,float& cast,float& da)
+  {
+  	Mat GRAYimg;
+  	cvtColor(InputImg,GRAYimg,CV_BGR2GRAY);
+  	float a=0;
+  	int Hist[256];
+  	for(int i=0;i<256;i++)
+  	Hist[i]=0;
+  	for(int i=0;i<GRAYimg.rows;i++)
+  	{
+  		for(int j=0;j<GRAYimg.cols;j++)
+  		{
+  			a+=float(GRAYimg.at<uchar>(i,j)-128);//在计算过程中，考虑128为亮度均值点
+  			int x=GRAYimg.at<uchar>(i,j);
+  			Hist[x]++;
+  		}
+  	}
+  	da=a/float(GRAYimg.rows*InputImg.cols);
+  	float D =abs(da);
+  	float Ma=0;
+  	for(int i=0;i<256;i++)
+  	{
+  		Ma+=abs(i-128-da)*Hist[i];
+  	}
+  	Ma/=float((GRAYimg.rows*GRAYimg.cols));
+  	float M=abs(Ma);
+  	float K=D/M;
+  	cast = K;
+     	return;
+  }
+  ```
+## 色偏检测
+  - 网上常用的一种方法是将RGB图像转变到CIE L*a*b*空间，其中L*表示图像亮度，a*表示图像红/绿分量，b*表示图像黄/蓝分量。通常存在色偏的图像，在a*和b*分量上的均值会偏离原点很远，方差也会偏小；通过计算图像在a*和b*分量上的均值和方差，就可评估图像是否存在色偏。计算CIE L*a*b*空间是一个比较繁琐的过程，好在OpenCV提供了现成的函数，因此整个过程也不复杂。
+  ```cpp
+  /********************************************************************************************
+  *函数描述：	calcCast 	计算并返回一幅图像的色偏度以及，色偏方向   
+  *函数参数：	InputImg 	需要计算的图片，BGR存放格式，彩色（3通道），灰度图无效
+  *			cast    	计算出的偏差值，小于1表示比较正常，大于1表示存在色偏
+  *			da       	红/绿色偏估计值，da大于0，表示偏红；da小于0表示偏绿
+  *			db       	黄/蓝色偏估计值，db大于0，表示偏黄；db小于0表示偏蓝
+  *函数返回值：	返回值通过cast、da、db三个应用返回，无显式返回值
+  *********************************************************************************************/
+  void colorException(Mat InputImg,float& cast,float& da,float& db)
+  {
+  	Mat LABimg;
+  	cvtColor(InputImg,LABimg,CV_BGR2Lab);//参考http://blog.csdn.net/laviewpbt/article/details/9335767
+  	                                   //由于OpenCV定义的格式是uint8，这里输出的LABimg从标准的0～100，-127～127，-127～127，被映射到了0～255，0～255，0～255空间
+  	float a=0,b=0;
+  	int HistA[256],HistB[256];
+  	for(int i=0;i<256;i++)
+  	{
+  		HistA[i]=0;
+  		HistB[i]=0;
+  	}
+  	for(int i=0;i<LABimg.rows;i++)
+  	{
+  		for(int j=0;j<LABimg.cols;j++)
+  		{
+  			a+=float(LABimg.at<cv::Vec3b>(i,j)[1]-128);//在计算过程中，要考虑将CIE L*a*b*空间还原 后同
+  			b+=float(LABimg.at<cv::Vec3b>(i,j)[2]-128);
+  			int x=LABimg.at<cv::Vec3b>(i,j)[1];
+  			int y=LABimg.at<cv::Vec3b>(i,j)[2];
+  			HistA[x]++;
+  			HistB[y]++;
+  		}
+  	}
+  	da=a/float(LABimg.rows*LABimg.cols);
+  	db=b/float(LABimg.rows*LABimg.cols);
+  	float D =sqrt(da*da+db*db);
+  	float Ma=0,Mb=0;
+  	for(int i=0;i<256;i++)
+  	{
+  		Ma+=abs(i-128-da)*HistA[i];//计算范围-128～127
+  		Mb+=abs(i-128-db)*HistB[i];
+  	}
+  	Ma/=float((LABimg.rows*LABimg.cols));
+  	Mb/=float((LABimg.rows*LABimg.cols));
+  	float M=sqrt(Ma*Ma+Mb*Mb);
+  	float K=D/M;
+  	cast = K;
+      return;
+  }
+  ```
+## 失焦检测
+  - 失焦的主要表现就是画面模糊，衡量画面模糊的主要方法就是梯度的统计特征，通常梯度值越高，画面的边缘信息越丰富，图像越清晰。需要注意的是梯度信息与每一个视频本身的特点有关系，如果画面中本身的纹理就很少，即使不失焦，梯度统计信息也会很少，对监控设备失焦检测需要人工参与的标定过程，由人告诉计算机某个设备正常情况下的纹理信息是怎样的。
+  ```py
+  double DefRto(Mat frame)
+  {
+  	Mat gray;
+  	cvtColor(frame,gray,CV_BGR2GRAY);
+  	IplImage *img = &(IplImage(gray));
+  	double temp = 0;
+  	double DR = 0;
+  	int i,j;//循环变量
+  	int height=img->height;
+  	int width=img->width;
+  	int step=img->widthStep/sizeof(uchar);
+  	uchar *data=(uchar*)img->imageData;
+  	double num = width*height;
+
+  	for(i=0;i<height;i++)
+  	{
+  		for(j=0;j<width;j++)
+  		{
+  			temp += sqrt((pow((double)(data[(i+1)*step+j]-data[i*step+j]),2) + pow((double)(data[i*step+j+1]-data[i*step+j]),2)));
+  			temp += abs(data[(i+1)*step+j]-data[i*step+j])+abs(data[i*step+j+1]-data[i*step+j]);
+  		}
+  	}
+  	DR = temp/num;
+  	return DR;
+  ```
+***

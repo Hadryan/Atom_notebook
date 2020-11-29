@@ -58,6 +58,22 @@
       plt.axis('off')
       plt.tight_layout()
   ```
+  ```py
+  def axes_show_info(nimgs, info_func=None, base_size=2, text_color='r', text_pos=(10, 50), pic_in_line=10):
+      img_num = len(nimgs)
+      lines = img_num // 10 + (0 if img_num % 10 == 0 else 1)
+      rows = pic_in_line if img_num > pic_in_line else img_num
+
+      fig, axes = plt.subplots(lines, rows, figsize=(base_size * rows, base_size * lines))
+      axes = axes.flatten()
+      for imm, ax in zip(nimgs, axes):
+          ax.imshow(imm)
+          ax.set_axis_off()
+          if info_func is not None:
+              ax.text(text_pos[0], text_pos[1], info_func(imm), color=text_color)
+      plt.tight_layout()
+      return fig, axes
+  ```
 ## Face align landmarks
   ```py
   from skimage import transform
@@ -108,6 +124,50 @@
   points, ne = rotation_detect(dd, 'test_images/rotate.png')
   points, ne = rotation_detect(dd, 'test_images/side.png')
   points, ne = rotation_detect(dd, 'test_images/side_rotate.png')
+  ```
+## 图像质量
+  ```py
+  from scipy import signal
+  from skimage.color import rgb2gray
+  from skimage.transform import resize
+  import cv2
+  import insightface
+  from glob2 import glob
+
+  det = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+  det.prepare(-1)
+
+  Laplace_conv = lambda imm: signal.convolve2d(imm, [[0, 1, 0], [1, -4, 1], [0, 1, 0]], mode='valid')
+  Laplace_cv2 = lambda imm: cv2.Laplacian(imm.astype('uint8'), cv2.CV_32F)
+
+  def laplacian_blur(img, laplace, LAPLACE_THRESHOLD = 50):
+      lap_img = laplace(rgb2gray(img) * 255)
+
+      score_sum = (lap_img > LAPLACE_THRESHOLD).sum()
+      score_var = lap_img.var()
+      return score_sum, score_var
+
+  aa = glob('./low/*.jpg') + np.random.permutation(glob('./high/*.jpg'))[:28].tolist()
+
+  nimgs, ccs = [], []
+  for ii in aa:
+      imm = imread(ii)
+      imm = (resize(imm, (imm.shape[0] // 2, imm.shape[1] // 2)) * 255).astype('uint8')
+      bbs, pps = det.detect(imm[:, :, ::-1])
+      if bbs.shape[0] == 1:
+          # print(ii, bbs)
+          bb = np.clip(bbs[0][:4], 0, np.inf).astype('int')
+          ww, hh = bb[2] - bb[0], bb[3] - bb[1]
+          bb[0], bb[1] = bb[0] + ww // 10, bb[1] + hh // 10
+          bb[2], bb[3] = bb[2] - ww // 10, bb[3] - hh // 10
+          nimgs.append((resize(imm[bb[1]:bb[3], bb[0]:bb[2]], (256, 256)) * 255).astype('uint8'))
+          ccs.append(bbs[0][4])
+      else:
+          print(ii, bbs.shape)
+
+  info_func = lambda img: 'Mean: %.4f\nVar: %.4f\nBlur: %.4f' %(np.mean((img.astype('float32') - 127) / 127.5), np.var((img.astype('float32') - 127) / 127.5), laplacian_blur(img, Laplace_conv)[1])
+
+  fig, axes = axes_show_info(nimgs[:-1], info_func=info_func)
   ```
 ***
 
@@ -1003,9 +1063,13 @@
   ! pip install insightface
 
   import insightface
+  import cv2
   det = insightface.model_zoo.face_detection.retinaface_r50_v1()
   det.prepare(-1)
-  det.detect(np.ones([224 ,224, 3]))
+
+  imm = cv2.imread('/home/leondgarse/workspace/test_images/Fotos_anuales_del_deporte_de_2012.jpg')
+  bbs, pps = det.detect(imm)
+  show_result(imm[:, :, ::-1], bbs[:, :4], bbs[:, 4], pps=pps)
   ```
 ## Pytorch
   - [Github biubug6/Pytorch_Retinaface](https://github.com/biubug6/Pytorch_Retinaface)
@@ -1047,12 +1111,16 @@
   net.load_state_dict(pretrained_dict, strict=False)
   net.eval()
   inputs = torch.randn(1, 3, 1024, 768).to(device)
+  print([ii.shape for ii in net(inputs)])
+  # [torch.Size([1, 32256, 4]), torch.Size([1, 32256, 2]), torch.Size([1, 32256, 10])]
   torch.onnx.export(net, inputs, 'retinaface.onnx', verbose=False)
 
   import onnxruntime
   sess = onnxruntime.InferenceSession('retinaface.onnx')
   print([(ii.name, ii.shape) for ii in sess.get_outputs()])
+  # [('758', [1, 32256, 4]), ('833', [1, 32256, 2]), ('832', [1, 32256, 10])]
   print([(ii.name, ii.shape) for ii in sess.get_inputs()])
+  # [('input.1', [1, 3, 1024, 768])]
   onnx_preds = sess.run(None, {sess.get_inputs()[0].name: np.ones([1, 3, 1024, 768], dtype=np.float32)})
   ```
 ## Keras
@@ -1225,7 +1293,7 @@
       return iou
   ```
 ## TensorRT
-  - [TensorRT RetinaFace in cpp](https://github.com/wang-xinyu/tensorrtx/tree/master/retinaface)
+  - [TensorRT RetinaFace in cpp with decode](https://github.com/wang-xinyu/tensorrtx/tree/master/retinaface)
   - [python EngineInference](https://github.com/leondgarse/Atom_notebook/blob/master/public/2019/08-19_tensorrt.md#onnx-engine)
   - **From pytorch saved onnx**
     ```sh

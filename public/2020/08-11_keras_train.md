@@ -281,7 +281,7 @@
     cd ~/workspace/tensorflow.arm32
     ./configure
     bazel build -c opt --config=android_arm tensorflow/lite/tools/benchmark:benchmark_model
-    bazel build --config opt --config monolithic --define tflite_with_xnnpack=false tensorflow/lite/tools/benchmark:benchmark_model
+    # bazel build --config opt --config monolithic --define tflite_with_xnnpack=false tensorflow/lite/tools/benchmark:benchmark_model
 
     adb push bazel-bin/tensorflow/lite/tools/benchmark/benchmark_model /data/local/tmp
     adb shell chmod +x /data/local/tmp/benchmark_model
