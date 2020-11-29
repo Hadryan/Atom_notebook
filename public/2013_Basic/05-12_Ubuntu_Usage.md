@@ -943,13 +943,15 @@
     # 日本語
     sudo apt-get install ibus-anthy
     ```
-  - language Support -> Keyboard input method system -> IBus
-  - Setting -> Region & Language -> Add -> Chinese -> Chinese (Intelligent Pinyin)
-  - Setting -> Region & Language -> Options -> Allow different sources for each window
+  - 配置
+    - language Support -> Keyboard input method system -> IBus
+    - Setting -> Region & Language -> Add -> Chinese -> Chinese (Intelligent Pinyin)
+    - Setting -> Region & Language -> Options -> Allow different sources for each window
+    - Setting -> Region & Language -> Anthy Options --> General --> Input Method --> Hiragana
   - 系统输入法选择为 IBus 时会自动清除选中的文本，如果是英文输入法就没有这个问题
     - 终端中 ibus-setup
     - 勾掉 在应用窗口中启用内嵌编辑模式(Embed preedit text in application window)
-  - ibus-setup 报错 No module named 'gi'
+  - `ibus-setup` 报错 `No module named 'gi'``
     ```shell
     Traceback (most recent call last):
       File "/usr/share/ibus/setup/main.py", line 34, in <module>
@@ -961,12 +963,23 @@
     - exec python3 /usr/share/ibus/setup/main.py $@
     + exec python2 /usr/share/ibus/setup/main.py $@
     ```
-  - ibus-setup 报错 Non-ASCII character '\xf0'
+    sudo vi /usr/lib/ibus/ibus-setup-anthy
+    ```shell
+    - exec python3 /usr/share/ibus-anthy/setup/main.py $@
+    + exec python2 /usr/share/ibus-anthy/setup/main.py $@
+    ```
+  - `ibus-setup` 报错 `Non-ASCII character '\xf0'`
     ```shell
       File "/usr/share/ibus/setup/main.py", line 285
     SyntaxError: Non-ASCII character '\xf0' in file /usr/share/ibus/setup/main.py on line 285, but no encoding declared
     ```
     修改 /usr/share/ibus/setup/main.py, line 285 中的表情符号为任意字母
+  - `ibus-setup-anthy` 报错 `chr() arg not in range(256)``
+    ```sh
+    sudo vi /usr/share/ibus-anthy/setup/_config.py
+    - SYMBOL_CHAR = chr(0x3042)
+    + SYMBOL_CHAR = unichr(0x3042)
+    ```
 ## 触控板右键
   - gnome-tweak-tool
   - Keyboard & Mouse -> Mouse Click Emulation
@@ -1374,6 +1387,22 @@
     sudo ln -s $HOME/workspace/SSS_PAC/whitelist.pac /var/www/html/whitelist.pac
     ```
     ![](images/pac_proxy.png)
+  - **squid** 本地端口转发，默认端口 `3128`
+    ```sh
+    sudo apt install squid
+    sudo vi /etc/squid/squid.conf
+    # 1193 acl localnet src 192.168.0.0/16         # RFC 1918 local private network (LAN)
+    # 1408 http_access allow localhost
+    # + 1409 http_access allow localnet  # Add this before http_access deny all
+    # 1412 http_access deny all
+    # 1907 # Squid normally listens to port 3128
+    # 1908 http_port 3128
+
+    sudo service squid restart
+
+    # log
+    sudo cat /var/log/squid/access.log
+    ```
 ## 每次开机时弹出 System problem report detected
   - Ubuntu 有一个内建的实用程序叫做 **Apport**, 当一个程序崩溃时，可以进行通知
   - **crash 文件** 生成的错误报告，删除后避免每次重启都弹出提示

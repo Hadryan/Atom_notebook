@@ -1601,6 +1601,7 @@
   - [Build TensorFlow Lite for ARM boards](https://www.tensorflow.org/lite/guide/build_arm64)
     ```sh
     ./configure
+    # Please specify the home path of the Android NDK to use. [Default is /home/leondgarse/Android/Sdk/ndk-bundle]: /home/leondgarse/Android/Sdk/ndk/20.0.5594570/
     # Please specify the (min) Android NDK API level to use: 18
     bazel build --config android_arm --config monolithic --define tflite_with_xnnpack=false //tensorflow/lite:libtensorflowlite.so --verbose_failures
     bazel build --config android_arm --config monolithic --define tflite_with_xnnpack=false //tensorflow/lite/c:libtensorflowlite_c.so --verbose_failures

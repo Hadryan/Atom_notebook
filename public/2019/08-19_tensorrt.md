@@ -790,7 +790,7 @@
 
         void* d_input;
         void* d_output;
-        void * bindings[2];
+        void* bindings[2];
 
     public:
         int max_batch_size;
@@ -828,16 +828,14 @@
         assert(runtime != nullptr);
         engine = runtime->deserializeCudaEngine(trtModelStream, size);
         assert(engine != nullptr);
-        assert(engine->getNbBindings() == 2);
+        assert(engine->getNbBindings() > 1);
         context = engine->createExecutionContext();
         assert(context != nullptr);
         delete[] trtModelStream;
 
         int inputIndex = 0;
-        int outputIndex = 1;
-
         // auto dataType = engine->getBindingDataType(0);
-        auto input_dims = engine->getBindingDimensions(0);
+        auto input_dims = engine->getBindingDimensions(inputIndex);
         input_ravel_dim = 1;
         for (int ii = 1; ii < input_dims.nbDims; ii++) {
             input_ravel_dim *= input_dims.d[ii];
@@ -846,6 +844,14 @@
             input_h = input_dims.d[1];
             input_w = input_dims.d[2];
         }
+
+        int output_num = engine->getNbBindings() - 1;
+        int outputIndexes[output_num]:
+        for (int ii = 0; ii < output_num; ii++) {
+            outputIndexes[ii] = ii + 1;
+
+        }
+
 
         auto output_dims = engine->getBindingDimensions(1);
         output_ravel_dim = 1;
