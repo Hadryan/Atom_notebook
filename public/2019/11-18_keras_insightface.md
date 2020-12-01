@@ -2089,7 +2089,7 @@
   names = ["Warmup", "Arcfacelose learning rate 0.1", "Arcfacelose learning rate 0.01", "Arcfacelose learning rate 0.001"]
 
   # axes, pre = plot.hist_plot_split("checkpoints/MXNET_r34_casia.json", epochs, axes=axes, customs=customs, names=names)
-  # axes, pre = plot.hist_plot_split("checkpoints/mxnet_r34_wdm1.json", epochs, axes=axes, customs=customs)
+  axes, pre = plot.hist_plot_split("checkpoints/mxnet_r34_wdm1_new.json", epochs, axes=axes, customs=customs)
   axes, pre = plot.hist_plot_split("checkpoints/mxnet_r34_wdm1_lazy_false.json", epochs, axes=axes, customs=customs, names=names)
   pp = {"epochs": epochs, "customs": customs, "axes": axes}
 
@@ -2110,11 +2110,11 @@
   # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_1e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_2_hist.json", **pp)
   # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_5e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_E20_E20_hist.json", **pp)
   # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_5e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_E20_opt_E10_3_hist.json", **pp)
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_5e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_E20_opt_E10_3_hist_wo_reg.json", **pp)
+  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_5e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_E20_opt_E10_3_hist_wo_reg.json", **pp)
   # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_1e3_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist.json", **pp)
   axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_1e3_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist_no_reg.json", **pp)
   # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_1e3_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist.json", **pp)
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_1e3_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist_no_reg.json", **pp)
+  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_1e3_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist_no_reg.json", **pp)
   # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_5e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist.json", **pp)
   axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_5e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist_no_reg.json", **pp)
 
@@ -2123,6 +2123,9 @@
 
   axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_SGD_REG_1e3_no_mom_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json", **pp)
   axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_SGDW_1e4_no_mom_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json", **pp)
+
+  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_SWA_5x5_SGD_REG_1e3_no_mom_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json", **pp)
+  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_SWA_1x1_SGD_REG_1e3_no_mom_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json", **pp)
   ```
   ```py
   import plot
@@ -3366,4 +3369,366 @@ test_optimizer_with_model(tfa.optimizers.SGDW(learning_rate=0.1, momentum=0.9, w
 # Epoch 0 - [weight] [[0.898]] - [losses]: 0.5 - [momentum]: [[-0.1]]
 # Epoch 1 - [weight] [[0.71640396]] - [losses]: 0.40320199728012085 - [momentum]: [[-0.1798]]
 # Epoch 2 - [weight] [[0.48151073]] - [losses]: 0.25661730766296387 - [momentum]: [[-0.2334604]]
+```
+***
+
+# IJB
+```py
+class Embedding:
+  def __init__(self, prefix, epoch, ctx_id=0):
+    print('loading',prefix, epoch)
+    ctx = mx.gpu(ctx_id)
+    sym, arg_params, aux_params = mx.model.load_checkpoint(prefix, epoch)
+    all_layers = sym.get_internals()
+    sym = all_layers['fc1_output']
+    image_size = (112,112)
+    self.image_size = image_size
+    model = mx.mod.Module(symbol=sym, context=ctx, label_names = None)
+    model.bind(for_training=False, data_shapes=[('data', (2, 3, image_size[0], image_size[1]))])
+    model.set_params(arg_params, aux_params)
+    self.model = model
+    src = np.array([
+      [30.2946, 51.6963],
+      [65.5318, 51.5014],
+      [48.0252, 71.7366],
+      [33.5493, 92.3655],
+      [62.7299, 92.2041] ], dtype=np.float32 )
+    src[:,0] += 8.0
+    self.src = src
+
+  def get(self, rimg, landmark):
+    assert landmark.shape[0]==68 or landmark.shape[0]==5
+    assert landmark.shape[1]==2
+    if landmark.shape[0]==68:
+      landmark5 = np.zeros( (5,2), dtype=np.float32 )
+      landmark5[0] = (landmark[36]+landmark[39])/2
+      landmark5[1] = (landmark[42]+landmark[45])/2
+      landmark5[2] = landmark[30]
+      landmark5[3] = landmark[48]
+      landmark5[4] = landmark[54]
+    else:
+      landmark5 = landmark
+    tform = trans.SimilarityTransform()
+    tform.estimate(landmark5, self.src)
+    M = tform.params[0:2,:]
+    img = cv2.warpAffine(rimg,M,(self.image_size[1],self.image_size[0]), borderValue = 0.0)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img_flip = np.fliplr(img)
+    img = np.transpose(img, (2,0,1)) #3*112*112, RGB
+    img_flip = np.transpose(img_flip,(2,0,1))
+    input_blob = np.zeros((2, 3, self.image_size[1], self.image_size[0]),dtype=np.uint8)
+    input_blob[0] = img
+    input_blob[1] = img_flip
+    data = mx.nd.array(input_blob)
+    db = mx.io.DataBatch(data=(data,))
+    self.model.forward(db, is_train=False)
+    feat = self.model.get_outputs()[0].asnumpy()
+    feat = feat.reshape([-1, feat.shape[0] * feat.shape[1]])
+    feat = feat.flatten()
+    return feat
+
+def read_template_pair_list(path):
+    pairs = np.loadtxt(path, dtype=str)
+    t1 = pairs[:,0].astype(np.int)
+    t2 = pairs[:,1].astype(np.int)
+    label = pairs[:,2].astype(np.int)
+    return t1, t2, label
+
+def read_template_media_list(path):
+    ijb_meta = np.loadtxt(path, dtype=str)
+    templates = ijb_meta[:,1].astype(np.int)
+    medias = ijb_meta[:,2].astype(np.int)
+    return templates, medias
+
+def get_image_feature(img_path, img_list_path, model_path, gpu_id):
+    img_list = open(img_list_path)
+    embedding = Embedding(model_path, 0, gpu_id)
+    files = img_list.readlines()
+    img_feats = []
+    faceness_scores = []
+    for img_index, each_line in enumerate(print_progress(files)):
+        name_lmk_score = each_line.strip().split(' ')
+        img_name = os.path.join(img_path, name_lmk_score[0])
+        img = cv2.imread(img_name)
+        lmk = np.array([float(x) for x in name_lmk_score[1:-1]], dtype=np.float32)
+        lmk = lmk.reshape( (5,2) )
+        img_feats.append(embedding.get(img,lmk))
+        faceness_scores.append(name_lmk_score[-1])
+    img_feats = np.array(img_feats).astype(np.float32)
+    faceness_scores = np.array(faceness_scores).astype(np.float32)
+    return img_feats, faceness_scores
+
+dataset = "/media/SD/tdtest/IJB_release"
+templates, medias = read_template_media_list(os.path.join(dataset, 'IJBB/meta', 'ijbb_face_tid_mid.txt'))
+p1, p2, label = read_template_pair_list(os.path.join(dataset, 'IJBB/meta', 'ijbb_template_pair_label.txt'))
+
+#img_feats = read_image_feature('./MS1MV2/IJBB_MS1MV2_r100_arcface.pkl')
+img_path = os.path.join(dataset, 'IJBB/loose_crop')
+img_list_path = os.path.join(dataset, 'IJBB/meta/ijbb_name_5pts_score.txt')
+model_path = os.path.join(dataset, 'pretrained_models/MS1MV2-ResNet100-Arcface/model')
+gpu_id = 1
+img_feats, faceness_scores = get_image_feature(img_path, img_list_path, model_path, gpu_id)
+print('Feature Shape: ({} , {}) .'.format(img_feats.shape[0], img_feats.shape[1]))
+```
+```py
+from tqdm import tqdm
+from skimage import transform
+
+def face_align_landmark_sk(img, landmark, image_size=(112, 112), method='similar'):
+    tform = transform.AffineTransform() if method == 'affine' else transform.SimilarityTransform()
+    src = np.array([[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366], [41.5493, 92.3655], [70.729904, 92.2041]], dtype=np.float32)
+    # landmark = np.array(landmark).reshape(2, 5)[::-1].T
+    tform.estimate(landmark, src)
+    ndimage = transform.warp(img, tform.inverse, output_shape=image_size)
+    if len(ndimage.shape) == 2:
+        ndimage = np.stack([ndimage, ndimage, ndimage], -1)
+    return (ndimage * 255).astype(np.uint8)
+
+def extract_IJB_data(data_path, sub_set, save_path=None, force_reload=False):
+    if save_path == None:
+        save_path = os.path.join(data_path, sub_set + "_backup.npz")
+    if not force_reload and os.path.exists(save_path):
+        print(">>>> Reloading from backup: %s..." % save_path)
+        aa = np.load(save_path)
+        return aa['ndimages'], aa['templates'], aa['medias'], aa['p1'], aa['p2'], aa['label'], aa['face_scores']
+
+    if sub_set == "IJBB":
+        media_list_path = os.path.join(data_path, 'IJBB/meta/ijbb_face_tid_mid.txt')
+        pair_list_path = os.path.join(data_path, 'IJBB/meta/ijbb_template_pair_label.txt')
+        img_path = os.path.join(data_path, 'IJBB/loose_crop')
+        img_list_path = os.path.join(data_path, 'IJBB/meta/ijbb_name_5pts_score.txt')
+    else:
+        media_list_path = os.path.join(data_path, 'IJBC/meta/ijbc_face_tid_mid.txt')
+        pair_list_path = os.path.join(data_path, 'IJBC/meta/ijbc_template_pair_label.txt')
+        img_path = os.path.join(data_path, 'IJBC/loose_crop')
+        img_list_path = os.path.join(data_path, 'IJBC/meta/ijbc_name_5pts_score.txt')
+
+    print(">>>> Loading templates and medias...")
+    ijb_meta = np.loadtxt(media_list_path, dtype=str) # ['1.jpg', '1', '69544']
+    templates, medias = ijb_meta[:,1].astype(np.int), ijb_meta[:,2].astype(np.int)
+    print(">>>> Loaded templates: %s, medias: %s, unique templates: %s" % (templates.shape, medias.shape, np.unique(templates).shape))
+    # (227630,) (227630,) (12115,)
+
+    print(">>>> Loading pairs...")
+    pairs = np.loadtxt(pair_list_path, dtype=str) # ['1', '11065', '1']
+    p1, p2, label = pairs[:,0].astype(np.int), pairs[:,1].astype(np.int), pairs[:,2].astype(np.int)
+    print(">>>> Loaded p1: %s, unique p1: %s" % (p1.shape, np.unique(p1).shape))
+    print(">>>> Loaded p2: %s, unique p2: %s" % (p2.shape, np.unique(p2).shape))
+    print(">>>> Loaded label: %s, label value counts: %s" % (label.shape, dict(zip(*np.unique(label, return_counts=True)))))
+    # (8010270,) (8010270,) (8010270,) (1845,) (10270,) # 10270 + 1845 = 12115
+    # {0: 8000000, 1: 10270}
+
+    print(">>>> Loading images...")
+    with open(img_list_path, "r") as ff:
+        # 1.jpg 46.060 62.026 87.785 60.323 68.851 77.656 52.162 99.875 86.450 98.648 0.999
+        img_records = np.array([ii.strip().split(' ') for ii in ff.readlines()])
+
+    img_names = np.array([os.path.join(img_path, ii) for ii in img_records[:, 0]])
+    landmarks = img_records[:, 1:-1].astype('float32').reshape(-1, 5, 2)
+    face_scores = img_records[:, -1].astype('float32')
+    print(">>>> Loaded img_names: %s, landmarks: %s, face_scores: %s" % (img_names.shape, landmarks.shape, face_scores.shape))
+    # (227630,) (227630, 5, 2) (227630,)
+    print(">>>> Loaded face_scores value counts:", dict(zip(*np.histogram(face_scores, bins=9)[::-1])))
+    # {0.1: 2515, 0.2: 0, 0.3: 62, 0.4: 94, 0.5: 136, 0.6: 197, 0.7: 291, 0.8: 538, 0.9: 223797}
+
+    print(">>>> Running warp affine...")
+    ndimages = [face_align_landmark_sk(imread(img_name), landmark) for img_name, landmark in tqdm(zip(img_names, landmarks), total=len(img_names))]
+    ndimages = np.stack(ndimages)
+    print("Finale image size:", ndimages.shape)
+    # (227630, 112, 112, 3)
+
+    print(">>>> Saving backup to: %s..." % save_path)
+    np.savez(save_path, ndimages=ndimages, templates=templates, medias=medias, p1=p1, p2=p2, label=label, face_scores=face_scores)
+    return ndimages, templates, medias, p1, p2, label, face_scores
+
+ndimages, templates, medias, p1, p2, label, face_scores = extract_IJB_data("/media/SD/tdtest/IJB_release", "IJBB")
+```
+```py
+from sklearn.preprocessing import normalize
+
+def get_embeddings(model_interf, ndimages, batch_size=64, flip=True):
+    steps = int(np.ceil(len(ndimages) / batch_size))
+    embs, embs_f = [], []
+    for id in tqdm(range(steps), "Embedding"):
+        img_batch = ndimages[id * batch_size : (id + 1) * batch_size]
+        embs.extend(model_interf(img_batch))
+        if flip:
+            embs_f.extend(model_interf(img_batch[:, :, ::-1, :]))
+    return np.array(embs), np.array(embs_f)
+
+def process_embeddings(embs, embs_f, use_flip_test=True, use_norm_score=False, use_detector_score=False, face_scores=None):
+    if use_flip_test and embs_f.shape[0] != 0:
+        embs = embs + embs_f
+    if use_norm_score:
+        embs = normalize(embs)
+    if use_detector_score and face_scores is not None:
+        embs = embs * np.expand_dims(face_scores, -1)
+    return embs
+
+def keras_model_interf(model_path):
+    mm = tf.keras.models.load_model(model_path, compile=False)
+    return lambda imgs: mm((tf.cast(imgs, "float32") - 127.5) * 0.0078125).numpy()
+
+interf_func = keras_model_interf("checkpoints/mobilenet_adamw_BS256_E80_arc_trip128_basic_agedb_30_epoch_89_batch_15000_0.953333.h5")
+embs, embs_f = get_embeddings(interf_func, ndimages)
+img_input_feats = process_embeddings(embs, embs_f, use_flip_test=True, use_norm_score=False, use_detector_score=True, face_scores=face_scores)
+```
+```py
+import mxnet as mx
+
+class Mxnet_model_interf:
+    def __init__(self, model, layer="fc1", image_size=(112, 112)):
+        cvd = os.environ.get("CUDA_VISIBLE_DEVICES", "").strip()
+        if len(cvd) > 0 and int(cvd) != -1:
+            ctx = [mx.gpu(ii) for ii in range(len(cvd.split(",")))]
+        else:
+            ctx = [mx.cpu()]
+
+        prefix, epoch = model.split(",")
+        print(">>>> loading mxnet model:", prefix, epoch, ctx)
+        sym, arg_params, aux_params = mx.model.load_checkpoint(prefix, int(epoch))
+        all_layers = sym.get_internals()
+        sym = all_layers[layer + "_output"]
+        model = mx.mod.Module(symbol=sym, context=ctx, label_names=None)
+        model.bind(data_shapes=[("data", (1, 3, image_size[0], image_size[1]))])
+        model.set_params(arg_params, aux_params)
+        self.model = model
+
+    def __call__(self, imgs):
+        # print(imgs.shape, imgs[0])
+        imgs = imgs.transpose(0, 3, 1, 2)
+        data = mx.nd.array(imgs)
+        db = mx.io.DataBatch(data=(data,))
+        self.model.forward(db, is_train=False)
+        emb = self.model.get_outputs()[0].asnumpy()
+        return emb
+
+interf_func = Mxnet_model_interf("/media/SD/tdtest/IJB_release/pretrained_models/MS1MV2-ResNet100-Arcface/model,0")
+img_feats = get_embedding(interf_func, ndimages)
+```
+```py
+def image2template_feature(img_feats=None, templates=None, medias=None):
+    unique_templates = np.unique(templates)
+    template_feats = np.zeros((len(unique_templates), img_feats.shape[1]))
+
+    for count_template, uqt in tqdm(enumerate(unique_templates), "Extract template feature", total=len(unique_templates)):
+        (ind_t,) = np.where(templates == uqt)
+        face_norm_feats = img_feats[ind_t]
+        face_medias = medias[ind_t]
+        unique_medias, unique_media_counts = np.unique(face_medias, return_counts=True)
+        media_norm_feats = []
+        for uu, ct in zip(unique_medias, unique_media_counts):
+            (ind_m,) = np.where(face_medias == uu)
+            if ct == 1:
+                media_norm_feats.append(face_norm_feats[ind_m])
+            else: # image features from the same video will be aggregated into one feature
+                media_norm_feats.append(np.mean(face_norm_feats[ind_m], 0, keepdims=True))
+        media_norm_feats = np.array(media_norm_feats)
+        # media_norm_feats = media_norm_feats / np.sqrt(np.sum(media_norm_feats ** 2, -1, keepdims=True))
+        template_feats[count_template] = np.sum(media_norm_feats, 0)
+    template_norm_feats = normalize(template_feats)
+    return template_norm_feats, unique_templates
+
+def verification(template_norm_feats=None, unique_templates=None, p1=None, p2=None, batch_size=100000):
+    template2id = np.zeros((max(unique_templates)+1, 1),dtype=int)
+    for count_template, uqt in enumerate(unique_templates):
+        template2id[uqt] = count_template
+
+    steps = int(np.ceil(len(p1) / batch_size))
+    score = []
+    for id in tqdm(range(steps), "Verification"):
+        feat1 = template_norm_feats[template2id[p1[id * batch_size: (id + 1) * batch_size]].flatten()]
+        feat2 = template_norm_feats[template2id[p2[id * batch_size: (id + 1) * batch_size]].flatten()]
+        score.extend(np.sum(feat1 * feat2, -1))
+    return np.array(score)
+
+template_norm_feats, unique_templates = image2template_feature(img_input_feats, templates, medias)
+score = verification(template_norm_feats, unique_templates, p1, p2)
+np.savez('aa.npz', score=score, label=label)
+```
+```py
+from sklearn.metrics import roc_curve, auc
+
+file_name = 'aa.npz'
+aa = np.load(file_name)
+score, label = aa['score'], aa['label']
+name = os.path.splitext(os.path.basename(file_name))[0]
+names, scores = [name], [score]
+
+x_labels = [10 ** (-ii) for ii in range(1, 7)[::-1]]
+tpr_result = {}
+fig = plt.figure()
+for name, score in zip(names, scores):
+    fpr, tpr, _ = roc_curve(label, score)
+    roc_auc = auc(fpr, tpr)
+    fpr, tpr = np.flipud(fpr),np.flipud(tpr) # select largest tpr at same fpr
+    plt.plot(fpr, tpr, lw=1, label='[%s (AUC = %0.4f%%)]' % (name, roc_auc * 100))
+    tpr_result[name] = [tpr[np.argmin(abs(fpr - ii))] for ii in x_labels]
+
+cc = pd.DataFrame(tpr_result, index=['%.0e' % ii for ii in x_labels]).T
+cc.columns.name = 'Methods'
+print(cc)
+
+plt.xlim([10**-6, 0.1])
+plt.ylim([0.3, 1.0])
+plt.grid(linestyle='--', linewidth=1)
+plt.xticks(x_labels)
+plt.yticks(np.linspace(0.3, 1.0, 8, endpoint=True))
+plt.xscale('log')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC on IJB-B')
+plt.legend(loc="lower right")
+plt.tight_layout()
+plt.show()
+```
+```py
+from sklearn.metrics import roc_curve, auc
+from menpo.visualize.viewmatplotlib import sample_colours_from_colourmap
+from prettytable import PrettyTable
+from pathlib import Path
+
+def read_score(path):
+    with open(path, 'rb') as fid:
+        img_feats = cPickle.load(fid)
+    return img_feats
+
+score_save_path = './IJBB/result'
+files = glob.glob(score_save_path + '/MS1MV2*.npy')  
+methods = np.array(["aa"])
+scores = {"aa": score}
+for file in files:
+    methods.append(Path(file).stem)
+    scores.append(np.load(file))
+methods = np.array(methods)
+scores = dict(zip(methods,scores))
+colours = dict(zip(methods, sample_colours_from_colourmap(methods.shape[0], 'Set2')))
+#x_labels = [1/(10**x) for x in np.linspace(6, 0, 6)]
+x_labels = [10**-6, 10**-5, 10**-4,10**-3, 10**-2, 10**-1]
+# tpr_fpr_table = PrettyTable(['Methods'] + map(str, x_labels))
+fig = plt.figure()
+for method in methods:
+    fpr, tpr, _ = roc_curve(label, scores[method])
+    roc_auc = auc(fpr, tpr)
+    fpr = np.flipud(fpr)
+    tpr = np.flipud(tpr) # select largest tpr at same fpr
+    plt.plot(fpr, tpr, color=colours[method], lw=1, label=('[%s (AUC = %0.4f %%)]' % (method.split('-')[-1], roc_auc*100)))
+    tpr_fpr_row = []
+    tpr_fpr_row.append(method)
+    for fpr_iter in np.arange(len(x_labels)):
+        _, min_index = min(list(zip(abs(fpr-x_labels[fpr_iter]), range(len(fpr)))))
+        tpr_fpr_row.append('%.4f' % tpr[min_index])
+    tpr_fpr_table.add_row(tpr_fpr_row)
+plt.xlim([10**-6, 0.1])
+plt.ylim([0.3, 1.0])
+plt.grid(linestyle='--', linewidth=1)
+plt.xticks(x_labels)
+plt.yticks(np.linspace(0.3, 1.0, 8, endpoint=True))
+plt.xscale('log')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC on IJB-B')
+plt.legend(loc="lower right")
+plt.show()
+#fig.savefig('IJB-B.pdf')
 ```
