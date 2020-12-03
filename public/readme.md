@@ -93,6 +93,7 @@
   - [05-02_computer_vision.md](./2020/05-02_computer_vision.md)
   - [08-11_keras_train.md](./2020/08-11_keras_train.md)
   - [08-21_face_detect.md](./2020/08-21_face_detect.md)
+  - [12-01_Insightface_training.md](./2020/12-01_Insightface_training.md)
   - [images](./2020/images)
 - [Dainty_factory](./Dainty_factory)
   - [Dainty_factory.md](./Dainty_factory/Dainty_factory.md)
