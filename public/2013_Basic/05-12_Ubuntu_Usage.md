@@ -191,6 +191,12 @@
 
     dpkg: error processing archive /var/cache/apt/archives/nvidia-396_396.37-0ubuntu1_amd64.deb (--unpack):
     ```
+  - 指定不更新某些包
+    ```sh
+    sudo apt-mark hold pkg1 [pkg2 ...]
+    # 取消
+    sudo apt-mark unhold pkg1 [pkg2 ...]
+    ```
 ## echo
   - echo $? 打印终止状态
   - **-n** 指定不换行

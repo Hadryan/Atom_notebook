@@ -30,6 +30,7 @@
   	- [Arcface loss](#arcface-loss)
   	- [Softmax](#softmax)
   	- [Offline Triplet loss train SUB](#offline-triplet-loss-train-sub)
+  	- [Basic training](#basic-training)
   	- [TF 通用函数](#tf-通用函数)
   - [nmslib dot svm dist calculation comparing](#nmslib-dot-svm-dist-calculation-comparing)
   - [Docker 封装](#docker-封装)
@@ -1015,6 +1016,29 @@
               negs.append(img_names[neg_random])
               print("label: %d, pos: %d, %f, neg: %d, %f" % (label, labels[pos], dist[pos], labels[neg_random], dist[neg_random]))
       return anchors, poses, negs
+  ```
+## Basic training
+  ```py
+  from tensorflow import keras
+  import losses, data, evals, myCallbacks
+  from backbones import mobile_facenet
+  # Dataset
+  data_path = '/datasets/faces_emore_112x112_folders'
+  train_ds = data.prepare_dataset(data_path, batch_size=512, random_status=3, random_crop=(100, 100, 3))
+  classes = train_ds.element_spec[-1].shape[-1]
+  # Model
+  basic_model = mobile_facenet.mobile_facenet(256, dropout=0, name="mobile_facenet_256")
+  model_output = keras.layers.Dense(classes, activation="softmax")(basic_model.outputs[0])
+  model = keras.models.Model(basic_model.inputs[0], model_output)
+  # Evals and basic callbacks
+  eval_paths = ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin']
+  my_evals = [evals.eval_callback(basic_model, ii, batch_size=512, eval_freq=1) for ii in eval_paths]
+  my_evals[-1].save_model = 'keras_mobilefacenet'
+  basic_callbacks = myCallbacks.basic_callbacks(checkpoint='keras_mobilefacenet.h5', evals=my_evals, lr=0.001)
+  callbacks = my_evals + basic_callbacks
+  # Compile and fit
+  model.compile(optimizer='nadam', loss=keras.losses.CategoricalCrossentropy(label_smoothing=0.1), metrics=["accuracy"])
+  model.fit(train_ds, epochs=15, callbacks=callbacks, verbose=1)
   ```
 ## TF 通用函数
   - **tf.compat.v1.scatter_sub** 将 `ref` 中 `indices` 指定位置的值减去 `updates`，会同步更新 `ref`

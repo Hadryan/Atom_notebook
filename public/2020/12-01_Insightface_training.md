@@ -158,6 +158,20 @@
       ]
       tt.train(sch)
   ```
+## Temp test
+  ```py
+  sys.path.append('..')
+  import losses, train
+  basic_model = train.buildin_models("MobileNet", dropout=0, emb_shape=256)
+  tt = train.Train('faces_emore_test', save_path='temp_test.h5', eval_paths=['lfw.bin'], basic_model=basic_model, lr_base=0.001, batch_size=16, random_status=0)
+  sch = [
+      {"loss": losses.CenterLoss(num_classes=5, emb_shape=256), "epoch": 2},
+  ]
+  tt.my_evals[-1].save_model = None
+  tt.basic_callbacks.pop(0) # NOT saving
+  tt.basic_callbacks.pop(-1) # NO gently_stop
+  tt.train(sch)
+  ```
 ## Face recognition test
   ```py
   import glob2
@@ -494,6 +508,7 @@
 
 # Weight decay
 ## MXNet SGD and tfa SGDW
+  - [AdamW and Super-convergence is now the fastest way to train neural nets](https://www.fast.ai/2018/07/02/adam-weight-decay/)
   - The behavior of `weight_decay` in `mx.optimizer.SGD` and `tfa.optimizers.SGDW` is different.
   - **MXNet SGD** multiplies `wd` with `lr`.
     ```py
@@ -667,8 +682,14 @@
   # Epoch 0 - [weight] [[0.898]] - [losses]: 0.5 - [momentum]: [[-0.1]]
   # Epoch 1 - [weight] [[0.71640396]] - [losses]: 0.40320199728012085 - [momentum]: [[-0.1798]]
   # Epoch 2 - [weight] [[0.48151073]] - [losses]: 0.25661730766296387 - [momentum]: [[-0.2334604]]
+
+  test_optimizer_with_model(tf.keras.optimizers.SGD(learning_rate=0.1, momentum=0.9), l2=0.1, epochs=3)
+  # Epoch 0 - [weight] [[0.88]] - [losses]: 0.6000000238418579 - [momentum]: [[-0.12]]
+  # Epoch 1 - [weight] [[0.66639996]] - [losses]: 0.4646399915218353 - [momentum]: [[-0.21360001]]
+  # Epoch 2 - [weight] [[0.39419195]] - [losses]: 0.266453355550766 - [momentum]: [[-0.272208]]
   ```
 ## MXNet model test
+  - **wd_mult** NOT working if just added in `mx.symbol.Variable`, has to be added by `opt.set_wd_mult`.
   ```py
   import mxnet as mx
   import logging
@@ -681,7 +702,8 @@
 
       data = mx.symbol.Variable("data", shape=(1,))
       label = mx.symbol.Variable("softmax_label", shape=(1,))
-      ww = mx.symbol.Variable("ww", shape=(1,1), wd_mult=wd_mult, init=mx.init.One())
+      # ww = mx.symbol.Variable("ww", shape=(1, 1), wd_mult=wd_mult, init=mx.init.One())
+      ww = mx.symbol.Variable("ww", shape=(1, 1), init=mx.init.One())
       nn = mx.sym.FullyConnected(data=data, weight=ww, no_bias=True, num_hidden=1)
 
       # loss = mx.symbol.SoftmaxOutput(data=nn, label=label, name='softmax')
@@ -689,7 +711,8 @@
       # sss = loss.bind(mx.cpu(), {'data': xx_input, 'softmax_label': yy_input, 'ww': y_pred})
       # print(sss.forward()[0].asnumpy().tolist())
       # [[0.5]]
-
+      if wd_mult is not None:
+          opt.set_wd_mult({'ww': wd_mult})
       model = mx.mod.Module(context=mx.cpu(), symbol=loss)
       weight_value = mx.nd.ones([1, 1])
       for ii in range(epochs):
@@ -716,9 +739,10 @@
   # Epoch 1 - [weight] [[0.714604]] - [losses]: 0.403202
   # Epoch 2 - [weight] [[0.47665802]] - [losses]: 0.25532946
   test_optimizer_with_mxnet_model(mx.optimizer.SGD(learning_rate=0.1, momentum=0.9, wd=0.02), wd_mult=10)
-  # Epoch 0 - [weight] [[0.898]] - [losses]: 0.5
-  # Epoch 1 - [weight] [[0.714604]] - [losses]: 0.403202
-  # Epoch 2 - [weight] [[0.47665802]] - [losses]: 0.25532946
+  # Epoch 0 - [weight] [[0.88]] - [losses]: 0.5
+  # Epoch 1 - [weight] [[0.66639996]] - [losses]: 0.3872
+  # Epoch 2 - [weight] [[0.39419195]] - [losses]: 0.22204445
+  # ==> Equals to keras model `l2 == 0.1`
   ```
 ## Modify model with L2 regularizer
   ```py
@@ -812,14 +836,20 @@
       def set_wd(self, wd):
           self.wd = wd
 
-  class l2_decay_wdm(keras.regularizers.L2):
+  class L2_decay_wdm(keras.regularizers.L2):
       def __init__(self, wd_func=None, **kwargs):
-          super(l2_decay_wdm, self).__init__(**kwargs)
+          super(L2_decay_wdm, self).__init__(**kwargs)
           self.wd_func = wd_func
+
       def __call__(self, x):
           self.l2 = self.wd_func()
-          print("l2 =", self.l2)
-          return super(l2_decay_wdm, self).__call__(x)
+          # tf.print(", l2 =", self.l2, end='')
+          return super(L2_decay_wdm, self).__call__(x)
+
+      def get_config(self):
+          self.l2 = 0  # Just a fake value for saving
+          config = super(L2_decay_wdm, self).get_config()
+          return config
   ```
 ***
 
@@ -1108,59 +1138,39 @@
   axes, pre = plot.hist_plot_split(["checkpoints/keras_mxnet_test_sgdw_hist.json", "checkpoints/mobilenet_adamw_BS256_E80_arc_tripD_hist.json"], epochs, axes=axes, customs=customs, names=names_1+names_2)
   pp = {"epochs": epochs, "customs": customs, "axes": axes}
 
-  axes, pre = plot.hist_plot_split("checkpoints/keras_mobilenet_emore_adamw_1e4_soft_arc_tripD_hist.json", **pp)
-  axes, pre = plot.hist_plot_split("checkpoints/keras_mobilenet_emore_nadam_REG_1e3_soft_arc_tripD_hist.json", **pp)
+  # axes, pre = plot.hist_plot_split("checkpoints/keras_mobilenet_emore_adamw_1e4_soft_arc_tripD_hist.json", **pp)
+  # axes, pre = plot.hist_plot_split("checkpoints/keras_mobilenet_emore_nadam_REG_1e3_soft_arc_tripD_hist.json", **pp)
   axes, pre = plot.hist_plot_split("checkpoints/keras_mobilenet_emore_nadam_soft_arc_tripD_hist.json", **pp)
+  axes, pre = plot.hist_plot_split("checkpoints/keras_mobilenet_emore_adamw_5e5_soft_center_1e2D_arc_tripD_hist.json", **pp)
+  axes, pre = plot.hist_plot_split("checkpoints/keras_mobilenet_emore_adamw_5e5_soft_center_1e1D_arc_tripD_hist.json", **pp)
   ```
 ## ResNet34 CASIA
   ```py
   axes = None
   customs = ["cfp_fp", "agedb_30", "lfw", "lr", "regular_loss"]
   epochs = [1, 19, 10, 50]
-  limit_loss_max = 30
   names = ["Warmup", "Arcfacelose learning rate 0.1", "Arcfacelose learning rate 0.01", "Arcfacelose learning rate 0.001"]
 
-  # axes, pre = plot.hist_plot_split("checkpoints/MXNET_r34_casia.json", epochs, axes=axes, customs=customs, names=names)
-  axes, pre = plot.hist_plot_split("checkpoints/mxnet_r34_wdm1_new.json", epochs, axes=axes, customs=customs)
-  axes, pre = plot.hist_plot_split("checkpoints/mxnet_r34_wdm1_lazy_false.json", epochs, axes=axes, customs=customs, names=names)
-  pp = {"epochs": epochs, "customs": customs, "axes": axes, "limit_loss_max": limit_loss_max}
+  axes, pre = plot.hist_plot_split("checkpoints/mxnet_r34_wdm1_new.json", epochs, axes=axes, customs=customs, names=names, fig_label="Original MXNet")
+  pp = {"epochs": epochs, "customs": customs, "axes": axes}
+  # axes, pre = plot.hist_plot_split("checkpoints/MXNET_r34_casia.json", epochs, axes=axes, customs=customs)
 
-  # axes, pre = plot.hist_plot_split("checkpoints/r34_wdm1_lazy_false_wd0_no_rescale.json", **pp)
-  axes, pre = plot.hist_plot_split("checkpoints/r34_wdm1_lazy_false_wd0.json", **pp)
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_sgdw_5e4_dr4_lr1e1_wd10_random0_arc32_E1_arcT4_BS512_casia_hist.json", **pp)
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_sgdw_5e4_dr4_lr1e1_wdm1_random0_arcT4_32_E5_BS512_casia_hist.json", **pp)
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_baseline_SGD_lr1e1_random0_arcT4_32_E5_BS512_casia_hist.json", **pp)
+  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_baseline_SGD_lr1e1_random0_arcT4_32_E5_BS512_casia_hist.json", fig_label="TF SGD baseline", **pp)
+  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_sgdw_5e4_dr4_lr1e1_wdm1_random0_arcT4_32_E5_BS512_casia_hist.json", fig_label="TF SGDW 5e-4", **pp)
+  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_SGDW_1e3_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json", fig_label="TF SGDW 1e-3", **pp)
 
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_5e4_lr1e1_random0_arcT4_32_E5_BS512_casia_hist.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_5e4_lr1e1_random0_arcT4_32_E5_BS512_casia_hist.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_5e5_lr1e1_random0_arcT4_32_E1_BS512_casia_hist.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_5e5_lr1e1_random0_arcT4_BS512_casia_hist.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_5e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_hist.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_1e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_hist.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_1e3_lr1e1_random0_arcT4_S32_E1_BS512_casia_2_hist.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_1e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_2_hist.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_1e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_2_hist.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_5e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_E20_E20_hist.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_5e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_E20_opt_E10_3_hist.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_5e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_E20_opt_E10_3_hist_wo_reg.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_1e3_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist.json", **pp)
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_1e3_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist_no_reg.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_1e3_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_SGD_1e3_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist_no_reg.json", **pp)
-  # axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_5e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist.json", **pp)
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_5e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist_no_reg.json", **pp)
+  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_5e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist_no_reg.json", fig_label="TF SGD, l2 5e-4", **pp)
+  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_SGD_REG_1e3_clone_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json", fig_label="TF SGD, l2 1e-3", **pp)
 
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_SGDW_1e3_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json", **pp)
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_l2_5e4_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json", **pp)
-
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_SGD_REG_1e3_wdm10_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json", **pp)
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_SGD_REG_1e3_clone_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json", **pp)
-
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_SGD_REG_1e3_no_mom_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json", **pp)
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_SGDW_1e4_no_mom_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json", **pp)
-
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_SWA_5x5_SGD_REG_1e3_no_mom_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json", **pp)
-  axes, pre = plot.hist_plot_split("checkpoints/NNNN_resnet34_MXNET_E_SWA_1x1_SGD_REG_1e3_no_mom_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json", **pp)
+  choose_accuracy([
+      "checkpoints/mxnet_r34_wdm1_new.json",
+      "checkpoints/MXNET_r34_casia.json",
+      "checkpoints/NNNN_resnet34_MXNET_E_baseline_SGD_lr1e1_random0_arcT4_32_E5_BS512_casia_hist.json",
+      "checkpoints/NNNN_resnet34_MXNET_E_sgdw_5e4_dr4_lr1e1_wdm1_random0_arcT4_32_E5_BS512_casia_hist.json",
+      "checkpoints/NNNN_resnet34_MXNET_E_SGDW_1e3_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json",
+      "checkpoints/NNNN_resnet34_MXNET_E_REG_BN_SGD_5e4_lr1e1_random0_arcT4_S32_E1_BS512_casia_3_hist_no_reg.json",
+      "checkpoints/NNNN_resnet34_MXNET_E_SGD_REG_1e3_clone_lr1e1_random0_arc_S32_E1_BS512_casia_4_hist.json",
+  ])
   ```
   ```py
   import plot
@@ -1333,6 +1343,10 @@
   from train_softmax import *
   sys.argv.extend('--data-dir /datasets/faces_casia --network "r34" --loss-type 4 --prefix "./model/mxnet_r34_wdm1_lazy_false_wd0_casia" --per-batch-size 512 --lr-steps "19180,28770" --margin-s 64.0 --margin-m 0.5 --ckpt 1 --emb-size 512 --fc7-wd-mult 1.0 --wd 5e-4 --verbose 959 --end-epoch 38400 --ce-loss'.replace('"', '').split(' '))
   args = parse_args()
+  ```
+  ```py
+  CUDA_VISIBLE_DEVICES='0' python train.py --network r34 --dataset casia --loss 'arcface' --per-batch-size 512 --lr-steps '19180,28770' --verbose 959
+
   ```
 ***
 
@@ -1726,114 +1740,21 @@
 
 # IJB
   ```py
-  templates, medias, p1, p2, label, img_names, landmarks, face_scores = extract_IJB_data("/media/SD/tdtest/IJB_release", "IJBB")
-
-  interf_func = keras_model_interf("checkpoints/mobilenet_adamw_BS256_E80_arc_trip128_basic_agedb_30_epoch_89_batch_15000_0.953333.h5")
-  embs, embs_f = get_embeddings(interf_func, img_names, landmarks)
-  img_input_feats = process_embeddings(embs, embs_f, use_flip_test=True, use_norm_score=False, use_detector_score=True, face_scores=face_scores)
-
-  interf_func = Mxnet_model_interf("/media/SD/tdtest/IJB_release/pretrained_models/MS1MV2-ResNet100-Arcface/model,0")
-  embs, embs_f = get_embeddings(interf_func, img_names, landmarks)
-  img_input_feats = process_embeddings(embs, embs_f, use_flip_test=True, use_norm_score=False, use_detector_score=True, face_scores=face_scores)
-
-  template_norm_feats, unique_templates = image2template_feature(img_input_feats, templates, medias)
-  score = verification(template_norm_feats, unique_templates, p1, p2)
-  np.savez('aa.npz', score=score, label=label)
-
-  tpr_result_df, fig = plot_roc_and_calculate_tpr(['aa.npz'])
-  ```
-  ```py
-  import IJB_evals
-
-  interf_func = IJB_evals.Mxnet_model_interf('/media/SD/tdtest/IJB_release/pretrained_models/MS1MV2-ResNet100-Arcface/model,0')
-  score, embs, embs_f, templates, medias, p1, p2, label, face_scores = IJB_evals.run_IJB_model_test('/media/SD/tdtest/IJB_release', "IJBB", interf_func)
-
-  results = {}
-  for use_norm_score in [True, False]:
-      for use_detector_score in [True, False]:
-          for use_flip_test in [True, False]:
-              name = "N{:d}D{:d}F{:d}".format(use_norm_score, use_detector_score, use_flip_test)
-              print(">>>>", name, use_norm_score, use_detector_score, use_flip_test)
-
-              img_input_feats = IJB_evals.process_embeddings(embs, embs_f, use_flip_test=use_flip_test, use_norm_score=use_norm_score, use_detector_score=use_detector_score, face_scores=face_scores)
-              template_norm_feats, unique_templates = IJB_evals.image2template_feature(img_input_feats, templates, medias)
-              score = IJB_evals.verification(template_norm_feats, unique_templates, p1, p2)
-              results[name] = score
-
-  aa, fig = IJB_evals.plot_roc_and_calculate_tpr(list(results.values()), names=list(results.keys()), label=label)
-  ```
-  ```py
-  $ time CUDA_VISIBLE_DEVICES='1' python IJB_evals.py -m '/media/SD/tdtest/IJB_release/pretrained_models/MS1MV2-ResNet100-Arcface/model,0' -L -d /media/SD/tdtest/IJB_release -B -b 64
-  >>>> loading mxnet model: /media/SD/tdtest/IJB_release/pretrained_models/MS1MV2-ResNet100-Arcface/model 0 [gpu(0)]
-  [21:02:32] src/nnvm/legacy_json_util.cc:209: Loading symbol saved by previous version v1.2.0. Attempting to upgrade...
-  [21:02:32] src/nnvm/legacy_json_util.cc:217: Symbol successfully upgraded!
-  >>>> Loading templates and medias...
-  >>>> Loaded templates: (227630,), medias: (227630,), unique templates: (12115,)
-  >>>> Loading pairs...
-  >>>> Loaded p1: (8010270,), unique p1: (1845,)
-  >>>> Loaded p2: (8010270,), unique p2: (10270,)
-  >>>> Loaded label: (8010270,), label value counts: {0: 8000000, 1: 10270}
-  >>>> Loading images...
-  >>>> Loaded img_names: (227630,), landmarks: (227630, 5, 2), face_scores: (227630,)
-  >>>> Loaded face_scores value counts: {0.1: 2515, 0.2: 0, 0.3: 62, 0.4: 94, 0.5: 136, 0.6: 197, 0.7: 291, 0.8: 538, 0.9: 223797}
-  >>>> Running warp affine...
-  100%|███████████████████████████████████████████████████████████████████████████████████████████████████| 227630/227630 [03:30<00:00, 1079.20it/s]
-  Finale image size: (227630, 112, 112, 3)
-  >>>> Saving backup to: /media/SD/tdtest/IJB_release/IJBB_backup.npz...
-  Embedding: 100%|██████████████████████████████████████████████████████████████████████████████████████████████| 3557/3557 [13:14<00:00,  4.48it/s]
-  >>>> N1D1F1 True True True
-  Extract template feature: 100%|███████████████████████████████████████████████████████████████████████████| 12115/12115 [00:02<00:00, 4828.27it/s]
-  Verification: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 81/81 [00:22<00:00,  3.68it/s]
-  >>>> N1D1F0 True True False
-  Extract template feature: 100%|███████████████████████████████████████████████████████████████████████████| 12115/12115 [00:02<00:00, 4812.50it/s]
-  Verification: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 81/81 [00:20<00:00,  3.92it/s]
-  >>>> N1D0F1 True False True
-  Extract template feature: 100%|███████████████████████████████████████████████████████████████████████████| 12115/12115 [00:02<00:00, 4917.91it/s]
-  Verification: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 81/81 [00:21<00:00,  3.75it/s]
-  >>>> N1D0F0 True False False
-  Extract template feature: 100%|███████████████████████████████████████████████████████████████████████████| 12115/12115 [00:02<00:00, 4906.07it/s]
-  Verification: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 81/81 [00:20<00:00,  3.88it/s]
-  >>>> N0D1F1 False True True
-  Extract template feature: 100%|███████████████████████████████████████████████████████████████████████████| 12115/12115 [00:02<00:00, 4890.38it/s]
-  Verification: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 81/81 [00:21<00:00,  3.75it/s]
-  >>>> N0D1F0 False True False
-  Extract template feature: 100%|███████████████████████████████████████████████████████████████████████████| 12115/12115 [00:02<00:00, 4896.14it/s]
-  Verification: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 81/81 [00:21<00:00,  3.84it/s]
-  >>>> N0D0F1 False False True
-  Extract template feature: 100%|███████████████████████████████████████████████████████████████████████████| 12115/12115 [00:02<00:00, 4893.51it/s]
-  Verification: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 81/81 [00:20<00:00,  3.88it/s]
-  >>>> N0D0F0 False False False
-  Extract template feature: 100%|███████████████████████████████████████████████████████████████████████████| 12115/12115 [00:02<00:00, 4673.65it/s]
-  Verification: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 81/81 [00:21<00:00,  3.80it/s]
-  |                                      |    1e-06 |    1e-05 |   0.0001 |    0.001 |     0.01 |      0.1 |
-  |:-------------------------------------|---------:|---------:|---------:|---------:|---------:|---------:|
-  | MS1MV2-ResNet100-Arcface_IJBB_N1D1F1 | 0.408861 | 0.899513 | 0.946349 | 0.964167 | 0.976144 | 0.98666  |
-  | MS1MV2-ResNet100-Arcface_IJBB_N1D1F0 | 0.389192 | 0.898442 | 0.94557  | 0.96261  | 0.975268 | 0.986076 |
-  | MS1MV2-ResNet100-Arcface_IJBB_N1D0F1 | 0.402142 | 0.893184 | 0.943622 | 0.963096 | 0.975755 | 0.986173 |
-  | MS1MV2-ResNet100-Arcface_IJBB_N1D0F0 | 0.382765 | 0.893281 | 0.942454 | 0.961538 | 0.975073 | 0.985589 |
-  | MS1MV2-ResNet100-Arcface_IJBB_N0D1F1 | 0.42814  | 0.908179 | 0.948978 | 0.964654 | 0.976728 | 0.986563 |
-  | MS1MV2-ResNet100-Arcface_IJBB_N0D1F0 | 0.392989 | 0.903895 | 0.947614 | 0.962999 | 0.975755 | 0.986076 |
-  | MS1MV2-ResNet100-Arcface_IJBB_N0D0F1 | 0.425998 | 0.907011 | 0.947809 | 0.96446  | 0.976436 | 0.986563 |
-  | MS1MV2-ResNet100-Arcface_IJBB_N0D0F0 | 0.389971 | 0.904187 | 0.946738 | 0.962025 | 0.976144 | 0.985979 |
-
-  real    21m20.310s
-  user    59m47.876s
-  sys     106m54.803s
-
   $ time CUDA_VISIBLE_DEVICES='1' python IJB_evals.py -m '/media/SD/tdtest/IJB_release/pretrained_models/MS1MV2-ResNet100-Arcface/model,0' -L -d /media/SD/tdtest/IJB_release -B -b 64 -F
   >>>> loading mxnet model: /media/SD/tdtest/IJB_release/pretrained_models/MS1MV2-ResNet100-Arcface/model 0 [gpu(0)]
   [09:17:15] src/nnvm/legacy_json_util.cc:209: Loading symbol saved by previous version v1.2.0. Attempting to upgrade...
   [09:17:15] src/nnvm/legacy_json_util.cc:217: Symbol successfully upgraded!
   >>>> Loading templates and medias...
-  >>>> Loaded templates: (227630,), medias: (227630,), unique templates: (12115,)
+  templates: (227630,), medias: (227630,), unique templates: (12115,)
   >>>> Loading pairs...
-  >>>> Loaded p1: (8010270,), unique p1: (1845,)
-  >>>> Loaded p2: (8010270,), unique p2: (10270,)
-  >>>> Loaded label: (8010270,), label value counts: {0: 8000000, 1: 10270}
+  p1: (8010270,), unique p1: (1845,)
+  p2: (8010270,), unique p2: (10270,)
+  label: (8010270,), label value counts: {0: 8000000, 1: 10270}
   >>>> Loading images...
-  >>>> Loaded img_names: (227630,), landmarks: (227630, 5, 2), face_scores: (227630,)
-  >>>> Loaded face_scores value counts: {0.1: 2515, 0.2: 0, 0.3: 62, 0.4: 94, 0.5: 136, 0.6: 197, 0.7: 291, 0.8: 538, 0.9: 223797}
-  >>>> Saving backup to: /media/SD/tdtest/IJB_release/IJBB_backup.npz...
+  img_names: (227630,), landmarks: (227630, 5, 2), face_scores: (227630,)
+  face_scores value counts: {0.1: 2515, 0.2: 0, 0.3: 62, 0.4: 94, 0.5: 136, 0.6: 197, 0.7: 291, 0.8: 538, 0.9: 223797}
+  >>>> Saving backup to: /media/SD/IJB_release/IJBB_backup.npz ...
+
   Embedding: 100%|██████████████████████████████████████████████████████████████████████████████████████████████| 3557/3557 [17:00<00:00,  3.48it/s]
   >>>> N1D1F1 True True True
   Extract template feature: 100%|███████████████████████████████████████████████████████████████████████████| 12115/12115 [00:02<00:00, 4948.45it/s]

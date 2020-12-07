@@ -1265,6 +1265,10 @@
     ```sh
     ls -1 | xargs -I {} sh -c "cd {}; echo '>>>> $PWD/{}'; git remote -v; git pull; cd -; echo ''"
     ```
+  - 随机选取当前文件夹下的 100 个文件夹中的随机 5 个文件，并输出路径
+    ```sh
+    ls -1 | sort -R | head -n 100 | xargs -I {} sh -c 'ls {}/*.jpg | sort -R | head -n 5' | xargs -I {} sh -c "echo $PWD/{}" > ~/foo
+    ```
 ***
 
 # bc 计算

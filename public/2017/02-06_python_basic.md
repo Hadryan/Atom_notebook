@@ -23,7 +23,7 @@
   	- [python 内建函数](#python-内建函数)
   	- [global](#global)
   	- [默认参数值](#默认参数值)
-  	- [指定关键参数](#指定关键参数)
+  	- [指定关键字参数](#指定关键字参数)
   	- [docstrings 文档字符串](#docstrings-文档字符串)
   	- [在函数中接收元组和列表](#在函数中接收元组和列表)
   	- [在函数中接收字典参数](#在函数中接收字典参数)
@@ -37,7 +37,9 @@
   	- [模块名称](#模块名称)
   	- [dir](#dir)
   - [数据结构](#数据结构)
-  	- [序列 (切片 / 索引 / in / not in / 转换工厂函数 / 内建函数)](#序列-切片-索引-in-not-in-转换工厂函数-内建函数)
+  	- [序列的切片与索引与 in 判断 (切片 / 索引 / in / not in / 转换工厂函数 / 内建函数)](#序列的切片与索引与-in-判断-切片-索引-in-not-in-转换工厂函数-内建函数)
+  	- [序列的 in 判断与运算符](#序列的-in-判断与运算符)
+  	- [序列的类型转换与内建函数](#序列的类型转换与内建函数)
   	- [列表 list](#列表-list)
   		- [列表方法](#列表方法)
   		- [示例](#示例)
@@ -68,11 +70,12 @@
   - [面向对象的编程](#面向对象的编程)
   	- [类](#类)
   	- [继承](#继承)
+  	- [类中的 import](#类中的-import)
   - [文件](#文件)
   	- [open 与 close](#open-与-close)
   	- [读文件](#读文件)
   	- [写文件](#写文件)
-    - [二进制储存器](#二进制储存器)
+  	- [二进制储存器](#二进制储存器)
   - [异常](#异常)
   - [Python 标准库](#python-标准库)
   	- [sys](#sys)
@@ -87,6 +90,7 @@
   	- [enumerate 带指数的列表](#enumerate-带指数的列表)
   	- [format 格式化](#format-格式化)
   	- [Iterator 与 Generators 与 Yield](#iterator-与-generators-与-yield)
+  - [Virtualenv](#virtualenv)
 
   <!-- /TOC -->
 ***
@@ -645,7 +649,7 @@
     ```python
     from pandas import DataFrame
     而不是
-    from pd imprt DataFrame
+    from pd import DataFrame
     ```
   - 应该避免使用from..import而使用import语句，因为这样可以使程序更加易读，也可以避免名称的冲突
 ## 模块名称
@@ -1688,6 +1692,16 @@
     # Name: aa, Age: 25
     # Salary: 10000, Area: Math
     ```
+## 类中的 import
+  - 使导入的模块仅在类中可用
+  ```py
+  class AA:
+      from math import sqrt
+      def __init__(self, aa):
+          self.aa = aa
+      def __call__(self):
+          return self.sqrt(self.aa)
+  ```
 ***
 
 # 文件
@@ -2165,5 +2179,24 @@
     tt = itertools.permutations(range(3), 2)
     print(list(tt))
     # [(0, 1), (0, 2), (1, 0), (1, 2), (2, 0), (2, 1)]
+    ```
+***
+
+# Virtualenv
+  - 创建 `python3.6` 虚拟环境
+    ```sh
+    sudo add-apt-repository ppa:deadsnakes/ppa
+    sudo apt install python3.6 python3.6-dev
+
+    pip install virtualenv virtualenvwrapper
+    source $(which virtualenvwrapper.sh)
+
+    virtualenv -p /usr/bin/python3.6 ~/.virtualenvs/python36
+    source ~/.virtualenvs/python36/bin/activate
+    ...
+
+    pip install mxnet==1.5.0 tensorflow==1.13.1
+
+    deactivate
     ```
 ***
