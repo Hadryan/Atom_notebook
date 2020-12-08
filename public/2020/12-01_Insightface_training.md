@@ -1796,3 +1796,205 @@
   sys     138m6.504s
   ```
 ***
+
+# Ali Datasets
+  ```py
+  import cv2
+  import shutil
+  import glob2
+  from tqdm import tqdm
+  from skimage.transform import SimilarityTransform
+  from sklearn.preprocessing import normalize
+
+  def face_align_landmarks(img, landmarks, image_size=(112, 112)):
+      ret = []
+      for landmark in landmarks:
+          src = np.array(
+              [[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366], [41.5493, 92.3655], [70.729904, 92.2041]],
+              dtype=np.float32,
+          )
+
+          if image_size[0] != 112:
+              src *= image_size[0] / 112
+              src[:, 0] += 8.0
+
+          dst = landmark.astype(np.float32)
+          tform = SimilarityTransform()
+          tform.estimate(dst, src)
+          M = tform.params[0:2, :]
+          ret.append(cv2.warpAffine(img, M, (image_size[1], image_size[0]), borderValue=0.0))
+
+      return np.array(ret)
+
+  def extract_face_images(source_reg, dest_path, detector, limit=-1):
+      aa = glob2.glob(source_reg)
+      dest_single = dest_path
+      dest_multi = dest_single + '_multi'
+      dest_none = dest_single + '_none'
+      os.makedirs(dest_none, exist_ok=True)
+      if limit != -1:
+          aa = aa[:limit]
+      for ii in tqdm(aa):
+          imm = imread(ii)
+          bbs, pps = detector(imm)
+          if len(bbs) == 0:
+              shutil.copy(ii, os.path.join(dest_none, '_'.join(ii.split('/')[-2:])))
+              continue
+          user_name, image_name = ii.split('/')[-2], ii.split('/')[-1]
+          if len(bbs) == 1:
+              dest_path = os.path.join(dest_single, user_name)
+          else:
+              dest_path = os.path.join(dest_multi, user_name)
+
+          if not os.path.exists(dest_path):
+              os.makedirs(dest_path)
+          # if len(bbs) != 1:
+          #     shutil.copy(ii, dest_path)
+
+          nns = face_align_landmarks(imm, pps)
+          image_name_form = '%s_{}.%s' % tuple(image_name.split('.'))
+          for id, nn in enumerate(nns):
+              dest_name = os.path.join(dest_path, image_name_form.format(id))
+              imsave(dest_name, nn)
+
+  import insightface
+  os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
+  # retina = insightface.model_zoo.face_detection.retinaface_mnet025_v1()
+  retina = insightface.model_zoo.face_detection.retinaface_r50_v1()
+  retina.prepare(0)
+  detector = lambda imm: retina.detect(imm)
+
+  sys.path.append('/home/leondgarse/workspace/samba/tdFace-flask')
+  from face_model.face_model import FaceModel
+  det = FaceModel(None)
+
+  def detector(imm):
+      bbox, confid, points  = det.get_face_location(imm)
+      return bbox, points
+  extract_face_images("./face_image/*/*.jpg", 'tdevals', detector)
+  extract_face_images("./tdface_Register/*/*.jpg", 'tdface_Register_cropped', detector)
+  extract_face_images("./tdface_Register/*/*.jpg", 'tdface_Register_mtcnn', detector)
+
+  ''' Review _multi and _none folder by hand, then do detection again on _none folder using another detector '''
+  inn = glob2.glob('tdface_Register_mtcnn_none/*.jpg')
+  for ii in tqdm(inn):
+      imm = imread(ii)
+      bbs, pps = detector(imm)
+      if len(bbs) != 0:
+          image_name = os.path.basename(ii)
+          user_name = image_name.split('_')[0]
+          dest_path = os.path.join(os.path.dirname(ii), user_name)
+          os.makedirs(dest_path, exist_ok=True)
+          nns = face_align_landmarks(imm, pps)
+          image_name_form = '%s_{}.%s' % tuple(image_name.split('.'))
+          for id, nn in enumerate(nns):
+              dest_name = os.path.join(dest_path, image_name_form.format(id))
+              imsave(dest_name, nn)
+              os.rename(ii, os.path.join(dest_path, image_name))
+
+  print(">>>> 提取特征值")
+  model_path = "/home/tdtest/workspace/Keras_insightface/checkpoints/keras_resnet101_emore_II_triplet_basic_agedb_30_epoch_107_0.971000.h5"
+  model = tf.keras.models.load_model(model_path, compile=False)
+  interp = lambda ii: normalize(model.predict((np.array(ii) - 127.5) / 127))
+  register_path = 'tdface_Register_mtcnn'
+
+  backup_file = 'tdface_Register_mtcnn.npy'
+  if os.path.exists(backup_file):
+      imms = np.load('tdface_Register_mtcnn.npy')
+  else:
+      imms = glob2.glob(os.path.join(register_path, "*/*.jpg"))
+      np.save('tdface_Register_mtcnn.npy', imms)
+
+  batch_size = 64
+  steps = int(np.ceil(len(imms) / batch_size))
+  embs = []
+  for ii in tqdm(range(steps), total=steps):
+      ibb = imms[ii * batch_size : (ii + 1) * batch_size]
+      embs.append(interp([imread(jj) for jj in ibb]))
+
+  embs = np.concatenate(embs)
+  dd, pp = {}, {}
+  for ii, ee in zip(imms, embs):
+      user = os.path.basename(os.path.dirname(ii))
+      dd[user] = np.vstack([dd.get(user, np.array([]).reshape(0, embs.shape[-1])), [ee]])
+      pp[user] = np.hstack([pp.get(user, []), ii])
+  # dd_bak = dd.copy()
+  # pp_bak = pp.copy()
+  print("Total: %d" % (len(dd)))
+
+  print(">>>> 合并组间距离过小的成员")
+  OUT_THREASH = 0.7
+  tt = dd.copy()
+  while len(tt) > 0:
+      kk, vv = tt.popitem()
+      # oo = np.vstack(list(tt.values()))
+      for ikk, ivv in tt.items():
+          imax = np.dot(vv, ivv.T).max()
+          if imax > OUT_THREASH:
+              print("First: %s, Second: %s, Max dist: %.4f" % (kk, ikk, imax))
+              if kk in dd and ikk in dd:
+                  dd[kk] = np.vstack([dd[kk], dd[ikk]])
+                  dd.pop(ikk)
+                  pp[kk] = np.hstack([pp[kk], pp[ikk]])
+                  pp.pop(ikk)
+  # print([kk for kk, vv in pp.items() if vv.shape[0] != dd[kk].shape[0]])
+  print("Total left: %d" % (len(dd)))
+
+  ''' Similar images between users '''
+  src = 'tdface_Register_mtcnn'
+  dst = 'tdface_Register_mtcnn_simi'
+  with open('tdface_Register_mtcnn.foo', 'r') as ff:
+      aa = ff.readlines()
+  for id, ii in tqdm(enumerate(aa), total=len(aa)):
+      first, second, simi = [jj.split(': ')[1] for jj in ii.strip().split(', ')]
+      dest_path = os.path.join(dst, '_'.join([str(id), first, second, simi]))
+      os.makedirs(dest_path, exist_ok=True)
+      for pp in os.listdir(os.path.join(src, first)):
+          src_path = os.path.join(src, first, pp)
+          shutil.copy(src_path, os.path.join(dest_path, first + '_' + pp))
+      for pp in os.listdir(os.path.join(src, second)):
+          src_path = os.path.join(src, second, pp)
+          shutil.copy(src_path, os.path.join(dest_path, second + '_' + pp))
+
+  ''' Pos & Neg dists '''
+  batch_size = 128
+  gg = ImageDataGenerator(rescale=1./255, preprocessing_function=lambda img: (img - 0.5) * 2)
+  tt = gg.flow_from_directory('./tdevals', target_size=(112, 112), batch_size=batch_size)
+  steps = int(np.ceil(tt.classes.shape[0] / batch_size))
+  embs = []
+  classes = []
+  for _ in tqdm(range(steps), total=steps):
+      aa, bb = tt.next()
+      emb = interp(aa)
+      embs.extend(emb)
+      classes.extend(np.argmax(bb, 1))
+  embs = np.array(embs)
+  classes = np.array(classes)
+  class_matrix = np.equal(np.expand_dims(classes, 0), np.expand_dims(classes, 1))
+  dists = np.dot(embs, embs.T)
+  pos_dists = np.where(class_matrix, dists, np.ones_like(dists))
+  neg_dists = np.where(np.logical_not(class_matrix), dists, np.zeros_like(dists))
+  (neg_dists.max(1) <= pos_dists.min(1)).sum()
+  ```
+  ```py
+  import glob2
+  def dest_test(aa, bb, model, reg_path="./tdface_Register_mtcnn"):
+      ees = []
+      for ii in [aa, bb]:
+          iee = glob2.glob(os.path.join(reg_path, ii, "*.jpg"))
+          iee = [imread(jj) for jj in iee]
+          ees.append(normalize(model.predict((np.array(iee) / 255. - 0.5) * 2)))
+      return np.dot(ees[0], ees[1].T)
+
+  with open('tdface_Register_mtcnn_0.7.foo', 'r') as ff:
+      aa = ff.readlines()
+  for id, ii in enumerate(aa):
+      first, second, simi = [jj.split(': ')[1] for jj in ii.strip().split(', ')]
+      dist = dest_test(first, second, model)
+      if dist < OUT_THREASH:
+          print(("first = %s, second = %s, simi = %s, model_simi = %f" % (first, second, simi, dist)))
+  ```
+  ```sh
+  cp ./face_image/2818/1586472495016.jpg ./face_image/4609/1586475252234.jpg ./face_image/3820/1586472950858.jpg ./face_image/4179/1586520054080.jpg ./face_image/2618/1586471583221.jpg ./face_image/6696/1586529149923.jpg ./face_image/5986/1586504872276.jpg ./face_image/1951/1586489518568.jpg ./face_image/17/1586511238696.jpg ./face_image/17/1586511110105.jpg ./face_image/17/1586511248992.jpg ./face_image/4233/1586482466485.jpg ./face_image/5500/1586493019872.jpg ./face_image/4884/1586474119164.jpg ./face_image/5932/1586471784905.jpg ./face_image/7107/1586575911740.jpg ./face_image/4221/1586512334133.jpg ./face_image/5395/1586578437529.jpg ./face_image/4204/1586506059923.jpg ./face_image/4053/1586477985553.jpg ./face_image/7168/1586579239307.jpg ./face_image/7168/1586489559660.jpg ./face_image/5477/1586512847480.jpg ./face_image/4912/1586489637333.jpg ./face_image/5551/1586502762688.jpg ./face_image/5928/1586579219121.jpg ./face_image/6388/1586513897953.jpg ./face_image/4992/1586471873460.jpg ./face_image/5934/1586492793214.jpg ./face_image/5983/1586490703112.jpg ./face_image/5219/1586492929098.jpg ./face_image/5203/1586487204198.jpg ./face_image/6099/1586490074263.jpg ./face_image/5557/1586490232722.jpg ./face_image/4067/1586491778846.jpg ./face_image/4156/1586512886040.jpg ./face_image/5935/1586492829221.jpg ./face_image/2735/1586513495061.jpg ./face_image/5264/1586557233625.jpg ./face_image/1770/1586470942329.jpg ./face_image/7084/1586514100804.jpg ./face_image/5833/1586497276529.jpg ./face_image/2200/1586577699180.jpg tdevals_none
+  ```
+***
