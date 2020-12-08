@@ -1487,31 +1487,31 @@
   CUDA_VISIBLE_DEVICES='0,1' horovodrun -np 2 -H localhost:2 python tensorflow_horovod.py -b 128 -e 6 -m MobileNet
   ```
 
-  | strategy          | batch size | mean time  | GPU memory   |
-  | ----------------- | ---------- | ---------- | ------------ |
-  | **ResNet101V2**   |            |            |              |
-  | OneDeviceStrategy | 32         | 201ms/step | 8897MiB      |
-  | OneDeviceStrategy | 64         | 380ms/step | 17089MiB     |
-  | MirroredStrategy  | 32 * 2     | 246ms/step | 8909MiB * 2  |
-  | horovod, cuda 1   | 32         | 223ms/step | 8925MiB      |
-  | horovod, cuda 0,1 | 32 * 2     | 241ms/step | 8925MiB * 2  |
-  | **ResNet50V2**    |            |            |              |
-  | OneDeviceStrategy | 32         | 120ms/step | 8897MiB      |
-  | OneDeviceStrategy | 64         | 224ms/step | 8897MiB      |
-  | MirroredStrategy  | 32 * 2     | 149ms/step | 8897MiB * 2  |
-  | horovod, cuda 1   | 32         | 146ms/step | 8925MiB      |
-  | horovod, cuda 0,1 | 32 * 2     | 154ms/step | 8925MiB * 2  |
-  | OneDeviceStrategy | 128        | 420ms/step | 17089MiB     |
-  | MirroredStrategy  | 128 * 2    | 360ms/step | 17089MiB * 2 |
-  | horovod, cuda 1   | 128        | 474ms/step | 17117MiB     |
-  | horovod, cuda 0,1 | 128 * 2    | 421ms/step | 17117MiB * 2 |
-  | **MobileNet**     |            |            |              |
-  | OneDeviceStrategy | 32         | 105ms/step |              |
-  | MirroredStrategy  | 32 * 2     | 116ms/step |              |
-  | horovod, cuda 1   | 32         | 130ms/step |              |
-  | horovod, cuda 0,1 | 32 * 2     | 135ms/step |              |
-  | OneDeviceStrategy | 128        | 413ms/step |              |
-  | MirroredStrategy  | 128 * 2    | 333ms/step |              |
-  | horovod, cuda 1   | 128        | 450ms/step |              |
-  | horovod, cuda 0,1 | 128 * 2    | 397ms/step |              |
+  | strategy          | batch size | mean time      | GPU memory   |
+  | ----------------- | ---------- | -------------- | ------------ |
+  | **ResNet101V2**   |            |                |              |
+  | OneDeviceStrategy | 32         | 201ms/step     | 8897MiB      |
+  | OneDeviceStrategy | 64         | 380ms/step     | 17089MiB     |
+  | MirroredStrategy  | 32 * 2     | 246ms/step     | 8909MiB * 2  |
+  | horovod, cuda 1   | 32         | 223ms/step     | 8925MiB      |
+  | horovod, cuda 0,1 | 32 * 2     | **241ms/step** | 8925MiB * 2  |
+  | **ResNet50V2**    |            |                |              |
+  | OneDeviceStrategy | 32         | 120ms/step     | 8897MiB      |
+  | OneDeviceStrategy | 64         | 224ms/step     | 8897MiB      |
+  | MirroredStrategy  | 32 * 2     | **149ms/step** | 8897MiB * 2  |
+  | horovod, cuda 1   | 32         | 146ms/step     | 8925MiB      |
+  | horovod, cuda 0,1 | 32 * 2     | 154ms/step     | 8925MiB * 2  |
+  | OneDeviceStrategy | 128        | 420ms/step     | 17089MiB     |
+  | MirroredStrategy  | 128 * 2    | **360ms/step** | 17089MiB * 2 |
+  | horovod, cuda 1   | 128        | 474ms/step     | 17117MiB     |
+  | horovod, cuda 0,1 | 128 * 2    | 421ms/step     | 17117MiB * 2 |
+  | **MobileNet**     |            |                |              |
+  | OneDeviceStrategy | 32         | 105ms/step     |              |
+  | MirroredStrategy  | 32 * 2     | **116ms/step** |              |
+  | horovod, cuda 1   | 32         | 130ms/step     |              |
+  | horovod, cuda 0,1 | 32 * 2     | 135ms/step     |              |
+  | OneDeviceStrategy | 128        | 413ms/step     |              |
+  | MirroredStrategy  | 128 * 2    | **333ms/step** |              |
+  | horovod, cuda 1   | 128        | 450ms/step     |              |
+  | horovod, cuda 0,1 | 128 * 2    | 397ms/step     |              |
 ***
