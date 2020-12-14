@@ -1243,3 +1243,33 @@
   from termcolor import colored, cprint
   cprint('Hello, World!', 'green', 'on_red', attrs=['bold'])
   ```
+***
+
+# 排列组合
+  - **排列**
+    ```py
+    import itertools
+    print(list(itertools.combinations(range(3), 2)))
+    # [(0, 1), (0, 2), (1, 2)]
+    print(list(itertools.combinations_with_replacement(range(3), 2)))
+    # [(0, 0), (0, 1), (0, 2), (1, 1), (1, 2), (2, 2)]
+    ```
+  - **组合**
+    ```py
+    print(list(itertools.permutations(range(3), 2)))
+    # [(0, 1), (0, 2), (1, 0), (1, 2), (2, 0), (2, 1)]
+    print(list(itertools.permutations(range(3), 3)))
+    # [(0, 1, 2), (0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0)]
+    ```
+  - **笛卡尔乘积 Cartesian product**
+    ```py
+    aa = [0, 1]
+    print(list(itertools.product(aa, aa, aa)))
+    # [(0, 0, 0), (0, 0, 1), (0, 1, 0), (0, 1, 1), (1, 0, 0), (1, 0, 1), (1, 1, 0), (1, 1, 1)]
+
+    print([[ii, jj, kk] for kk in aa for jj in aa for ii in aa])
+    # [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]]
+
+    print(np.stack(np.meshgrid(aa, aa, aa), axis=-1).reshape(-1, 3))
+    ```
+***

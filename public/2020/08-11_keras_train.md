@@ -1515,3 +1515,518 @@
   | horovod, cuda 1   | 128        | 450ms/step     |              |
   | horovod, cuda 0,1 | 128 * 2    | 397ms/step     |              |
 ***
+
+# Weight decay
+## MXNet SGD and tfa SGDW
+  - [AdamW and Super-convergence is now the fastest way to train neural nets](https://www.fast.ai/2018/07/02/adam-weight-decay/)
+  - The behavior of `weight_decay` in `mx.optimizer.SGD` and `tfa.optimizers.SGDW` is different.
+  - **MXNet SGD** multiplies `wd` with `lr`.
+    ```py
+    import mxnet as mx
+    help(mx.optimizer.SGD)
+    # weight = weight - lr * (rescale_grad * clip(grad, clip_gradient) + wd * weight)
+    #        = (1 - lr * wd) * weight - lr * (rescale_grad * clip(grad, clip_gradient))
+    ```
+    Test with `learning_rate=0.1, weight_decay=5e-4`, weight is actually modified by `5e-5`.
+    ```py
+    import mxnet as mx
+    mm_loss_grad = mx.nd.array([[1., 1], [1, 1]])
+
+    mm = mx.nd.array([[1., 1], [1, 1]])
+    mopt = mx.optimizer.SGD(learning_rate=0.1)
+    mopt.update(0, mm, mm_loss_grad, None)
+    print(mm.asnumpy())  # Basic value is `mm - lr * mm_loss = 0.9`
+    # [[0.9 0.9] [0.9 0.9]]
+
+    mm = mx.nd.array([[1., 1], [1, 1]])
+    mopt = mx.optimizer.SGD(learning_rate=0.1, wd=5e-4)
+    mopt.update(0, mm, mm_loss_grad, None)
+    print(mm.asnumpy())  # 0.9 - 0.89995 = 5e-5
+    # [[0.89995 0.89995]  [0.89995 0.89995]]
+    ```
+  - **tfa SGDW** behaves different, it does NOT multiply `wd` with `lr`. With `learning_rate=0.1, weight_decay=5e-4`, weight is actually modified with `5e-4`.
+    ```py
+    # /opt/anaconda3/lib/python3.7/site-packages/tensorflow_addons/optimizers/weight_decay_optimizers.py
+    # 170     def _decay_weights_op(self, var, apply_state=None):
+    # 177             return var.assign_sub(coefficients["wd_t"] * var, self._use_locking)
+    ```
+    ```py
+    import tensorflow_addons as tfa
+    ww_loss_grad = tf.convert_to_tensor([[1., 1.], [1., 1.]])
+    ww = tf.Variable([[1., 1.], [1., 1.]])
+    opt = tfa.optimizers.SGDW(learning_rate=0.1, weight_decay=5e-4)
+    opt.apply_gradients(zip([ww_loss_grad], [ww]))
+    print(ww.numpy()) # 0.9 - 0.8995 = 5e-4
+    # [[0.8995 0.8995] [0.8995 0.8995]]
+    ```
+    So `learning_rate=0.1, weight_decay=5e-4` in `mx.optimizer.SGD` is equal to `learning_rate=0.1, weight_decay=5e-5` in `tfa.optimizers.SGDW`.
+  - **weight decay multiplier** If we set `wd_mult=10` in a MXNet layer, `wd` will mutiply by `10` in this layer. This means it will be `weight_decay == 5e-4` in a keras layer.
+    ```py
+    # https://github.com/apache/incubator-mxnet/blob/e6cea0d867329131fa6052e5f45dc5f626c00d72/python/mxnet/optimizer/optimizer.py#L482
+    # 29  class Optimizer(object):
+    # 482                lrs[i] *= self.param_dict[index].lr_mult
+    ```
+## L2 Regularization and Weight Decay
+  - [Weight Decay == L2 Regularization?](https://towardsdatascience.com/weight-decay-l2-regularization-90a9e17713cd)
+  - [PDF DECOUPLED WEIGHT DECAY REGULARIZATION](https://arxiv.org/pdf/1711.05101.pdf)
+  - **Keras l2 regularization**
+    ```py
+    ww = tf.convert_to_tensor([[1.0, -2.0], [-3.0, 4.0]])
+
+    # loss = l2 * reduce_sum(square(x))
+    aa = keras.regularizers.L2(0.2)
+    aa(ww)  # tf.reduce_sum(ww ** 2) * 0.2
+    # 6.0
+
+    # output = sum(t ** 2) / 2
+    tf.nn.l2_loss(ww)
+    # 15.0
+    tf.nn.l2_loss(ww) * 0.2
+    # 3.0
+    ```
+    Total loss with l2 regularization will be
+    ```py
+    total_loss = Loss(w) + λ * R(w)
+    ```
+  - `Keras.optimizers.SGD`
+    ```py
+    help(keras.optimizers.SGD)
+    # w = w - learning_rate * g
+    #   = w - learning_rate * g - learning_rate * Grad(l2_loss)
+    ```
+    So with `keras.regularizers.L2(λ)`, it should be
+    ```py
+    wd * weight = Grad(l2_loss)
+        --> wd * weight = 2 * λ * weight
+        --> λ = wd / 2
+    ```
+    **Test**
+    ```py
+    ww_loss_grad = tf.convert_to_tensor([[1., 1.], [1., 1.]])
+    ww = tf.Variable([[1., 1.], [1., 1.]])
+    opt = keras.optimizers.SGD(0.1)
+    with tf.GradientTape() as tape:
+        # l2_loss = tf.nn.l2_loss(ww) * 5e-4
+        l2_loss = keras.regularizers.L2(5e-4 / 2)(ww)  # `tf.nn.l2_loss` divided the loss by 2, `keras.regularizers.L2` not
+    l2_grad = tape.gradient(l2_loss, ww).numpy()
+    opt.apply_gradients(zip([ww_loss_grad + l2_grad], [ww]))
+    print(ww.numpy()) # 0.9 - 0.89995 = 5e-5
+    # [[0.89995 0.89995] [0.89995 0.89995]]
+    ```
+    That means the `L2_regulalizer` will modify the weights value by `l2 * lr == 5e-4 * 0.1 = 5e-5`.
+  - If we want the same result as `mx.optimizer.SGD(learning_rate=0.1, wd=5e-4)` and `wd_mult=10` in a MXNet layer, which actually decay this layer's weights with `wd * wd_mult * learning_rate == 5e-4`, and other layers `wd * learning_rate == 5e-5`.
+    - Firstlly, the keras optimizer is `tfa.optimizers.SGDW(learning_rate=0.1, weight_decay=5e-5)`.
+    - Then add a `keras.regularizers.L2` with `l2 == weight_decay / learning_rate * (wd_mult - 1) / 2` to this layer.
+    ```py
+    ww_loss_grad = tf.convert_to_tensor([[1., 1.], [1., 1.]])
+    ww = tf.Variable([[1., 1.], [1., 1.]])
+    opt = tfa.optimizers.SGDW(learning_rate=0.1, weight_decay=5e-5)
+    with tf.GradientTape() as tape:
+        l2_loss = keras.regularizers.L2(5e-5 / 0.1 * (10 - 1) / 2)(ww)
+    l2_grad = tape.gradient(l2_loss, ww).numpy()
+    opt.apply_gradients(zip([ww_loss_grad + l2_grad], [ww]))
+    print(ww.numpy()) # 0.9 - 0.8995 = 5e-4
+    # [[0.8995 0.8995] [0.8995 0.8995]]
+    ```
+## SGD with momentum
+  - **MXNet**
+    ```py
+    # incubator-mxnet/python/mxnet/optimizer/sgd.py, incubator-mxnet/src/operator/optimizer_op.cc +109
+    grad += wd * weight
+    momentum_stat = momentum * momentum_stat - lr * grad
+    weight += momentum_stat
+    ```
+  - **Keras SGDW** Using `wd == lr * wd`, `weight` will be the same with `MXNet SGD` in the first update, but `momentum_stat` will be different. Then in the second update, `weight` will also be different.
+    ```py
+    momentum_stat = momentum * momentum_stat - lr * grad
+    weight += momentum_stat - wd * weight
+    ```
+
+  - **Keras SGD with l2 regularizer** can behave same as `MXNet SGD`
+    ```py
+    grad += regularizer_loss
+    momentum_stat = momentum * momentum_stat - lr * grad
+    weight += momentum_stat
+    ```
+## Keras Model test
+  ```py
+  import tensorflow_addons as tfa
+
+  def test_optimizer_with_model(opt, epochs=3, l2=0):
+      kernel_regularizer = None if l2 == 0 else keras.regularizers.L2(l2)
+      aa = keras.layers.Dense(1, use_bias=False, kernel_initializer='ones', kernel_regularizer=kernel_regularizer)
+      aa.build([1])
+      mm = keras.Sequential([aa])
+      loss = lambda y_true, y_pred: (y_true - y_pred) ** 2 / 2
+      mm.compile(optimizer=opt, loss=loss)
+      for ii in range(epochs):
+          mm.fit([[1.]], [[0.]], epochs=ii+1, initial_epoch=ii, verbose=0)
+          print("Epoch", ii, "- [weight]", aa.weights[0].numpy(), "- [losses]:", mm.history.history['loss'][0], end="")
+          if len(opt.weights) > 1:
+              print(" - [momentum]:", opt.weights[-1].numpy(), end="")
+          print()
+      return mm, opt
+
+  test_optimizer_with_model(tf.keras.optimizers.SGD(learning_rate=0.1), epochs=3)
+  # Epoch 0 - [weight] [[0.9]] - [losses]: 0.5
+  # Epoch 1 - [weight] [[0.81]] - [losses]: 0.4049999713897705
+  # Epoch 2 - [weight] [[0.729]] - [losses]: 0.32804998755455017
+  test_optimizer_with_model(tf.keras.optimizers.SGD(learning_rate=0.1), l2=0.01, epochs=3)
+  # Epoch 0 - [weight] [[0.898]] - [losses]: 0.5099999904632568
+  # Epoch 1 - [weight] [[0.806404]] - [losses]: 0.411266028881073
+  # Epoch 2 - [weight] [[0.7241508]] - [losses]: 0.33164656162261963
+  test_optimizer_with_model(tfa.optimizers.SGDW(learning_rate=0.1, weight_decay=0.002), epochs=3)
+  # Epoch 0 - [weight] [[0.898]] - [losses]: 0.5
+  # Epoch 1 - [weight] [[0.806404]] - [losses]: 0.40320199728012085
+  # Epoch 2 - [weight] [[0.72415084]] - [losses]: 0.3251436948776245
+  test_optimizer_with_model(tf.keras.optimizers.SGD(learning_rate=0.1, momentum=0.9), epochs=3)
+  # Epoch 0 - [weight] [[0.9]] - [losses]: 0.5 - [momentum]: [[-0.1]]
+  # Epoch 1 - [weight] [[0.71999997]] - [losses]: 0.4049999713897705 - [momentum]: [[-0.17999999]]
+  # Epoch 2 - [weight] [[0.486]] - [losses]: 0.25919997692108154 - [momentum]: [[-0.23399998]]
+  test_optimizer_with_model(tf.keras.optimizers.SGD(learning_rate=0.1, momentum=0.9), l2=0.01, epochs=3)
+  # Epoch 0 - [weight] [[0.898]] - [losses]: 0.5099999904632568 - [momentum]: [[-0.102]] ==> 0.102 * 0.1
+  # Epoch 1 - [weight] [[0.714604]] - [losses]: 0.411266028881073 - [momentum]: [[-0.183396]] ==> -0.102 * 0.9 - 0.898 * 1.02 * 0.1
+  # Epoch 2 - [weight] [[0.47665802]] - [losses]: 0.2604360580444336 - [momentum]: [[-0.237946]]
+  # ==> momentum_stat_2 == momentum_stat_1 * momentum - weight_1 * (1 + l2 * 2) * learning_rate
+  test_optimizer_with_model(tfa.optimizers.SGDW(learning_rate=0.1, momentum=0.9, weight_decay=0.002), epochs=3)
+  # Epoch 0 - [weight] [[0.898]] - [losses]: 0.5 - [momentum]: [[-0.1]]
+  # Epoch 1 - [weight] [[0.71640396]] - [losses]: 0.40320199728012085 - [momentum]: [[-0.1798]]
+  # Epoch 2 - [weight] [[0.48151073]] - [losses]: 0.25661730766296387 - [momentum]: [[-0.2334604]]
+
+  test_optimizer_with_model(tf.keras.optimizers.SGD(learning_rate=0.1, momentum=0.9), l2=0.1, epochs=3)
+  # Epoch 0 - [weight] [[0.88]] - [losses]: 0.6000000238418579 - [momentum]: [[-0.12]]
+  # Epoch 1 - [weight] [[0.66639996]] - [losses]: 0.4646399915218353 - [momentum]: [[-0.21360001]]
+  # Epoch 2 - [weight] [[0.39419195]] - [losses]: 0.266453355550766 - [momentum]: [[-0.272208]]
+  ```
+## MXNet model test
+  - **wd_mult** NOT working if just added in `mx.symbol.Variable`, has to be added by `opt.set_wd_mult`.
+  ```py
+  import mxnet as mx
+  import logging
+  logging.getLogger().setLevel(logging.ERROR)
+
+  def test_optimizer_with_mxnet_model(opt, epochs=3, wd_mult=None):
+      xx, yy = np.array([[1.]]), np.array([[0.]])
+      xx_input, yy_input = mx.nd.array(xx), mx.nd.array(yy)
+      dataiter = mx.io.NDArrayIter(xx, yy)
+
+      data = mx.symbol.Variable("data", shape=(1,))
+      label = mx.symbol.Variable("softmax_label", shape=(1,))
+      # ww = mx.symbol.Variable("ww", shape=(1, 1), wd_mult=wd_mult, init=mx.init.One())
+      ww = mx.symbol.Variable("ww", shape=(1, 1), init=mx.init.One())
+      nn = mx.sym.FullyConnected(data=data, weight=ww, no_bias=True, num_hidden=1)
+
+      # loss = mx.symbol.SoftmaxOutput(data=nn, label=label, name='softmax')
+      loss = mx.symbol.MakeLoss((label - nn) ** 2 / 2)
+      # sss = loss.bind(mx.cpu(), {'data': xx_input, 'softmax_label': yy_input, 'ww': y_pred})
+      # print(sss.forward()[0].asnumpy().tolist())
+      # [[0.5]]
+      if wd_mult is not None:
+          opt.set_wd_mult({'ww': wd_mult})
+      model = mx.mod.Module(context=mx.cpu(), symbol=loss)
+      weight_value = mx.nd.ones([1, 1])
+      for ii in range(epochs):
+          loss_value = loss.bind(mx.cpu(), {'data': xx_input, 'softmax_label': yy_input, 'ww': weight_value}).forward()[0]
+          # model.fit(train_data=dataiter, num_epoch=ii+1, begin_epoch=0, optimizer=opt, force_init=True)
+          model.fit(train_data=dataiter, num_epoch=ii+1, begin_epoch=ii, optimizer=opt)
+          weight_value = model.get_params()[0]['ww']
+          # output = model.get_outputs()[0]
+          print("Epoch", ii, "- [weight]", weight_value.asnumpy(), "- [losses]:", loss_value.asnumpy()[0, 0])
+          # if len(opt.weights) > 1:
+          #     print(" - [momentum]:", opt.weights[-1].numpy(), end="")
+          # print()
+
+  test_optimizer_with_mxnet_model(mx.optimizer.SGD(learning_rate=0.1, wd=0.02))
+  # Epoch 0 - [weight] [[0.898]] - [losses]: 0.5
+  # Epoch 1 - [weight] [[0.806404]] - [losses]: 0.403202
+  # Epoch 2 - [weight] [[0.7241508]] - [losses]: 0.3251437
+  test_optimizer_with_mxnet_model(mx.optimizer.SGD(learning_rate=0.1, wd=0.002))
+  # Epoch 0 - [weight] [[0.8998]] - [losses]: 0.5
+  # Epoch 1 - [weight] [[0.80964005]] - [losses]: 0.40482002
+  # Epoch 2 - [weight] [[0.72851413]] - [losses]: 0.3277585
+  test_optimizer_with_mxnet_model(mx.optimizer.SGD(learning_rate=0.1, momentum=0.9, wd=0.02))
+  # Epoch 0 - [weight] [[0.898]] - [losses]: 0.5
+  # Epoch 1 - [weight] [[0.714604]] - [losses]: 0.403202
+  # Epoch 2 - [weight] [[0.47665802]] - [losses]: 0.25532946
+  test_optimizer_with_mxnet_model(mx.optimizer.SGD(learning_rate=0.1, momentum=0.9, wd=0.02), wd_mult=10)
+  # Epoch 0 - [weight] [[0.88]] - [losses]: 0.5
+  # Epoch 1 - [weight] [[0.66639996]] - [losses]: 0.3872
+  # Epoch 2 - [weight] [[0.39419195]] - [losses]: 0.22204445
+  # ==> Equals to keras model `l2 == 0.1`
+  ```
+## Modify model with L2 regularizer
+  ```py
+  mm = keras.applications.MobileNet()
+
+  regularizers_type = {}
+  for layer in mm.layers:
+      rrs = [kk for kk in layer.__dict__.keys() if 'regularizer' in kk and not kk.startswith('_')]
+      if len(rrs) != 0:
+          # print(layer.name, layer.__class__.__name__, rrs)
+          if layer.__class__.__name__ not in regularizers_type:
+              regularizers_type[layer.__class__.__name__] = rrs
+  print(regularizers_type)
+  # {'Conv2D': ['kernel_regularizer', 'bias_regularizer'],
+  # 'BatchNormalization': ['beta_regularizer', 'gamma_regularizer'],
+  # 'PReLU': ['alpha_regularizer'],
+  # 'SeparableConv2D': ['kernel_regularizer', 'bias_regularizer', 'depthwise_regularizer', 'pointwise_regularizer'],
+  # 'DepthwiseConv2D': ['kernel_regularizer', 'bias_regularizer', 'depthwise_regularizer'],
+  # 'Dense': ['kernel_regularizer', 'bias_regularizer']}
+
+  weight_decay = 5e-4
+  for layer in mm.layers:
+      if isinstance(layer, keras.layers.Dense) or isinstance(layer, keras.layers.Conv2D) or isinstance(layer, keras.layers.DepthwiseConv2D):
+          print(">>>> Dense or Conv2D", layer.name, "use_bias:", layer.use_bias)
+          layer.kernel_regularizer = keras.regularizers.L2(weight_decay / 2)
+          if layer.use_bias:
+              layer.bias_regularizer = keras.regularizers.L2(weight_decay / 2)
+      if isinstance(layer, keras.layers.SeparableConv2D):
+          print(">>>> SeparableConv2D", layer.name, "use_bias:", layer.use_bias)
+          layer.pointwise_regularizer = keras.regularizers.L2(weight_decay / 2)
+          layer.depthwise_regularizer = keras.regularizers.L2(weight_decay / 2)
+          if layer.use_bias:
+              layer.bias_regularizer = keras.regularizers.L2(weight_decay / 2)
+      if isinstance(layer, keras.layers.BatchNormalization):
+          print(">>>> BatchNormalization", layer.name, "scale:", layer.scale, ", center:", layer.center)
+          if layer.center:
+              layer.beta_regularizer = keras.regularizers.L2(weight_decay / 2)
+          if layer.scale:
+              layer.gamma_regularizer = keras.regularizers.L2(weight_decay / 2)
+      if isinstance(layer, keras.layers.PReLU):
+          print(">>>> PReLU", layer.name)
+          layer.alpha_regularizer = keras.regularizers.L2(weight_decay / 2)
+  ```
+## Optimizers with weight decay test
+  ```py
+  from tensorflow import keras
+  import tensorflow_addons as tfa
+  import losses, data, evals, myCallbacks, train
+  # from tensorflow.keras.callbacks import LearningRateScheduler
+
+  # Dataset
+  data_path = '/datasets/faces_emore_112x112_folders'
+  train_ds = data.prepare_dataset(data_path, batch_size=256, random_status=3, random_crop=(100, 100, 3))
+  classes = train_ds.element_spec[-1].shape[-1]
+
+  # Model
+  basic_model = train.buildin_models("MobileNet", dropout=0, emb_shape=256)
+  # model_output = keras.layers.Dense(classes, activation="softmax")(basic_model.outputs[0])
+  model_output = train.NormDense(classes, name="arcface")(basic_model.outputs[0])
+  model = keras.models.Model(basic_model.inputs[0], model_output)
+
+  # Evals and basic callbacks
+  save_name = 'keras_mxnet_test_sgdw'
+  eval_paths = ['/datasets/faces_emore/lfw.bin', '/datasets/faces_emore/cfp_fp.bin', '/datasets/faces_emore/agedb_30.bin']
+  my_evals = [evals.eval_callback(basic_model, ii, batch_size=256, eval_freq=1) for ii in eval_paths]
+  my_evals[-1].save_model = save_name
+  basic_callbacks = myCallbacks.basic_callbacks(checkpoint=save_name + '.h5', evals=my_evals, lr=0.001)
+  basic_callbacks = basic_callbacks[:1] + basic_callbacks[2:]
+  callbacks = my_evals + basic_callbacks
+  # Compile and fit
+
+  ss = myCallbacks.ConstantDecayScheduler([3, 5, 7], lr_base=0.1)
+  optimizer = tfa.optimizers.SGDW(learning_rate=0.1, weight_decay=5e-4, momentum=0.9)
+
+  model.compile(optimizer=optimizer, loss=losses.arcface_loss, metrics=["accuracy"])
+  # model.compile(optimizer=optimizer, loss=keras.losses.categorical_crossentropy, metrics=["accuracy"])
+  wd_callback = myCallbacks.OptimizerWeightDecay(optimizer.lr.numpy(), optimizer.weight_decay.numpy())
+  model.fit(train_ds, epochs=15, callbacks=[ss, wd_callback, *callbacks], verbose=1)
+
+  opt = tfa.optimizers.AdamW(weight_decay=lambda : None)
+  opt.weight_decay = lambda : 5e-1 * opt.lr
+
+  mlp.compile(optimizer=opt, loss=tf.keras.losses.BinaryCrossentropy())
+  ```
+  ```py
+  class Foo:
+      def __init__(self, wd):
+          self.wd = wd
+      def __call__(self):
+          return self.wd
+      def set_wd(self, wd):
+          self.wd = wd
+
+  class L2_decay_wdm(keras.regularizers.L2):
+      def __init__(self, wd_func=None, **kwargs):
+          super(L2_decay_wdm, self).__init__(**kwargs)
+          self.wd_func = wd_func
+
+      def __call__(self, x):
+          self.l2 = self.wd_func()
+          # tf.print(", l2 =", self.l2, end='')
+          return super(L2_decay_wdm, self).__call__(x)
+
+      def get_config(self):
+          self.l2 = 0  # Just a fake value for saving
+          config = super(L2_decay_wdm, self).get_config()
+          return config
+  ```
+***
+
+# Distillation
+## MNIST example
+  - [Github keras-team/keras-io knowledge_distillation.py](https://github.com/keras-team/keras-io/blob/master/examples/vision/knowledge_distillation.py)
+  ```py
+  import tensorflow as tf
+  from tensorflow import keras
+  from tensorflow.keras import layers
+  import numpy as np
+
+  # Create the teacher
+  teacher = keras.Sequential(
+      [
+          layers.Conv2D(256, (3, 3), strides=(2, 2), padding="same"),
+          layers.LeakyReLU(alpha=0.2),
+          layers.MaxPooling2D(pool_size=(2, 2), strides=(1, 1), padding="same"),
+          layers.Conv2D(512, (3, 3), strides=(2, 2), padding="same"),
+          layers.Flatten(),
+          layers.Dense(10),
+      ],
+      name="teacher",
+  )
+
+  # Create the student
+  student = keras.Sequential(
+      [
+          layers.Conv2D(16, (3, 3), strides=(2, 2), padding="same"),
+          layers.LeakyReLU(alpha=0.2),
+          layers.MaxPooling2D(pool_size=(2, 2), strides=(1, 1), padding="same"),
+          layers.Conv2D(32, (3, 3), strides=(2, 2), padding="same"),
+          layers.Flatten(),
+          layers.Dense(10),
+      ],
+      name="student",
+  )
+
+  # Prepare the train and test dataset.
+  batch_size = 64
+  # (x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
+  # x_train, x_test = np.reshape(x_train, (-1, 28, 28, 1)), np.reshape(x_test, (-1, 28, 28, 1))
+  (x_train, y_train), (x_test, y_test) = keras.datasets.cifar10.load_data()
+
+  # Normalize data
+  x_train = x_train.astype("float32") / 255.0
+  x_test = x_test.astype("float32") / 255.0
+
+  # Train teacher as usual
+  teacher.compile(
+      optimizer=keras.optimizers.Adam(),
+      loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+      metrics=[keras.metrics.SparseCategoricalAccuracy()],
+  )
+
+  # Train and evaluate teacher on data.
+  teacher.fit(x_train, y_train, epochs=15, validation_data=(x_test, y_test))
+  teacher.evaluate(x_test, y_test)
+
+  def create_distiller_model(teacher, student, clone=True):
+      if clone:
+          teacher_copy = keras.models.clone_model(teacher)
+          student_copy = keras.models.clone_model(student)
+      else:
+          teacher_copy, student_copy = teacher, student
+
+      teacher_copy.trainable = False
+      student_copy.trainable = True
+      inputs = teacher_copy.inputs[0]
+      student_output = student_copy(inputs)
+      teacher_output = teacher_copy(inputs)
+      mm = keras.models.Model(inputs, keras.layers.Concatenate()([student_output, teacher_output]))
+      return student_copy, mm
+
+  class DistillerLoss(keras.losses.Loss):
+      def __init__(self, student_loss_fn, distillation_loss_fn, alpha=0.1, temperature=10, **kwargs):
+          super(DistillerLoss, self).__init__(**kwargs)
+          self.student_loss_fn, self.distillation_loss_fn = student_loss_fn, distillation_loss_fn
+          self.alpha, self.temperature = alpha, temperature
+
+      def call(self, y_true, y_pred):
+          student_output, teacher_output = tf.split(y_pred, 2, axis=-1)
+          student_loss = self.student_loss_fn(y_true, student_output)
+          distillation_loss = self.distillation_loss_fn(
+              tf.nn.softmax(teacher_output / self.temperature, axis=1),
+              tf.nn.softmax(student_output / self.temperature, axis=1),
+          )
+          loss = self.alpha * student_loss + (1 - self.alpha) * distillation_loss
+          return loss
+
+  def distiller_accuracy(y_true, y_pred):
+      student_output, _ = tf.split(y_pred, 2, axis=-1)
+      return keras.metrics.sparse_categorical_accuracy(y_true, student_output)
+
+  distiller_loss = DistillerLoss(
+      student_loss_fn=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+      distillation_loss_fn=keras.losses.KLDivergence(),
+      alpha=0.1,
+      # temperature=100,
+      temperature=10,
+  )
+
+  student_copy, mm = create_distiller_model(teacher, student)
+  mm.compile(optimizer=keras.optimizers.Adam(), loss=distiller_loss, metrics=[distiller_accuracy])
+  mm.summary()
+  mm.fit(x_train, y_train, epochs=15, validation_data=(x_test, y_test))
+
+  mm.evaluate(x_test, y_test)
+  student_copy.compile(metrics=["accuracy"])
+  student_copy.evaluate(x_test, y_test)
+
+  # Train student scratch
+  student_scratch = keras.models.clone_model(student)
+  student_scratch.compile(
+      optimizer=keras.optimizers.Adam(),
+      loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+      metrics=[keras.metrics.SparseCategoricalAccuracy()],
+  )
+
+  student_scratch.fit(x_train, y_train, epochs=15, validation_data=(x_test, y_test))
+  student_scratch.evaluate(x_test, y_test)
+  ```
+## Embedding
+  ```py
+  def tf_imread(file_path):
+      img = tf.io.read_file(file_path)
+      img = tf.image.decode_jpeg(img, channels=3) # [0, 255]
+      img = tf.image.convert_image_dtype(img, tf.float32) # [0, 1]
+      return img
+
+  data_path = "faces_casia_112x112_folders_shuffle_label_embs.pkl"
+  batch_size = 64
+  aa = np.load(data_path, allow_pickle=True)
+  image_names, image_classes, embeddings = aa['image_names'], aa['image_classes'], aa['embeddings']
+  classes = np.max(image_classes) + 1
+  print(">>>> Image length: %d, Image class length: %d, embeddings: %s" % (len(image_names), len(image_classes), np.shape(embeddings)))
+  # >>>> Image length: 490623, Image class length: 490623, embeddings: (490623, 256)
+
+  AUTOTUNE = tf.data.experimental.AUTOTUNE
+  dss = tf.data.Dataset.from_tensor_slices((image_names, image_classes, embeddings))
+  ds = dss.map(lambda imm, label, emb: (tf_imread(imm), (tf.one_hot(label, depth=classes, dtype=tf.int32), emb)), num_parallel_calls=AUTOTUNE)
+
+  ds = ds.batch(batch_size)  # Use batch --> map has slightly effect on dataset reading time, but harm the randomness
+  ds = ds.map(lambda xx, yy: ((xx * 2) - 1, yy))
+  ds = ds.prefetch(buffer_size=AUTOTUNE)
+
+  xx = tf.keras.applications.MobileNetV2(include_top=False, weights=None)
+  xx.trainable = True
+  inputs = keras.layers.Input(shape=(112, 112, 3))
+  nn = xx(inputs)
+  nn = keras.layers.GlobalAveragePooling2D()(nn)
+  nn = keras.layers.BatchNormalization()(nn)
+  # nn = layers.Dropout(0)(nn)
+  embedding = keras.layers.Dense(256, name="embeddings")(nn)
+  logits = keras.layers.Dense(classes, activation='softmax', name="logits")(embedding)
+
+  model = keras.models.Model(inputs, [logits, embedding])
+
+  def distiller_loss(true_emb_normed, pred_emb):
+      pred_emb_normed = tf.nn.l2_normalize(pred_emb, axis=-1)
+      # loss = tf.reduce_sum(tf.square(true_emb_normed - pred_emb_normed), axis=-1)
+      loss = 1 - tf.reduce_sum(pred_emb_normed * true_emb_normed, axis=-1)
+      return loss
+
+  model.compile(optimizer='adam', loss=[keras.losses.categorical_crossentropy, distiller_loss], loss_weights=[1, 7])
+  # model.compile(optimizer='adam', loss=[keras.losses.sparse_categorical_crossentropy, keras.losses.mse], metrics=['accuracy', 'mae'])
+  model.summary()
+  model.fit(ds)
+  ```
+***

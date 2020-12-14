@@ -261,6 +261,19 @@
     print("PI = %-10.3f%-10.3f" %(math.pi, math.pi))
     PI = 3.142   3.142
     ```
+  - **%f, %g, %G, %e, %E** 格式化输出，`%g / %G` 根据值的大小采用 `%e` 或 `%f`
+    ```py
+    print(["%f" % ii for ii in [1, 0.1, 0.2, 0.01, 0.0001, 0.000001]])
+    # ['1.000000', '0.100000', '0.200000', '0.010000', '0.000100', '0.000001']
+    print(["%g" % ii for ii in [1, 0.1, 0.2, 0.01, 0.0001, 0.000001]])
+    # ['1', '0.1', '0.2', '0.01', '0.0001', '1e-06']
+    print(["%G" % ii for ii in [1, 0.1, 0.2, 0.01, 0.0001, 0.000001]])
+    # ['1', '0.1', '0.2', '0.01', '0.0001', '1E-06']
+    print(["%e" % ii for ii in [1, 0.1, 0.2, 0.01, 0.0001, 0.000001]])
+    # ['1.000000e+00', '1.000000e-01', '2.000000e-01', '1.000000e-02', '1.000000e-04', '1.000000e-06']
+    print(["%.1E" % ii for ii in [1, 0.1, 0.2, 0.01, 0.0001, 0.000001]])
+    # ['1.0E+00', '1.0E-01', '2.0E-01', '1.0E-02', '1.0E-04', '1.0E-06']
+    ```
   - 格式化输出字符串
     ```python
     输出10位宽度，4位精度，左 / 右对齐
@@ -1692,6 +1705,28 @@
     # Name: aa, Age: 25
     # Salary: 10000, Area: Math
     ```
+## 重载
+  ```py
+  class Foo:
+      def __init__(self, aa):
+          self.aa = aa
+      def __call__(self, bb):
+          return self.test_func(self.aa, bb)
+      def test_func(self, aa, bb):
+          return aa + bb
+
+  class Goo(Foo):
+      def test_func(self, aa, bb):
+          return(aa - bb)
+
+  class Koo(Foo):
+      def test_func(self, aa, bb):
+          return(aa * bb)
+
+  print(Foo(3)(4))  # 7
+  print(Goo(3)(4))  # -1
+  print(Koo(3)(4))  # 12
+  ```
 ## 类中的 import
   - 使导入的模块仅在类中可用
   ```py
